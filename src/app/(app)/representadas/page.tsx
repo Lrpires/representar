@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getContext } from "@/lib/session";
 import { createPrincipal, setPrincipalActive } from "./actions";
 import { pct, safeQ } from "@/lib/format";
@@ -106,7 +107,7 @@ export default async function PrincipalsPage({
                         : "border-line bg-subtle"
                     }`}
                   >
-                    <div className="p-5 pb-4">
+                    <Link href={`${PATH}/${p.id}`} className="block p-5 pb-4 transition hover:bg-white/50">
                       <div className="flex items-start justify-between gap-3">
                         <Avatar name={p.name} size={48} />
                         {p.default_commission_pct != null ? (
@@ -127,7 +128,7 @@ export default async function PrincipalsPage({
                           <span className="truncate">{p.contact}</span>
                         </p>
                       ) : null}
-                    </div>
+                    </Link>
                     <div className="flex items-center justify-between gap-3 border-t border-line/80 px-5 py-3.5">
                       <span className="min-w-0 truncate text-[13px] text-muted">
                         {p.payment_terms || "Sem condição de pagamento"}

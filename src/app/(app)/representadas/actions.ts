@@ -21,18 +21,19 @@ export async function createPrincipal(formData: FormData) {
     fail(PATH, "A comissão deve ser um número entre 0 e 100.");
   }
 
-  const { error } = await supabase.from("principals").insert({
+  const { data: created, error } = await supabase.from("principals").insert({
     org_id: orgId,
     name,
     cnpj: optional(formData, "cnpj"),
     default_commission_pct: commission,
     payment_terms: optional(formData, "terms"),
     contact: optional(formData, "contact"),
-  });
-  if (error) fail(PATH, `Não foi possível salvar: ${error.message}`);
+  }).select("id").single();
+  if (error || !created) fail(PATH, `Não foi possível salvar: ${error?.message ?? "erro desconhecido"}`);
 
   revalidatePath(PATH);
-  redirect(PATH);
+  // Já abre a ficha completa para preencher o restante (endereço, comissão, contatos).
+  redirect(`${PATH}/${created.id}`);
 }
 
 // Liga ou desliga a representada. Desligada, ela some das listas de escolha

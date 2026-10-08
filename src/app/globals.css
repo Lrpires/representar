@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Tokens de design — estilo claro e limpo: fundo branco-gelo, barra
+   lateral, cartões bem arredondados, azul como cor de marca, preto nas
+   ações e filtros ativos, contadores coloridos.
+   ------------------------------------------------------------------ */
+@theme {
+  --color-canvas: #f5f6fa;
+  --color-paper: #ffffff;
+  --color-surface: #ffffff;
+  --color-subtle: #f8f9fb;
+  --color-hover: #f1f3f8;
+  --color-active: #e8efff;
+  --color-sheet: #ffffff;
+
+  --color-ink: #111114;
+  --color-ink-2: #3a3d47;
+  --color-muted: #6b7080;
+  --color-faint: #9ca1b0;
+
+  --color-line: #e8eaf0;
+  --color-line-strong: #d9dce5;
+
+  --color-pen: #2563eb;
+  --color-pen-dark: #1d4ed8;
+  --color-pen-soft: #e8efff;
+  --color-pen-ink: #1e40af;
+
+  --color-alert: #e5484d;
+  --color-alert-soft: #fdeced;
+  --color-ok: #16a34a;
+  --color-ok-soft: #dcf5e4;
+  --color-warn: #a16207;
+  --color-warn-soft: #fdf0c4;
+
+  --color-tint-green: #cfeedb;
+  --color-tint-yellow: #fbe9a6;
+  --color-tint-orange: #fcd5c0;
+  --color-tint-blue: #d6e3ff;
+
+  --shadow-soft: 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-panel: 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-float: 0 1px 2px rgb(16 24 40 / 0.07), 0 0 0 1px rgb(16 24 40 / 0.03);
+  --shadow-field: 0 1px 1px rgb(16 24 40 / 0.03);
+  --shadow-btn: 0 1px 2px rgb(16 24 40 / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.12);
+  --shadow-sheet: 0 24px 64px -16px rgb(16 24 40 / 0.35), 0 0 0 1px rgb(16 24 40 / 0.05);
+
+  --animate-sheet-in: sheet-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-sheet-up: sheet-up 280ms cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-fade-in: fade-in 180ms ease-out;
+
+  @keyframes sheet-in {
+    from { transform: translateX(28px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+html {
+  min-height: 100%;
+  background-color: var(--color-canvas);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-pen-soft);
+  color: var(--color-pen-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-pen);
+  outline-offset: 3px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.45;
+  cursor: pointer;
+}
+
+input[type="search"]::-webkit-search-cancel-button {
+  display: none;
+}
+
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%236b7080' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 6.5 3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.5rem !important;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

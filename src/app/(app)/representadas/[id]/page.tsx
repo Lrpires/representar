@@ -1,11 +1,10 @@
 import { notFound } from "next/navigation";
 import { getContext } from "@/lib/session";
-import { updatePrincipal, addContact, deleteContact, addTier, deleteTier } from "./actions";
+import { updatePrincipal, addContact, deleteContact } from "./actions";
 import {
   baseOptions, triggerOptions, releaseOptions, closeOptions, payOptions, commissionSummary,
   type Option,
 } from "@/lib/commission";
-import { pct } from "@/lib/format";
 import { Icon, type IconName } from "@/components/icons";
 import {
   PageHeader, Field, ErrorNote, OkNote, Badge, Avatar, inputCls, primaryBtn, ghostBtn,
@@ -60,7 +59,7 @@ export default async function PrincipalPage({
   const sp = await searchParams;
   const { supabase, canManage } = await getContext();
 
-  const [{ data: p }, { data: contacts }, { data: tiers }] = await Promise.all([
+  const [{ data: p }, { data: contacts }] = await Promise.all([
     supabase.from("principals").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("principal_contacts")
@@ -68,18 +67,12 @@ export default async function PrincipalPage({
       .eq("principal_id", id)
       .order("is_main", { ascending: false })
       .order("name"),
-    supabase
-      .from("principal_commission_tiers")
-      .select("id, discount_from, discount_to, commission_pct")
-      .eq("principal_id", id)
-      .order("discount_from"),
   ]);
   if (!p) notFound();
 
   const v = (x: string | number | null | undefined) => (x == null ? "" : String(x));
   const save = updatePrincipal.bind(null, id);
   const addContactFor = addContact.bind(null, id);
-  const addTierFor = addTier.bind(null, id);
 
   return (
     <>
@@ -198,11 +191,6 @@ export default async function PrincipalPage({
                     <input name="territory" defaultValue={v(p.territory)} className={inputCls} />
                   </Field>
                 </div>
-                <div className="sm:col-span-2">
-                  <Field label="Condições de pagamento do cliente" hint="Ex.: 30/60/90 dias, à vista com 3% de desconto.">
-                    <input name="payment_terms" defaultValue={v(p.payment_terms)} className={inputCls} />
-                  </Field>
-                </div>
               </div>
             </Section>
 
@@ -274,50 +262,6 @@ export default async function PrincipalPage({
             </div>
           ) : null}
         </form>
-
-        {/* ---------- Faixas de comissão por desconto ---------- */}
-        <Section
-          icon="percent"
-          title="Comissão por faixa de desconto"
-          hint="Se a fábrica paga menos quando você dá desconto ao cliente. Ex.: até 5% de desconto paga 5%; de 5,01% a 10% paga 4%."
-        >
-          {tiers && tiers.length > 0 ? (
-            <ul className="mb-4 divide-y divide-line rounded-2xl border border-line">
-              {tiers.map((t) => (
-                <li key={t.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-                  <span className="min-w-0 flex-1">
-                    Desconto de <b>{pct(t.discount_from)}</b>
-                    {t.discount_to != null ? <> até <b>{pct(t.discount_to)}</b></> : <> ou mais</>}
-                    {" "}→ comissão de <b>{pct(t.commission_pct)}</b>
-                  </span>
-                  {canManage ? (
-                    <form action={deleteTier.bind(null, id, t.id)}>
-                      <button aria-label="Remover faixa" className="flex h-9 w-9 items-center justify-center rounded-xl text-muted transition hover:bg-hover hover:text-ink">
-                        <Icon name="x" size={16} />
-                      </button>
-                    </form>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mb-4 text-sm text-muted">Nenhuma faixa. Vale a comissão padrão para qualquer desconto.</p>
-          )}
-          {canManage ? (
-            <form action={addTierFor} className="grid gap-3 sm:grid-cols-4 sm:items-end">
-              <Field label="Desconto de (%)">
-                <input name="discount_from" inputMode="decimal" placeholder="0" className={inputCls} />
-              </Field>
-              <Field label="Até (%)" hint="Vazio = sem limite.">
-                <input name="discount_to" inputMode="decimal" placeholder="5" className={inputCls} />
-              </Field>
-              <Field label="Comissão (%)">
-                <input name="commission_pct" inputMode="decimal" required placeholder="5" className={inputCls} />
-              </Field>
-              <button className={ghostBtn}>Adicionar faixa</button>
-            </form>
-          ) : null}
-        </Section>
 
         {/* ---------- Contatos ---------- */}
         <Section icon="users" title="Contatos na fábrica" hint="Comercial, financeiro, logística. Guarde o aniversário para não esquecer.">

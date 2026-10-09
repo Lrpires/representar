@@ -23,7 +23,7 @@ export default async function PrincipalsPage({
 
   let query = supabase
     .from("principals")
-    .select("id, name, cnpj, default_commission_pct, payment_terms, contact, active")
+    .select("id, name, cnpj, default_commission_pct, city, state, contact, active")
     .order("name");
   if (q) query = query.or(`name.ilike.*${q}*,cnpj.ilike.*${q}*`);
   const { data } = await query;
@@ -131,7 +131,7 @@ export default async function PrincipalsPage({
                     </Link>
                     <div className="flex items-center justify-between gap-3 border-t border-line/80 px-5 py-3.5">
                       <span className="min-w-0 truncate text-[13px] text-muted">
-                        {p.payment_terms || "Sem condição de pagamento"}
+                        {p.city ? `${p.city}${p.state ? ` / ${p.state}` : ""}` : "Cidade não informada"}
                       </span>
                       {canManage ? (
                         <form action={toggle}>
@@ -176,14 +176,6 @@ export default async function PrincipalsPage({
           <Field label="Comissão padrão (%)">
             <input name="commission" inputMode="decimal" placeholder="5,0" className={inputCls} />
           </Field>
-          <div className="sm:col-span-2">
-            <Field
-              label="Condições de pagamento"
-              hint="Ex.: 30/60/90 dias, à vista com 3% de desconto."
-            >
-              <input name="terms" className={inputCls} />
-            </Field>
-          </div>
           <div className="sm:col-span-2">
             <Field label="Contato na fábrica">
               <input name="contact" className={inputCls} />

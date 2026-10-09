@@ -10,7 +10,7 @@ const PATH = "/tabelas-de-preco";
 
 export async function createPriceTable(formData: FormData) {
   const { supabase, orgId, canManage } = await getContext();
-  if (!canManage) fail(PATH, "Só dono e gerente podem criar tabelas de preço.");
+  if (!canManage) fail(PATH, "Só administrador e gerente podem criar tabelas de preço.");
 
   const principalId = text(formData, "principal_id");
   const name = text(formData, "name");
@@ -44,7 +44,7 @@ export async function createPriceTable(formData: FormData) {
 export async function upsertPriceItem(tableId: string, formData: FormData) {
   const path = `${PATH}/${tableId}`;
   const { supabase, orgId, canManage } = await getContext();
-  if (!canManage) fail(path, "Só dono e gerente podem lançar preços.");
+  if (!canManage) fail(path, "Só administrador e gerente podem lançar preços.");
 
   const variantId = text(formData, "variant_id");
   const price = parseNumber(text(formData, "price"));

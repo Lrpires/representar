@@ -10,7 +10,7 @@ const PATH = "/representadas";
 
 export async function createPrincipal(formData: FormData) {
   const { supabase, orgId, canManage } = await getContext();
-  if (!canManage) fail(PATH, "Só dono e gerente podem cadastrar representadas.");
+  if (!canManage) fail(PATH, "Só administrador e gerente podem cadastrar representadas.");
 
   const name = text(formData, "name");
   if (!name) fail(PATH, "Informe o nome da representada.");
@@ -26,7 +26,6 @@ export async function createPrincipal(formData: FormData) {
     name,
     cnpj: optional(formData, "cnpj"),
     default_commission_pct: commission,
-    payment_terms: optional(formData, "terms"),
     contact: optional(formData, "contact"),
   }).select("id").single();
   if (error || !created) fail(PATH, `Não foi possível salvar: ${error?.message ?? "erro desconhecido"}`);
@@ -40,7 +39,7 @@ export async function createPrincipal(formData: FormData) {
 // (produtos e tabelas), mas nada é apagado.
 export async function setPrincipalActive(id: string, active: boolean) {
   const { supabase, canManage } = await getContext();
-  if (!canManage) fail(PATH, "Só dono e gerente podem alterar representadas.");
+  if (!canManage) fail(PATH, "Só administrador e gerente podem alterar representadas.");
 
   const { error } = await supabase.from("principals").update({ active }).eq("id", id);
   if (error) fail(PATH, `Não foi possível atualizar: ${error.message}`);

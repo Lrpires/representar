@@ -51,6 +51,11 @@ const groups: { title: string; items: Item[] }[] = [
   },
 ];
 
+const teamGroup = {
+  title: "Administração",
+  items: [{ href: "/equipe", label: "Equipe", short: "Equipe", icon: "users" as IconName, badge: "bg-tint-blue text-pen-ink" }],
+};
+
 const tabItems: Item[] = [
   groups[0].items[0],
   groups[1].items[0],
@@ -62,9 +67,11 @@ const tabItems: Item[] = [
 export function Nav({
   variant,
   counts = {},
+  showTeam = false,
 }: {
   variant: "side" | "tabs";
   counts?: Record<string, number>;
+  showTeam?: boolean;
 }) {
   const pathname = usePathname();
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
@@ -72,7 +79,7 @@ export function Nav({
   if (variant === "side") {
     return (
       <nav aria-label="Principal" className="mt-7 flex flex-col gap-6">
-        {groups.map((group) => (
+        {(showTeam ? [...groups, teamGroup] : groups).map((group) => (
           <div key={group.title} className="flex flex-col gap-1">
             <p className="mb-1 px-3 text-sm text-muted">{group.title}</p>
             {group.items.map((item) => {

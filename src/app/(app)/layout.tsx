@@ -10,6 +10,7 @@ import { signOut } from "./actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { orgName, role, user, canManage } = await getContext();
+  const showTeam = role === "owner" || role === "manager";
   const counts = await getCounts();
 
   const steps = setupSteps(counts, canManage);
@@ -21,6 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     "/representadas": counts.representadas,
     "/produtos": counts.produtos,
     "/tabelas-de-preco": counts.tabelas,
+    "/equipe": 0,
   };
 
   return (
@@ -40,7 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        <Nav variant="side" counts={navCounts} />
+        <Nav variant="side" counts={navCounts} showTeam={showTeam} />
 
         <div className="mt-auto flex items-center gap-3 rounded-2xl px-2 py-2">
           <Avatar name={user.email ?? orgName} size={34} />

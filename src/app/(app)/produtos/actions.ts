@@ -11,7 +11,7 @@ const PATH = "/produtos";
 
 export async function createProduct(formData: FormData) {
   const { supabase, orgId, canManage } = await getContext();
-  if (!canManage) fail(PATH, "Só dono e gerente podem cadastrar produtos.");
+  if (!canManage) fail(PATH, "Só administrador e gerente podem cadastrar produtos.");
 
   const principalId = text(formData, "principal_id");
   const code = text(formData, "code");
@@ -23,20 +23,20 @@ export async function createProduct(formData: FormData) {
   if (!name) fail(PATH, "Informe o nome do produto.");
   if (!UNITS.some((u) => u.value === unit)) fail(PATH, "Escolha uma unidade de venda válida.");
 
-  const { error } = await supabase.from("products").insert({
+  const { data: created, error } = await supabase.from("products").insert({
     org_id: orgId,
     principal_id: principalId,
     code,
     name,
     unit,
-  });
-  if (error) {
-    if (error.code === "23505") {
+  }).select("id").single();
+  if (error || !created) {
+    if (error?.code === "23505") {
       fail(PATH, "Já existe um produto com esse código nessa representada.");
     }
-    fail(PATH, `Não foi possível salvar: ${error.message}`);
+    fail(PATH, `Não foi possível salvar: ${error?.message}`);
   }
 
   revalidatePath(PATH);
-  redirect(PATH);
+  redirect(`${PATH}/${created.id}`);
 }

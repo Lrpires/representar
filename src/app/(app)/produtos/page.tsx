@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { getContext } from "@/lib/session";
 import { createProduct } from "./actions";
-import { UNITS, unitLabel } from "@/lib/units";
+import { UNIT_GROUPS, unitLabel } from "@/lib/units";
+import { productImageUrl } from "@/lib/storage";
 import { safeQ } from "@/lib/format";
+import { Icon } from "@/components/icons";
 import { Sheet } from "@/components/sheet";
 import { SearchBox } from "@/components/search";
 import {
@@ -11,6 +13,25 @@ import {
 } from "@/components/ui";
 
 const PATH = "/produtos";
+
+type Img = { path: string; is_cover: boolean; position: number };
+function Thumb({ images, size }: { images: Img[] | null; size: number }) {
+  const list = images ?? [];
+  const img = list.find((i) => i.is_cover) ?? [...list].sort((a, b) => a.position - b.position)[0];
+  return (
+    <span
+      style={{ width: size, height: size }}
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-subtle text-muted"
+    >
+      {img ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={productImageUrl(img.path)} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <Icon name="image" size={18} />
+      )}
+    </span>
+  );
+}
 
 export default async function ProductsPage({
   searchParams,
@@ -23,7 +44,7 @@ export default async function ProductsPage({
 
   let productsQuery = supabase
     .from("products")
-    .select("id, code, name, unit, principal_id, principals(name)")
+    .select("id, code, name, unit, active, brand, category, principal_id, principals(name), product_images(path, is_cover, position)")
     .order("name");
   if (q) productsQuery = productsQuery.or(`name.ilike.*${q}*,code.ilike.*${q}*`);
   if (sp.rep) productsQuery = productsQuery.eq("principal_id", sp.rep);
@@ -112,6 +133,7 @@ export default async function ProductsPage({
               <TableShell>
                 <thead className="border-b border-line bg-subtle">
                   <tr>
+                    <th className={th}></th>
                     <th className={th}>Código</th>
                     <th className={th}>Produto</th>
                     <th className={th}>Representada</th>
@@ -123,8 +145,14 @@ export default async function ProductsPage({
                     const principal = p.principals as unknown as { name: string } | null;
                     return (
                       <tr key={p.id} className="transition hover:bg-subtle">
+                        <td className={`${td} w-16`}>
+                          <Link href={`${PATH}/${p.id}`}><Thumb images={p.product_images as unknown as Img[]} size={44} /></Link>
+                        </td>
                         <td className={`${td} font-mono text-[13px] text-muted`}>{p.code}</td>
-                        <td className={`${td} font-medium`}>{p.name}</td>
+                        <td className={`${td} font-medium`}>
+                          <Link href={`${PATH}/${p.id}`} className="hover:underline">{p.name}</Link>
+                          {!p.active ? <span className="ml-2"><Badge>Inativo</Badge></span> : null}
+                        </td>
                         <td className={`${td} text-ink-2`}>{principal?.name}</td>
                         <td className={td}>
                           <Badge>{unitLabel(p.unit)}</Badge>
@@ -139,8 +167,10 @@ export default async function ProductsPage({
                 {products.map((p) => {
                   const principal = p.principals as unknown as { name: string } | null;
                   return (
-                    <li key={p.id} className="flex items-start justify-between gap-3 px-4 py-3.5">
-                      <div className="min-w-0">
+                    <li key={p.id}>
+                     <Link href={`${PATH}/${p.id}`} className="flex items-center gap-3 px-4 py-3.5">
+                      <Thumb images={p.product_images as unknown as Img[]} size={52} />
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium leading-snug">{p.name}</p>
                         <p className="mt-1 text-sm text-muted">
                           <span className="font-mono text-xs">{p.code}</span>
@@ -148,6 +178,7 @@ export default async function ProductsPage({
                         </p>
                       </div>
                       <Badge>{unitLabel(p.unit)}</Badge>
+                     </Link>
                     </li>
                   );
                 })}
@@ -160,7 +191,7 @@ export default async function ProductsPage({
       <Sheet
         open={sheetOpen}
         title="Novo produto"
-        description="Escolha a representada e a unidade de venda."
+        description="Só o básico. Depois você completa descrição, fotos e medidas."
         closeHref={PATH}
       >
         <SheetForm action={createProduct} closeHref={PATH} submitLabel="Salvar">
@@ -186,10 +217,12 @@ export default async function ProductsPage({
           </Field>
           <Field label="Unidade de venda">
             <select name="unit" required className={inputCls} defaultValue="unidade">
-              {UNITS.map((u) => (
-                <option key={u.value} value={u.value}>
-                  {u.label}
-                </option>
+              {UNIT_GROUPS.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.units.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </Field>

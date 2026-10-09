@@ -35,7 +35,7 @@ export default async function OnboardingPage({
           Crie o seu escritório
         </h1>
         <p className="mb-7 mt-2 text-sm leading-relaxed text-muted">
-          Você será o dono e poderá convidar vendedores depois. Se trabalha sozinho, use o seu
+          Você será o administrador e poderá convidar vendedores depois. Se trabalha sozinho, use o seu
           nome.
         </p>
 

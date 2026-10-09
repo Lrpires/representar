@@ -28,7 +28,7 @@ function inRange(n: number | null, min: number, max: number) {
 export async function updatePrincipal(id: string, formData: FormData) {
   const { supabase, canManage } = await getContext();
   const path = here(id);
-  if (!canManage) fail(path, "Só dono e gerente podem alterar representadas.");
+  if (!canManage) fail(path, "Só administrador e gerente podem alterar representadas.");
 
   const name = text(formData, "name");
   if (!name) fail(path, "Informe o nome da representada.");
@@ -92,7 +92,6 @@ export async function updatePrincipal(id: string, formData: FormData) {
       contract_start: start,
       contract_end: end,
       territory: optional(formData, "territory"),
-      payment_terms: optional(formData, "payment_terms"),
       contact: optional(formData, "contact"),
       notes: optional(formData, "notes"),
       default_commission_pct: commission,
@@ -132,7 +131,7 @@ function parseBirthday(raw: string): string | null | "invalid" {
 export async function addContact(principalId: string, formData: FormData) {
   const { supabase, orgId, canManage } = await getContext();
   const path = here(principalId);
-  if (!canManage) fail(path, "Só dono e gerente podem alterar contatos.");
+  if (!canManage) fail(path, "Só administrador e gerente podem alterar contatos.");
 
   const name = text(formData, "name");
   if (!name) fail(path, "Informe o nome do contato.");
@@ -162,42 +161,8 @@ export async function addContact(principalId: string, formData: FormData) {
 
 export async function deleteContact(principalId: string, contactId: string) {
   const { supabase, canManage } = await getContext();
-  if (!canManage) fail(here(principalId), "Só dono e gerente podem alterar contatos.");
+  if (!canManage) fail(here(principalId), "Só administrador e gerente podem alterar contatos.");
   const { error } = await supabase.from("principal_contacts").delete().eq("id", contactId);
   if (error) fail(here(principalId), `Não foi possível remover: ${error.message}`);
   done(principalId, "Contato removido.");
-}
-
-// ---------- Faixas de comissão por desconto ----------
-
-export async function addTier(principalId: string, formData: FormData) {
-  const { supabase, orgId, canManage } = await getContext();
-  const path = here(principalId);
-  if (!canManage) fail(path, "Só dono e gerente podem alterar as faixas.");
-
-  const from = num(formData, "discount_from") ?? 0;
-  const to = num(formData, "discount_to");
-  const rate = num(formData, "commission_pct");
-  if (!inRange(from, 0, 100) || !inRange(to, 0, 100)) fail(path, "O desconto deve ficar entre 0 e 100.");
-  if (to !== null && to < from) fail(path, "O desconto final não pode ser menor que o inicial.");
-  if (rate === null || !inRange(rate, 0, 100)) fail(path, "Informe a comissão da faixa (entre 0 e 100).");
-
-  const { error } = await supabase.from("principal_commission_tiers").insert({
-    org_id: orgId,
-    principal_id: principalId,
-    discount_from: from,
-    discount_to: to,
-    commission_pct: rate,
-  });
-  if (error) fail(path, `Não foi possível salvar a faixa: ${error.message}`);
-
-  done(principalId, "Faixa adicionada.");
-}
-
-export async function deleteTier(principalId: string, tierId: string) {
-  const { supabase, canManage } = await getContext();
-  if (!canManage) fail(here(principalId), "Só dono e gerente podem alterar as faixas.");
-  const { error } = await supabase.from("principal_commission_tiers").delete().eq("id", tierId);
-  if (error) fail(here(principalId), `Não foi possível remover: ${error.message}`);
-  done(principalId, "Faixa removida.");
 }

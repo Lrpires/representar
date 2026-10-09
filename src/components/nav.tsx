@@ -15,7 +15,10 @@ type Item = {
 const groups: { title: string; items: Item[] }[] = [
   {
     title: "Geral",
-    items: [{ href: "/", label: "Início", short: "Início", icon: "home" }],
+    items: [
+      { href: "/", label: "Início", short: "Início", icon: "home" },
+      { href: "/pedidos", label: "Pedidos", short: "Pedidos", icon: "file", badge: "bg-tint-blue text-pen-ink" },
+    ],
   },
   {
     title: "Carteira",
@@ -58,6 +61,7 @@ const teamGroup = {
 
 const tabItems: Item[] = [
   groups[0].items[0],
+  groups[0].items[1],
   groups[1].items[0],
   groups[2].items[0],
   groups[2].items[1],
@@ -120,7 +124,7 @@ export function Nav({
       aria-label="Principal"
       className="fixed inset-x-3 bottom-3 z-40 rounded-3xl border border-line bg-white/95 p-1.5 shadow-sheet backdrop-blur-xl pb-[max(0.375rem,env(safe-area-inset-bottom))] lg:hidden"
     >
-      <ul className="mx-auto grid max-w-lg grid-cols-5 gap-1">
+      <ul className="mx-auto grid max-w-lg grid-cols-6 gap-0.5">
         {tabItems.map((item) => {
           const active = isActive(item.href);
           return (
@@ -128,7 +132,7 @@ export function Nav({
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10.5px] transition ${
+                className={`flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] transition ${
                   active ? "bg-active font-semibold text-pen" : "text-muted"
                 }`}
               >

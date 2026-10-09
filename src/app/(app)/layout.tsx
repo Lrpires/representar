@@ -22,6 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     "/representadas": counts.representadas,
     "/produtos": counts.produtos,
     "/tabelas-de-preco": counts.tabelas,
+    "/pedidos": counts.pedidos,
     "/equipe": 0,
   };
 

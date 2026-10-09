@@ -6,6 +6,7 @@ export type Counts = {
   produtos: number;
   tabelas: number;
   clientes: number;
+  pedidos: number;
 };
 
 // Totais usados no menu lateral e na tela inicial (calculados uma vez por visita).
@@ -15,11 +16,12 @@ export const getCounts = cache(async (): Promise<Counts> => {
     const { count } = await supabase.from(table).select("id", { count: "exact", head: true });
     return count ?? 0;
   };
-  const [representadas, produtos, tabelas, clientes] = await Promise.all([
+  const [representadas, produtos, tabelas, clientes, pedidos] = await Promise.all([
     count("principals"),
     count("products"),
     count("price_tables"),
     count("customers"),
+    count("orders"),
   ]);
-  return { representadas, produtos, tabelas, clientes };
+  return { representadas, produtos, tabelas, clientes, pedidos };
 });

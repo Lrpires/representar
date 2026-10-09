@@ -61,5 +61,6 @@ export const getContext = cache(async () => {
     role,
     canManage: role === "owner" || role === "manager",
     isOwner: role === "owner",
+    isBackOffice: role === "owner" || role === "manager" || role === "finance",
   };
 });

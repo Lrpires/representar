@@ -72,7 +72,15 @@ export default async function TeamPage({
                     <Badge tone={tone[m.role as Role]}>{roleLabel[m.role as Role]}</Badge>
                   </div>
 
-                  {isOwner ? (
+                  {isOwner && mine ? (
+                    <form action={updateMember.bind(null, m.id)} className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <input type="hidden" name="role" value={m.role} />
+                      <input name="full_name" placeholder="Seu nome" defaultValue={m.full_name ?? ""} className={inputCls} />
+                      <button className={ghostBtn}>Salvar nome</button>
+                    </form>
+                  ) : null}
+
+                  {isOwner && !mine ? (
                     <form
                       action={updateMember.bind(null, m.id)}
                       className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]"
@@ -91,20 +99,24 @@ export default async function TeamPage({
                         </select>
                       </div>
                       <button className={ghostBtn}>Salvar</button>
-                      {!mine ? (
-                        <button
-                          formAction={removeMember.bind(null, m.id)}
-                          className="h-12 rounded-xl px-4 text-sm text-alert hover:bg-subtle"
-                        >
-                          Remover
-                        </button>
-                      ) : null}
+                      <button
+                        formAction={removeMember.bind(null, m.id)}
+                        className="h-12 rounded-xl px-4 text-sm text-alert hover:bg-subtle"
+                      >
+                        Remover
+                      </button>
                     </form>
                   ) : null}
                 </li>
               );
             })}
           </ul>
+          {isOwner && (members ?? []).length === 1 ? (
+            <p className="mt-4 rounded-2xl bg-subtle p-4 text-sm leading-relaxed text-ink-2">
+              Para cadastrar um vendedor, clique em <strong>Convidar pessoa</strong> (botão no topo da
+              página). Seu perfil de administrador não deve ser alterado.
+            </p>
+          ) : null}
         </section>
 
         {isOwner && (invites ?? []).length > 0 ? (

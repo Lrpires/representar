@@ -81,7 +81,7 @@ export async function updateMember(memberId: string, formData: FormData) {
   if (!current) fail(PATH, "Pessoa não encontrada.");
 
   if (current.role === "owner" && role !== "owner" && (await ownerCount(orgId)) <= 1) {
-    fail(PATH, "O escritório precisa de pelo menos um administrador.");
+    fail(PATH, "Você é o único administrador, então não pode mudar o próprio perfil. Para cadastrar um vendedor use o botão Convidar pessoa.");
   }
 
   const { error } = await supabase

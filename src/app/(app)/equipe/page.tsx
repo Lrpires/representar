@@ -30,6 +30,7 @@ const MATRIX: { label: string; roles: Role[] }[] = [
   { label: "Cadastrar representadas e produtos", roles: ["owner", "manager"] },
   { label: "Registrar faturamento e comissões", roles: ["owner", "manager", "finance"] },
   { label: "Contas a pagar", roles: ["owner", "manager", "finance"] },
+  { label: "Lançar metas (o vendedor vê as dele)", roles: ["owner", "manager"] },
   { label: "Ver a equipe", roles: ["owner", "manager"] },
   { label: "Convidar pessoas e mudar perfis", roles: ["owner"] },
   { label: "Configurações do escritório", roles: ["owner"] },

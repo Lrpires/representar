@@ -8,7 +8,7 @@ export async function loadEditorData() {
   const { supabase } = await getContext();
   const settings = await getSettings();
 
-  const [{ data: customers }, { data: principals }, { data: variants }, { data: recent }] = await Promise.all([
+  const [{ data: customers }, { data: principals }, { data: variants }, { data: recent }, { data: lastOrders }] = await Promise.all([
     supabase.from("customers").select("*").order("name"),
     supabase.from("principals").select("id, name, default_commission_pct").eq("active", true).order("name"),
     supabase
@@ -24,7 +24,17 @@ export async function loadEditorData() {
       .not("variant_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(3000),
+    // Última representada de cada cliente: é a sugerida no novo pedido.
+    supabase
+      .from("orders")
+      .select("customer_id, principal_id")
+      .neq("status", "cancelado")
+      .order("order_date", { ascending: false })
+      .order("number", { ascending: false })
+      .limit(20000),
   ]);
+  const lastPrincipal = new Map<string, string>();
+  for (const o of lastOrders ?? []) if (!lastPrincipal.has(o.customer_id)) lastPrincipal.set(o.customer_id, o.principal_id);
 
   const lastPrice = new Map<string, number>();
   for (const r of recent ?? []) {
@@ -46,14 +56,14 @@ export async function loadEditorData() {
   products.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   // select("*") funciona com ou sem as migrações 006/007 (colunas novas opcionais).
-  type C = { id: string; name: string; city?: string | null; state?: string | null; cnpj: string | null; principal_id?: string | null };
+  type C = { id: string; name: string; city?: string | null; state?: string | null; cnpj: string | null };
   const editorCustomers: EditorCustomer[] = ((customers ?? []) as C[]).map((c) => ({
     id: c.id,
     name: c.name,
     city: c.city ?? null,
     state: c.state ?? null,
     cnpj: c.cnpj,
-    principal_id: c.principal_id ?? null,
+    last_principal_id: lastPrincipal.get(c.id) ?? null,
   }));
 
   const editorPrincipals: EditorPrincipal[] = (principals ?? []).map((p) => ({

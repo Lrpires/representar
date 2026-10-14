@@ -39,7 +39,6 @@ function readCustomer(formData: FormData, back: string) {
     street_number: optional(formData, "street_number"),
     complement: optional(formData, "complement"),
     district: optional(formData, "district"),
-    principal_id: optional(formData, "principal_id"),
     notes: optional(formData, "notes"),
   };
 }
@@ -65,7 +64,13 @@ export async function updateCustomer(id: string, formData: FormData) {
   const back = `${detail(id)}?editar=1`;
   const fields = readCustomer(formData, back);
 
-  const { error } = await supabase.from("customers").update(fields).eq("id", id);
+  // Endereço mudou: a posição no mapa precisa ser recalculada.
+  const { data: before } = await supabase.from("customers").select("*").eq("id", id).maybeSingle();
+  const addressKeys = ["zip", "street", "street_number", "district", "city", "state"] as const;
+  const moved = before && addressKeys.some((k) => (before[k] ?? null) !== (fields[k] ?? null));
+  const geoReset = moved && "latitude" in before ? { latitude: null, longitude: null, geo_quality: null, geocoded_at: null } : {};
+
+  const { error } = await supabase.from("customers").update({ ...fields, ...geoReset }).eq("id", id);
   if (error) fail(back, `Não foi possível salvar: ${error.message}`);
 
   revalidatePath(PATH);
@@ -126,4 +131,34 @@ export async function deleteInteraction(customerId: string, interactionId: strin
   if (error) fail(back, `Não foi possível excluir: ${error.message}`);
   revalidatePath(detail(customerId));
   redirect(back);
+}
+
+// Guarda a posição do cliente no mapa (calculada no navegador a partir do endereço).
+export async function saveLocation(
+  id: string,
+  lat: number,
+  lng: number,
+  quality: "endereco" | "rua" | "bairro" | "cidade" | "manual",
+): Promise<{ error?: string }> {
+  const { supabase } = await getContext();
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return { error: "Posição inválida." };
+  // geo_version 2 = posição feita pela busca nova (a migração 014 não apaga essas).
+  const patch = { latitude: lat, longitude: lng, geo_quality: quality, geocoded_at: new Date().toISOString() };
+  let { error } = await supabase.from("customers").update({ ...patch, geo_version: 2 }).eq("id", id);
+  if (error?.message.includes("geo_version")) ({ error } = await supabase.from("customers").update(patch).eq("id", id));
+  if (error) {
+    if (error.message.includes("geo_quality")) return { error: "Falta rodar a migração 014 no Supabase." };
+    return { error: error.message.includes("latitude") ? "Falta rodar a migração de mapa no Supabase." : error.message };
+  }
+  return {};
+}
+
+// Marca que o endereço não foi encontrado (para não tentar de novo a cada visita ao mapa).
+export async function markNotFound(id: string): Promise<void> {
+  const { supabase } = await getContext();
+  await supabase.from("customers").update({ geocoded_at: new Date().toISOString() }).eq("id", id);
+}
+
+export async function refreshClientes() {
+  revalidatePath(PATH);
 }

@@ -2,201 +2,56 @@ import Link from "next/link";
 import { getContext } from "@/lib/session";
 import { getCounts } from "@/lib/counts";
 import { getSettings } from "@/lib/settings";
-import { setupSteps } from "@/lib/setup";
+import { getProfile } from "@/lib/profile";
 import { formatOrderNumber, statusInfo } from "@/lib/orders";
 import { stageLabel } from "@/lib/leads";
 import { brl, formatDate, todayISO } from "@/lib/format";
-import { monthInfo } from "@/lib/month";
-import { Icon, type IconName } from "@/components/icons";
+import { resolvePeriod, buildSeries, delta, rank, addDays } from "@/lib/cockpit";
+import { goalProgress, goalScope, type GoalRow } from "@/lib/goals";
+import { loadGoals } from "@/lib/goals-data";
+import { CockpitShell } from "@/components/cockpit/filters";
+import { SalesChart } from "@/components/cockpit/sales-chart";
+import { Kpi, RankList } from "@/components/cockpit/parts";
+import { Icon } from "@/components/icons";
 import { WhatsAppButton } from "@/components/whatsapp";
-import { Badge, Card, EmptyState, NewButton, PageHeader, Progress, primaryBtn } from "@/components/ui";
+import { Badge, EmptyState, NewButton, PageHeader, primaryBtn } from "@/components/ui";
+import { GoalCard } from "./metas/card";
+
+const SOLD = ["enviado", "faturado", "entregue"];
 
 function greeting(): string {
-  const hour = Number(
-    new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }),
-  );
-  if (hour < 12) return "Bom dia";
-  if (hour < 18) return "Boa tarde";
-  return "Boa noite";
+  const hour = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }));
+  return hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
 }
 
-function todayLabel(): string {
-  const s = new Date().toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "America/Sao_Paulo",
-  });
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-const addDays = (iso: string, n: number) => {
-  const d = new Date(`${iso}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
+type Order = {
+  id: string; number: number; status: string; order_date: string; total: number; subtotal: number; discount_pct: number;
+  commission_pct: number | null; principal_id: string; seller_id: string; customer_id: string;
+  customers: { name: string } | null; principals: { name: string } | null;
 };
 
-type FollowUp = {
-  kind: "lead" | "cliente";
-  id: string;
-  name: string;
-  sub: string;
-  phone: string | null;
-  date: string;
-  href: string;
-};
-
-type Stat = {
-  label: string;
-  value: string;
-  sub: string;
-  href: string;
-  icon: IconName;
-  valueTone?: "ok" | "alert";
-  subAlert?: boolean;
-};
-
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string; de?: string; ate?: string; rep?: string; vend?: string }>;
+}) {
+  const sp = await searchParams;
   const { supabase, canManage, role, isBackOffice } = await getContext();
-  const [counts, settings] = await Promise.all([getCounts(), getSettings()]);
-  const canOrder = role !== "finance";
+  const [counts, settings, profile] = await Promise.all([getCounts(), getSettings(), getProfile()]);
   const today = todayISO();
-  const month = monthInfo();
-  const in7 = addDays(today, 7);
+  const P = resolvePeriod(sp.periodo, sp.de, sp.ate, today);
+  const rep = sp.rep || null;
+  const vend = isBackOffice ? sp.vend || null : null;
+  const canOrder = role !== "finance";
 
-  const [
-    { data: monthOrders },
-    { data: recent },
-    { data: commissions },
-    { data: payables7 },
-    { data: payablesMonth },
-    { data: leadsDue },
-    { data: customersDue },
-  ] = await Promise.all([
-    supabase.from("orders").select("total, status").gte("order_date", month.start).in("status", ["enviado", "faturado", "entregue"]),
-    supabase
-      .from("orders")
-      .select("id, number, status, order_date, total, customers(name), principals(name)")
-      .order("number", { ascending: false })
-      .limit(6),
-    supabase.from("commissions").select("value, status, due_date, received_value").neq("status", "cancelada"),
-    isBackOffice
-      ? supabase.from("payables").select("amount, due_date").eq("status", "pendente").lte("due_date", in7)
-      : Promise.resolve({ data: [] as { amount: number; due_date: string }[] }),
-    isBackOffice
-      ? supabase.from("payables").select("amount").gte("due_date", month.start).lte("due_date", month.end)
-      : Promise.resolve({ data: [] as { amount: number }[] }),
-    supabase
-      .from("leads")
-      .select("id, name, company, phone, stage, next_contact")
-      .lte("next_contact", today)
-      .not("stage", "in", "(ganho,perdido)")
-      .order("next_contact")
-      .limit(30),
-    supabase
-      .from("customers")
-      .select("id, name, contact_name, phone, next_contact")
-      .lte("next_contact", today)
-      .order("next_contact")
-      .limit(30),
-  ]);
-
-  const sold = (monthOrders ?? []).reduce((s, o) => s + Number(o.total), 0);
-  const nSold = (monthOrders ?? []).length;
-  const comm = commissions ?? [];
-  const toReceive = comm.filter((c) => c.status === "a_receber").reduce((s, c) => s + Number(c.value), 0);
-  const lateComm = comm
-    .filter((c) => c.status === "a_receber" && c.due_date < today)
-    .reduce((s, c) => s + Number(c.value), 0);
-  const commMonth = comm
-    .filter((c) => c.due_date >= month.start && c.due_date <= month.end)
-    .reduce((s, c) => s + Number(c.status === "recebida" ? (c.received_value ?? c.value) : c.value), 0);
-  const pay7 = (payables7 ?? []).reduce((s, p) => s + Number(p.amount), 0);
-  const payOverdue = (payables7 ?? []).filter((p) => p.due_date < today).length;
-  const payMonth = (payablesMonth ?? []).reduce((s, p) => s + Number(p.amount), 0);
-  const balance = commMonth - payMonth;
-
-  // RN7: follow-ups de hoje e atrasados (leads e clientes).
-  const followUps: FollowUp[] = [
-    ...(leadsDue ?? []).map((l) => ({
-      kind: "lead" as const,
-      id: l.id,
-      name: l.name,
-      sub: [l.company, stageLabel(l.stage)].filter(Boolean).join(" · "),
-      phone: l.phone,
-      date: l.next_contact as string,
-      href: `/leads?lead=${l.id}`,
-    })),
-    ...(customersDue ?? []).map((c) => ({
-      kind: "cliente" as const,
-      id: c.id,
-      name: c.name,
-      sub: c.contact_name ? `Cliente · ${c.contact_name}` : "Cliente",
-      phone: c.phone,
-      date: c.next_contact as string,
-      href: `/clientes/${c.id}?aba=interacoes`,
-    })),
-  ].sort((a, b) => a.date.localeCompare(b.date));
-  const lateCount = followUps.filter((f) => f.date < today).length;
-
-  const steps = setupSteps(counts, canManage);
-  const done = steps.filter((s) => s.n > 0).length;
-  const firstPending = steps.find((s) => s.n === 0);
-
-  const monthName = month.label.split(" ")[0].toLowerCase();
-  const stats: Stat[] = [
-    {
-      label: "Vendido no mês",
-      value: brl(sold),
-      sub: `${nSold} ${nSold === 1 ? "pedido" : "pedidos"} em ${monthName}`,
-      href: "/pedidos?periodo=mes",
-      icon: "receipt",
-    },
-    {
-      label: "Comissão a receber",
-      value: brl(toReceive),
-      sub: lateComm ? `${brl(lateComm)} atrasados` : "Nenhuma atrasada",
-      href: "/comissoes?status=a_receber",
-      icon: "percent",
-      subAlert: lateComm > 0,
-    },
-  ];
-  if (isBackOffice) {
-    stats.push(
-      {
-        label: "Contas a pagar (7 dias)",
-        value: brl(pay7),
-        sub: payOverdue ? `${payOverdue} ${payOverdue === 1 ? "vencida" : "vencidas"}` : "Nenhuma vencida",
-        href: "/contas-a-pagar?status=pendentes",
-        icon: "wallet",
-        subAlert: payOverdue > 0,
-      },
-      {
-        label: "Saldo do mês",
-        value: brl(balance),
-        sub: "Comissões do mês menos contas",
-        href: "/comissoes",
-        icon: "layers",
-        valueTone: balance >= 0 ? "ok" : "alert",
-      },
-    );
-  }
-
-  // Sem nenhuma representada: o painel ainda não tem o que mostrar.
   if (counts.representadas === 0) {
     return (
       <>
-        <PageHeader title={greeting()} hint={todayLabel()} />
+        <PageHeader title={`${greeting()}, ${profile.firstName}`} />
         <EmptyState
           icon="factory"
           title="Cadastre sua primeira representada para começar"
-          action={
-            canManage ? (
-              <Link href="/representadas?novo=1" className={primaryBtn}>
-                Nova representada
-              </Link>
-            ) : null
-          }
+          action={canManage ? <Link href="/representadas?novo=1" className={primaryBtn}>Nova representada</Link> : null}
         >
           Informe as empresas que você representa e a comissão de cada uma. Depois é só cadastrar os
           clientes e fazer o primeiro pedido.
@@ -205,133 +60,444 @@ export default async function HomePage() {
     );
   }
 
+  // Aplica os filtros de representada e vendedor numa consulta.
+  function scoped<T>(q: T, prefix = ""): T {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let r = q as any;
+    if (rep) r = r.eq(`${prefix}principal_id`, rep);
+    if (vend) r = r.eq(`${prefix}seller_id`, vend);
+    return r as T;
+  }
+
+  const [
+    { data: curData },
+    { data: prevData },
+    { data: invCur },
+    { data: invPrev },
+    { data: comm },
+    { data: items },
+    { data: history },
+    { data: principals },
+    { data: members },
+    { data: payables },
+    { data: leadsDue },
+    { data: customersDue },
+    goalData,
+  ] = await Promise.all([
+    scoped(
+      supabase
+        .from("orders")
+        .select("id, number, status, order_date, total, subtotal, discount_pct, commission_pct, principal_id, seller_id, customer_id, customers(name), principals(name)")
+        .gte("order_date", P.start)
+        .lte("order_date", P.end),
+    ).order("number", { ascending: false }).limit(20000),
+    scoped(supabase.from("orders").select("order_date, total, customer_id").in("status", SOLD).gte("order_date", P.prevStart).lte("order_date", P.prevEnd)).limit(20000),
+    scoped(
+      supabase.from("order_invoices").select("value, issued_at, orders!inner(principal_id, seller_id, status)").neq("orders.status", "cancelado").gte("issued_at", P.start).lte("issued_at", P.end),
+      "orders.",
+    ).limit(20000),
+    scoped(
+      supabase.from("order_invoices").select("value, orders!inner(principal_id, seller_id, status)").neq("orders.status", "cancelado").gte("issued_at", P.prevStart).lte("issued_at", P.prevEnd),
+      "orders.",
+    ).limit(20000),
+    scoped(supabase.from("commissions").select("value, status, due_date, received_value, received_at, order_invoices(issued_at)").neq("status", "cancelada")).limit(20000),
+    scoped(
+      supabase
+        .from("order_items")
+        .select("description, code, qty, line_total, orders!inner(order_date, status, principal_id, seller_id)")
+        .in("orders.status", SOLD)
+        .gte("orders.order_date", P.start)
+        .lte("orders.order_date", P.end),
+      "orders.",
+    ).limit(20000),
+    // Últimos 12 meses: base para clientes novos e clientes para reativar.
+    scoped(
+      supabase.from("orders").select("customer_id, order_date, total, customers(name, phone)").in("status", SOLD).gte("order_date", addDays(today, -365)),
+    ).limit(20000),
+    supabase.from("principals").select("id, name").order("name"),
+    isBackOffice
+      ? supabase.from("members").select("user_id, full_name, email, role")
+      : Promise.resolve({ data: [] as { user_id: string; full_name: string | null; email: string | null; role: string }[] }),
+    isBackOffice
+      ? supabase.from("payables").select("amount, due_date").eq("status", "pendente").lte("due_date", addDays(today, 7))
+      : Promise.resolve({ data: [] as { amount: number; due_date: string }[] }),
+    supabase.from("leads").select("id, name, company, phone, stage, next_contact").lte("next_contact", today).not("stage", "in", "(ganho,perdido)").order("next_contact").limit(20),
+    supabase.from("customers").select("id, name, contact_name, phone, next_contact").lte("next_contact", today).order("next_contact").limit(20),
+    loadGoals(P.start, P.end),
+  ]);
+
+  const orders = (curData ?? []) as unknown as Order[];
+  const sold = orders.filter((o) => SOLD.includes(o.status));
+  const prevSold = prevData ?? [];
+  const pName = new Map((principals ?? []).map((p) => [p.id, p.name] as const));
+  const sName = new Map((members ?? []).map((m) => [m.user_id, m.full_name || m.email || "Vendedor"] as const));
+
+  /* ---------- Indicadores ---------- */
+  const soldTotal = sold.reduce((s, o) => s + Number(o.total), 0);
+  const prevTotal = prevSold.reduce((s, o) => s + Number(o.total), 0);
+  const ticket = sold.length ? soldTotal / sold.length : 0;
+  const prevTicket = prevSold.length ? prevTotal / prevSold.length : 0;
+  const invoiced = (invCur ?? []).reduce((s, i) => s + Number(i.value), 0);
+  const prevInvoiced = (invPrev ?? []).reduce((s, i) => s + Number(i.value), 0);
+  const customers = new Set(sold.map((o) => o.customer_id));
+  const prevCustomers = new Set(prevSold.map((o) => o.customer_id));
+  const commissions = comm ?? [];
+  const inPeriod = (d: string | null | undefined) => !!d && d >= P.start && d <= P.end;
+  const commGenerated = commissions
+    .filter((c) => inPeriod((c.order_invoices as unknown as { issued_at: string } | null)?.issued_at))
+    .reduce((s, c) => s + Number(c.value), 0);
+  const commExpected = sold.reduce(
+    (s, o) => s + (Number(o.subtotal) * (1 - Number(o.discount_pct) / 100) * Number(o.commission_pct ?? 0)) / 100,
+    0,
+  );
+  const toReceive = commissions.filter((c) => c.status === "a_receber").reduce((s, c) => s + Number(c.value), 0);
+  const lateComm = commissions.filter((c) => c.status === "a_receber" && c.due_date < today).reduce((s, c) => s + Number(c.value), 0);
+  const receivedPeriod = commissions
+    .filter((c) => c.status === "recebida" && inPeriod(c.received_at))
+    .reduce((s, c) => s + Number(c.received_value ?? c.value), 0);
+
+  // Clientes novos: compraram no período e não tinham comprado nos 12 meses anteriores ao início.
+  const before = new Set((history ?? []).filter((h) => h.order_date < P.start).map((h) => h.customer_id));
+  const newCustomers = [...customers].filter((c) => !before.has(c)).length;
+
+  /* ---------- Gráfico ---------- */
+  const series = buildSeries(
+    P,
+    sold.map((o) => ({ date: o.order_date, value: Number(o.total) })),
+    prevSold.map((o) => ({ date: o.order_date, value: Number(o.total) })),
+  );
+
+  /* ---------- Situação dos pedidos do período ---------- */
+  const funnel = [
+    { key: "rascunho", label: "Rascunho", hint: "ainda não enviados" },
+    { key: "enviado", label: "Enviado", hint: "aguardando faturamento" },
+    { key: "faturado", label: "Faturado", hint: "com nota fiscal" },
+    { key: "cancelado", label: "Cancelado", hint: "" },
+  ].map((f) => {
+    const list = orders.filter((o) => o.status === f.key || (f.key === "faturado" && o.status === "entregue"));
+    return { ...f, n: list.length, value: list.reduce((s, o) => s + Number(o.total), 0), tone: statusInfo(f.key).tone };
+  });
+  const funnelMax = Math.max(...funnel.map((f) => f.value), 1);
+
+  /* ---------- Rankings ---------- */
+  const link = (patch: Record<string, string | null>) => {
+    const p = new URLSearchParams();
+    const merged: Record<string, string | null | undefined> = { periodo: sp.periodo, de: sp.de, ate: sp.ate, rep: sp.rep, vend: sp.vend, ...patch };
+    for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
+    const s = p.toString();
+    return s ? `/?${s}` : "/";
+  };
+  const share = (v: number) => (soldTotal ? v / soldTotal : 0);
+  const byPrincipal = rank(sold, (o) => o.principal_id, (o) => Number(o.total)).slice(0, 6);
+  const bySeller = rank(sold, (o) => o.seller_id, (o) => Number(o.total)).slice(0, 6);
+  const byCustomer = rank(sold, (o) => o.customer_id, (o) => Number(o.total)).slice(0, 6);
+  const customerName = new Map(sold.map((o) => [o.customer_id, o.customers?.name ?? "Cliente"] as const));
+  const productRows = (items ?? []).map((i) => ({ k: `${i.code ?? ""}|${i.description}`, v: Number(i.line_total), q: Number(i.qty) }));
+  const byProduct = rank(productRows, (r) => r.k, (r) => r.v).slice(0, 6);
+  const productQty = new Map<string, number>();
+  for (const r of productRows) productQty.set(r.k, (productQty.get(r.k) ?? 0) + r.q);
+  const productTotal = productRows.reduce((s, r) => s + r.v, 0);
+
+  /* ---------- Clientes para reativar (sem comprar há 60+ dias) ---------- */
+  const lastBuy = new Map<string, { date: string; total: number; name: string; phone: string | null }>();
+  for (const h of history ?? []) {
+    const c = h.customers as unknown as { name: string; phone: string | null } | null;
+    const cur = lastBuy.get(h.customer_id);
+    lastBuy.set(h.customer_id, {
+      date: !cur || h.order_date > cur.date ? h.order_date : cur.date,
+      total: (cur?.total ?? 0) + Number(h.total),
+      name: c?.name ?? "Cliente",
+      phone: c?.phone ?? null,
+    });
+  }
+  const limitDate = addDays(today, -60);
+  const toReactivate = [...lastBuy.entries()]
+    .filter(([, v]) => v.date < limitDate)
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 6);
+
+  /* ---------- Meta do recorte ---------- */
+  const wantScope = rep && vend ? "vendedor_representada" : vend ? "vendedor" : rep ? "representada" : "geral";
+  const covers = (g: GoalRow) => (g.period_start <= P.start && g.period_end >= P.end ? 0 : 1);
+  const goal = goalData.goals
+    .filter((g) => g.metric === "vendido" && goalScope(g) === wantScope && (!rep || g.principal_id === rep) && (!vend || g.seller_id === vend))
+    .sort((a, b) => covers(a) - covers(b))[0];
+  const goalP = goal ? goalProgress(goal, goalData.sales, goalData.invoices, today) : null;
+
+  /* ---------- Agenda ---------- */
+  const followUps = [
+    ...(leadsDue ?? []).map((l) => ({
+      kind: "lead" as const, id: l.id, name: l.name, sub: [l.company, stageLabel(l.stage)].filter(Boolean).join(" · "),
+      phone: l.phone, date: l.next_contact as string, href: `/leads?lead=${l.id}`,
+    })),
+    ...(customersDue ?? []).map((c) => ({
+      kind: "cliente" as const, id: c.id, name: c.name, sub: c.contact_name ? `Cliente · ${c.contact_name}` : "Cliente",
+      phone: c.phone, date: c.next_contact as string, href: `/clientes/${c.id}?aba=interacoes`,
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+  const pay7 = (payables ?? []).reduce((s, p) => s + Number(p.amount), 0);
+  const payLate = (payables ?? []).filter((p) => p.due_date < today);
+
+  const sellersOpt = isBackOffice
+    ? (members ?? []).filter((m) => m.role !== "finance").map((m) => ({ value: m.user_id, label: m.full_name || m.email || "Vendedor" }))
+    : null;
+  const recent = orders.slice(0, 6);
+  const goalTitle =
+    wantScope === "geral" ? "Meta do escritório" : wantScope === "representada" ? `Meta · ${pName.get(rep!)}` : `Meta · ${sName.get(vend!) ?? "vendedor"}`;
+
   return (
     <>
       <PageHeader
-        title={greeting()}
-        hint={todayLabel()}
+        title={`${greeting()}, ${profile.firstName}`}
+        hint={
+          rep || vend
+            ? `Vendo ${[rep ? pName.get(rep) : null, vend ? sName.get(vend) : null].filter(Boolean).join(" · ")}`
+            : "O resumo do escritório. Use os filtros para olhar um período, uma representada ou um vendedor."
+        }
         action={canOrder ? <NewButton label="Novo pedido" href="/pedidos/novo" fab /> : null}
       />
 
-      <dl
-        className={`mb-6 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line ${stats.length === 4 ? "lg:grid-cols-4" : ""} [&>*]:bg-white`}
-        style={{ gap: 1 }}
+      <CockpitShell
+        principals={(principals ?? []).map((p) => ({ value: p.id, label: p.name }))}
+        sellers={sellersOpt}
+        periodLabel={P.label}
+        compareLabel={`Comparações ${P.compareLabel}`}
       >
-        {stats.map((s) => (
-          <Link key={s.label} href={s.href} className="group min-w-0 p-4 transition-colors hover:bg-subtle sm:p-5">
-            <dt className="flex items-center gap-1.5 text-[13px] text-muted">
-              <Icon name={s.icon} size={14} className="text-faint" />
-              <span className="truncate">{s.label}</span>
-            </dt>
-            <dd
-              className={`mt-2 truncate text-xl font-semibold tabular-nums tracking-[-0.02em] sm:text-2xl ${
-                s.valueTone === "ok" ? "text-ok" : s.valueTone === "alert" ? "text-alert" : "text-ink"
-              }`}
-            >
-              {s.value}
-            </dd>
-            <dd className={`mt-0.5 truncate text-xs ${s.subAlert ? "font-medium text-alert" : "text-muted"}`}>{s.sub}</dd>
-          </Link>
-        ))}
-      </dl>
+        {/* Indicadores */}
+        <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line md:grid-cols-3" style={{ gap: 1 }}>
+          <div className="col-span-2 md:col-span-1">
+            <Kpi big label="Vendido" icon="receipt" value={brl(soldTotal)} delta={delta(soldTotal, prevTotal)} sub={`antes ${brl(prevTotal)}`} href="/pedidos" />
+          </div>
+          <Kpi label="Pedidos" icon="file" value={String(sold.length)} delta={delta(sold.length, prevSold.length)} sub={`antes ${prevSold.length}`} href="/pedidos" />
+          <Kpi label="Ticket médio" icon="tag" value={brl(ticket)} delta={delta(ticket, prevTicket)} />
+          <Kpi label="Faturado (NF)" icon="receipt" value={brl(invoiced)} delta={delta(invoiced, prevInvoiced)} href="/comissoes" />
+          <Kpi
+            label="Comissão gerada"
+            icon="percent"
+            value={brl(commGenerated)}
+            sub={commExpected ? `prevista nos pedidos ${brl(commExpected)}` : undefined}
+            href="/comissoes"
+          />
+          <div className="col-span-2 md:col-span-1">
+          <Kpi
+            label="Clientes atendidos"
+            icon="users"
+            value={String(customers.size)}
+            delta={delta(customers.size, prevCustomers.size)}
+            sub={newCustomers ? `${newCustomers} ${newCustomers === 1 ? "novo" : "novos"}` : undefined}
+            href="/clientes"
+          />
+          </div>
+        </dl>
 
-      <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
-        <Card
-          title="Follow-ups de hoje"
-          hint={
-            followUps.length
-              ? `${followUps.length} ${followUps.length === 1 ? "contato" : "contatos"}${
-                  lateCount ? ` · ${lateCount} atrasado${lateCount === 1 ? "" : "s"}` : ""
-                }`
-              : undefined
-          }
-          flush
-          action={
-            <Link href="/leads" className="inline-flex items-center gap-1 text-[13px] text-muted hover:text-ink">
-              Leads
-              <Icon name="arrow-right" size={13} />
-            </Link>
-          }
-        >
-          {followUps.length === 0 ? (
-            <div className="flex flex-col items-center px-6 py-10 text-center">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-ok-soft text-ok">
-                <Icon name="check" size={18} strokeWidth={2.2} />
-              </span>
-              <p className="mt-3 text-sm font-medium">Nenhum contato pendente para hoje</p>
-              <p className="mt-1 max-w-xs text-[13px] text-muted">
-                Ao registrar uma conversa com um lead ou cliente, agende o próximo contato: ele aparece aqui no dia.
-              </p>
-            </div>
-          ) : (
-            <ul className="divide-y divide-line">
-              {followUps.slice(0, 8).map((f) => {
-                const late = f.date < today;
-                return (
-                  <li key={`${f.kind}-${f.id}`} className="relative flex items-center gap-3 px-4 py-3 transition-colors hover:bg-subtle sm:px-5">
-                    <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                        late ? "bg-alert-soft text-alert" : "bg-warn-soft text-warn"
-                      }`}
-                    >
-                      <Icon name={f.kind === "lead" ? "sparkle" : "users"} size={15} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <Link href={f.href} className="block truncate text-sm font-medium after:absolute after:inset-0">
-                        {f.name}
-                      </Link>
-                      <span className="block truncate text-xs text-muted">{f.sub}</span>
-                    </span>
-                    <span className={`shrink-0 text-xs font-medium ${late ? "text-alert" : "text-warn"}`}>
-                      {late ? `Atrasado · ${formatDate(f.date).slice(0, 5)}` : "Hoje"}
-                    </span>
-                    <WhatsAppButton phone={f.phone} />
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
+        {/* Gráfico + meta + situação */}
+        <div className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+          <section className="min-w-0 rounded-xl border border-line bg-white p-4 sm:p-5">
+            <h2 className="text-sm font-semibold">Vendas por {series.unit}</h2>
+            <p className="mb-3 text-xs text-muted">Pedidos enviados e faturados, pela data do pedido.</p>
+            {sold.length || prevSold.length ? (
+              <SalesChart points={series.points} unit={series.unit} compareLabel={P.compareLabel} />
+            ) : (
+              <p className="py-16 text-center text-sm text-muted">Nenhuma venda neste período.</p>
+            )}
+          </section>
 
-        <Card
-          title="Pedidos recentes"
-          flush
-          action={
-            (recent ?? []).length > 0 ? (
-              <Link href="/pedidos" className="inline-flex items-center gap-1 text-[13px] text-muted hover:text-ink">
-                Ver todos
-                <Icon name="arrow-right" size={13} />
+          <div className="grid content-start gap-4">
+            {goal && goalP ? (
+              <GoalCard goal={goal} progress={goalP} title={goalTitle} />
+            ) : (
+              <Link
+                href="/metas"
+                className="flex items-center gap-3 rounded-xl border border-dashed border-line-strong px-4 py-4 text-sm text-muted transition hover:border-pen hover:text-ink"
+              >
+                <Icon name="target" size={18} className="text-faint" />
+                <span className="flex-1">Sem meta de vendas para este recorte.</span>
+                <span className="font-medium text-pen">{canManage ? "Lançar" : "Ver metas"}</span>
               </Link>
-            ) : null
-          }
-        >
-          {(recent ?? []).length === 0 ? (
-            <div className="flex flex-col items-center px-6 py-10 text-center">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-subtle text-muted">
-                <Icon name="receipt" size={18} />
-              </span>
-              <p className="mt-3 text-sm font-medium">Nenhum pedido ainda</p>
-              <p className="mt-1 max-w-xs text-[13px] text-muted">Cliente, representada e itens: em menos de 2 minutos.</p>
-              {canOrder && counts.clientes > 0 ? (
-                <Link href="/pedidos/novo" className={`${primaryBtn} mt-5`}>
-                  Fazer o primeiro pedido
-                </Link>
-              ) : null}
-            </div>
+            )}
+
+            <section className="rounded-xl border border-line bg-white p-4">
+              <h2 className="mb-3 text-sm font-semibold">Situação dos pedidos do período</h2>
+              <ul className="grid gap-2.5">
+                {funnel.map((f) => (
+                  <li key={f.key}>
+                    <Link href={`/pedidos?status=${f.key}`} className="group block">
+                      <span className="flex items-baseline justify-between gap-2 text-[13px]">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Badge tone={f.tone} dot>
+                            {f.label}
+                          </Badge>
+                          <span className="truncate text-xs text-muted">
+                            {f.n} {f.hint}
+                          </span>
+                        </span>
+                        <span className="tabular-nums text-ink group-hover:text-pen">{brl(f.value)}</span>
+                      </span>
+                      <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-active">
+                        <span className="block h-full rounded-full bg-pen/70" style={{ width: `${(f.value / funnelMax) * 100}%` }} />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        </div>
+
+        {/* Rankings */}
+        <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <RankList
+            title="Representadas"
+            empty="Sem vendas no período."
+            rows={byPrincipal.map(([id, v]) => ({
+              key: id,
+              name: pName.get(id) ?? "—",
+              value: brl(v),
+              share: share(v),
+              href: link({ rep: rep === id ? null : id }),
+              active: rep === id,
+            }))}
+          />
+          {isBackOffice && !vend ? (
+            <RankList
+              title="Vendedores"
+              empty="Sem vendas no período."
+              rows={bySeller.map(([id, v]) => ({
+                key: id,
+                name: sName.get(id) ?? "Vendedor",
+                value: brl(v),
+                share: share(v),
+                href: link({ vend: id }),
+              }))}
+            />
+          ) : (
+            <section className="rounded-xl border border-line bg-white p-4">
+              <h2 className="mb-2 text-sm font-semibold">Comissões</h2>
+              <MiniStat label="A receber" value={brl(toReceive)} href="/comissoes?status=a_receber" />
+              <MiniStat label="Atrasadas" value={brl(lateComm)} alert={lateComm > 0} href="/comissoes?status=atrasadas" />
+              <MiniStat label="Recebidas no período" value={brl(receivedPeriod)} ok />
+            </section>
+          )}
+          <RankList
+            title="Clientes"
+            empty="Sem vendas no período."
+            more={{ href: "/clientes", label: "Carteira" }}
+            rows={byCustomer.map(([id, v]) => ({ key: id, name: customerName.get(id) ?? "Cliente", value: brl(v), share: share(v), href: `/clientes/${id}` }))}
+          />
+          <RankList
+            title="Produtos"
+            empty="Sem itens vendidos no período."
+            rows={byProduct.map(([k, v]) => ({
+              key: k,
+              name: k.split("|").slice(1).join("|"),
+              value: brl(v),
+              share: productTotal ? v / productTotal : 0,
+              sub: `${(productQty.get(k) ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} un.`,
+            }))}
+          />
+        </div>
+
+        {/* Financeiro, agenda e reativação */}
+        <div className="mb-5 grid gap-4 lg:grid-cols-3">
+          {isBackOffice ? (
+            <section className="rounded-xl border border-line bg-white p-4">
+              <h2 className="mb-2 text-sm font-semibold">Financeiro</h2>
+              <MiniStat label="Comissão a receber" value={brl(toReceive)} href="/comissoes?status=a_receber" />
+              <MiniStat label="Comissões atrasadas" value={brl(lateComm)} alert={lateComm > 0} href="/comissoes?status=atrasadas" />
+              <MiniStat label="Recebido no período" value={brl(receivedPeriod)} ok />
+              <div className="my-2 h-px bg-line" />
+              <MiniStat label="Contas nos próximos 7 dias" value={brl(pay7)} href="/contas-a-pagar?status=pendentes" />
+              <MiniStat label="Contas vencidas" value={String(payLate.length)} alert={payLate.length > 0} href="/contas-a-pagar?status=vencidas" />
+              <p className="mt-2 text-[11px] text-muted">As contas a pagar são do escritório e não mudam com os filtros.</p>
+            </section>
+          ) : null}
+
+          <section className="flex flex-col rounded-xl border border-line bg-white">
+            <header className="flex items-center justify-between border-b border-line px-4 py-3">
+              <h2 className="text-sm font-semibold">
+                Follow-ups de hoje <span className="ml-1 font-normal text-muted">{followUps.length}</span>
+              </h2>
+              <Link href="/leads?filtro=hoje" className="text-xs text-muted hover:text-ink">
+                Leads
+              </Link>
+            </header>
+            {followUps.length === 0 ? (
+              <p className="px-4 py-8 text-center text-[13px] text-muted">Nenhum contato pendente para hoje.</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {followUps.slice(0, 6).map((f) => {
+                  const late = f.date < today;
+                  return (
+                    <li key={`${f.kind}-${f.id}`} className="relative flex items-center gap-3 px-4 py-2.5 hover:bg-subtle">
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${late ? "bg-alert-soft text-alert" : "bg-warn-soft text-warn"}`}>
+                        <Icon name={f.kind === "lead" ? "sparkle" : "users"} size={14} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <Link href={f.href} className="block truncate text-[13px] font-medium after:absolute after:inset-0">
+                          {f.name}
+                        </Link>
+                        <span className="block truncate text-[11px] text-muted">{f.sub}</span>
+                      </span>
+                      <span className={`shrink-0 text-[11px] font-medium ${late ? "text-alert" : "text-warn"}`}>
+                        {late ? `Atrasado · ${formatDate(f.date).slice(0, 5)}` : "Hoje"}
+                      </span>
+                      <WhatsAppButton phone={f.phone} />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="flex flex-col rounded-xl border border-line bg-white">
+            <header className="border-b border-line px-4 py-3">
+              <h2 className="text-sm font-semibold">Clientes para reativar</h2>
+              <p className="text-[11px] text-muted">Compraram no último ano, mas não há mais de 60 dias.</p>
+            </header>
+            {toReactivate.length === 0 ? (
+              <p className="px-4 py-8 text-center text-[13px] text-muted">Nenhum cliente parado.</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {toReactivate.map(([id, c]) => (
+                  <li key={id} className="relative flex items-center gap-3 px-4 py-2.5 hover:bg-subtle">
+                    <span className="min-w-0 flex-1">
+                      <Link href={`/clientes/${id}`} className="block truncate text-[13px] font-medium after:absolute after:inset-0">
+                        {c.name}
+                      </Link>
+                      <span className="block text-[11px] text-muted">
+                        Última compra {formatDate(c.date)} · {brl(c.total)} em 12 meses
+                      </span>
+                    </span>
+                    <WhatsAppButton phone={c.phone} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        {/* Pedidos do período */}
+        <section className="rounded-xl border border-line bg-white">
+          <header className="flex items-center justify-between border-b border-line px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-semibold">Pedidos do período</h2>
+            <Link href="/pedidos" className="inline-flex items-center gap-1 text-xs text-muted hover:text-ink">
+              Ver todos <Icon name="arrow-right" size={12} />
+            </Link>
+          </header>
+          {recent.length === 0 ? (
+            <p className="px-4 py-8 text-center text-[13px] text-muted">Nenhum pedido neste período.</p>
           ) : (
             <ul className="divide-y divide-line">
-              {(recent ?? []).map((o) => {
+              {recent.map((o) => {
                 const st = statusInfo(o.status);
-                const customer = (o.customers as unknown as { name: string } | null)?.name ?? "";
-                const principal = (o.principals as unknown as { name: string } | null)?.name ?? "";
                 return (
                   <li key={o.id}>
-                    <Link href={`/pedidos/${o.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-subtle sm:px-5">
+                    <Link href={`/pedidos/${o.id}`} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-subtle sm:px-5">
                       <span className="w-20 shrink-0 truncate font-mono text-xs text-muted">{formatOrderNumber(o.number, settings)}</span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-ink">{customer}</span>
-                        <span className="block truncate text-xs text-muted">
-                          {principal} · {formatDate(o.order_date)}
+                        <span className="block truncate text-[13px] font-medium">{o.customers?.name}</span>
+                        <span className="block truncate text-[11px] text-muted">
+                          {o.principals?.name} · {formatDate(o.order_date)}
                         </span>
                       </span>
                       <span className="hidden sm:block">
@@ -339,57 +505,31 @@ export default async function HomePage() {
                           {st.label}
                         </Badge>
                       </span>
-                      <span className="w-24 shrink-0 text-right text-sm tabular-nums text-ink">{brl(Number(o.total))}</span>
+                      <span className="w-24 shrink-0 text-right text-[13px] tabular-nums">{brl(Number(o.total))}</span>
                     </Link>
                   </li>
                 );
               })}
             </ul>
           )}
-        </Card>
-      </div>
-
-      {firstPending ? (
-        <Card title="Primeiros passos" hint={`${done} de ${steps.length} etapas concluídas`} flush className="mt-6">
-          <div className="px-4 pt-4 sm:px-5">
-            <Progress value={done} max={steps.length} />
-          </div>
-          <ol className="grid gap-1 p-2 sm:grid-cols-3 sm:p-3">
-            {steps.map((step, i) => {
-              const complete = step.n > 0;
-              const isNext = step === firstPending;
-              return (
-                <li key={step.href}>
-                  <Link
-                    href={step.href}
-                    className={`group flex items-center gap-3 rounded-lg p-2.5 transition-colors hover:bg-hover ${isNext ? "bg-pen-soft/60" : ""}`}
-                  >
-                    <span
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                        complete
-                          ? "bg-pen text-white"
-                          : isNext
-                            ? "border-[1.5px] border-pen text-pen"
-                            : "border-[1.5px] border-line-strong text-faint"
-                      }`}
-                    >
-                      {complete ? <Icon name="check" size={13} strokeWidth={2.6} /> : i + 1}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className={`block truncate text-sm ${complete ? "text-muted line-through decoration-faint" : "font-medium text-ink"}`}
-                      >
-                        {step.title}
-                      </span>
-                      <span className="block truncate text-xs text-muted">{step.desc}</span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ol>
-        </Card>
-      ) : null}
+        </section>
+      </CockpitShell>
     </>
+  );
+}
+
+function MiniStat({ label, value, alert, ok, href }: { label: string; value: string; alert?: boolean; ok?: boolean; href?: string }) {
+  const inner = (
+    <>
+      <span className="text-[13px] text-ink-2">{label}</span>
+      <span className={`text-[13px] font-semibold tabular-nums ${alert ? "text-alert" : ok ? "text-ok" : "text-ink"}`}>{value}</span>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="-mx-2 flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-hover">
+      {inner}
+    </Link>
+  ) : (
+    <div className="flex items-center justify-between py-1.5">{inner}</div>
   );
 }

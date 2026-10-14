@@ -18,7 +18,7 @@ export default async function NewOrderPage({
 
   const data = await loadEditorData();
   const customer = data.customers.find((c) => c.id === sp.cliente);
-  const principalId = customer?.principal_id ?? (data.principals.length === 1 ? data.principals[0].id : "");
+  const principalId = customer?.last_principal_id ?? (data.principals.length === 1 ? data.principals[0].id : "");
   const principal = data.principals.find((p) => p.id === principalId);
 
   const missing = data.principals.length === 0 ? "representada" : data.customers.length === 0 ? "cliente" : null;

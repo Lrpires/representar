@@ -4,6 +4,7 @@ import { getSettings, themeVars } from "@/lib/settings";
 import { formatOrderNumber, numText, statusInfo } from "@/lib/orders";
 import { brl, formatDate } from "@/lib/format";
 import { unitLabel } from "@/lib/units";
+import { logoUrl } from "@/lib/storage";
 import { PrintButton } from "@/components/print-button";
 import { Logo } from "@/components/ui";
 
@@ -17,7 +18,7 @@ export default async function PrintOrderPage({ params }: { params: Promise<{ id:
 
   const { data: o } = await supabase
     .from("orders")
-    .select("*, customers(*), principals(name, legal_name, cnpj, order_email)")
+    .select("*, customers(*), principals(*)")
     .eq("id", id)
     .maybeSingle();
   if (!o) notFound();
@@ -82,6 +83,10 @@ export default async function PrintOrderPage({ params }: { params: Promise<{ id:
         <section className="grid grid-cols-2 gap-6 border-b border-line py-5">
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Cliente</p>
+            {logoUrl(c.logo_path) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl(c.logo_path)!} alt="" className="mb-1.5 max-h-10 max-w-[8rem] object-contain" />
+            ) : null}
             <p className="font-semibold">{c.name}</p>
             {c.cnpj ? <p>CNPJ {c.cnpj}</p> : null}
             {address ? <p className="text-ink-2">{address}</p> : null}
@@ -91,6 +96,10 @@ export default async function PrintOrderPage({ params }: { params: Promise<{ id:
           </div>
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Representada</p>
+            {logoUrl(p.logo_path) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl(p.logo_path)!} alt="" className="mb-1.5 max-h-10 max-w-[8rem] object-contain" />
+            ) : null}
             <p className="font-semibold">{p.name}</p>
             {p.legal_name ? <p>{p.legal_name}</p> : null}
             {p.cnpj ? <p>CNPJ {p.cnpj}</p> : null}

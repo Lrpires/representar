@@ -22,8 +22,19 @@ function readLead(formData: FormData, back: string) {
   const valueRaw = text(formData, "estimated_value");
   const value = valueRaw ? parseNumber(valueRaw) : null;
   if (value !== null && (!Number.isFinite(value) || value < 0)) fail(back, "Valor estimado inválido.");
+  const state = text(formData, "state").toUpperCase();
+  if (state && !/^[A-Z]{2}$/.test(state)) fail(back, "Use a sigla do estado com 2 letras (ex.: PE).");
+  const zip = text(formData, "zip").replace(/\D/g, "");
+  if (zip && zip.length !== 8) fail(back, "O CEP precisa ter 8 números.");
+
   return {
     name,
+    zip: zip ? `${zip.slice(0, 5)}-${zip.slice(5)}` : null,
+    street: optional(formData, "street"),
+    street_number: optional(formData, "street_number"),
+    complement: optional(formData, "complement"),
+    district: optional(formData, "district"),
+    state: state || null,
     company: optional(formData, "company"),
     phone: phone ? formatPhone(phone) : null,
     email: optional(formData, "email"),
@@ -55,7 +66,17 @@ export async function updateLead(id: string, formData: FormData) {
   const { supabase } = await getContext();
   const back = `${PATH}?lead=${id}&editar=1`;
   const fields = readLead(formData, back);
-  const { error } = await supabase.from("leads").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
+
+  // Endereço mudou: a posição no mapa precisa ser recalculada.
+  const { data: before } = await supabase.from("leads").select("*").eq("id", id).maybeSingle();
+  const keys = ["zip", "street", "street_number", "district", "city", "state"] as const;
+  const moved = before && keys.some((k) => (before[k] ?? null) !== (fields[k] ?? null));
+  const geoReset = moved ? { latitude: null, longitude: null, geo_quality: null, geocoded_at: null } : {};
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ ...fields, ...geoReset, updated_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) fail(back, `Não foi possível salvar: ${error.message}`);
   revalidatePath(PATH);
   revalidatePath("/");
@@ -117,7 +138,7 @@ export async function convertLead(id: string) {
   const back = `${PATH}?lead=${id}`;
   const { data: lead } = await supabase
     .from("leads")
-    .select("name, company, phone, city, notes, customer_id")
+    .select("*")
     .eq("id", id)
     .maybeSingle();
   if (!lead) fail(PATH, "Lead não encontrado.");
@@ -133,6 +154,16 @@ export async function convertLead(id: string) {
       phone: lead.phone,
       city: lead.city,
       notes: lead.notes,
+      // Endereço e posição no mapa vão junto para o cliente.
+      zip: lead.zip ?? null,
+      street: lead.street ?? null,
+      street_number: lead.street_number ?? null,
+      complement: lead.complement ?? null,
+      district: lead.district ?? null,
+      state: lead.state ?? null,
+      ...(lead.latitude != null
+        ? { latitude: lead.latitude, longitude: lead.longitude, geo_quality: lead.geo_quality, geocoded_at: lead.geocoded_at }
+        : {}),
     })
     .select("id")
     .single();
@@ -156,4 +187,34 @@ export async function deleteLead(id: string) {
   if (error) fail(`${PATH}?lead=${id}`, `Não foi possível excluir: ${error.message}`);
   revalidatePath(PATH);
   redirect(`${PATH}?ok=${encodeURIComponent("Lead excluído.")}`);
+}
+
+/* ---------- Mapa ---------- */
+
+export async function saveLeadLocation(
+  id: string,
+  lat: number,
+  lng: number,
+  quality: "endereco" | "rua" | "bairro" | "cidade" | "manual",
+): Promise<{ error?: string }> {
+  const { supabase } = await getContext();
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return { error: "Posição inválida." };
+  // geo_version 2 = posição feita pela busca nova (a migração 014 não apaga essas).
+  const patch = { latitude: lat, longitude: lng, geo_quality: quality, geocoded_at: new Date().toISOString() };
+  let { error } = await supabase.from("leads").update({ ...patch, geo_version: 2 }).eq("id", id);
+  if (error?.message.includes("geo_version")) ({ error } = await supabase.from("leads").update(patch).eq("id", id));
+  if (error) {
+    if (error.message.includes("geo_quality")) return { error: "Falta rodar a migração 014 no Supabase." };
+    return { error: error.message.includes("latitude") ? "Falta rodar a migração de mapa no Supabase." : error.message };
+  }
+  return {};
+}
+
+export async function markLeadNotFound(id: string): Promise<void> {
+  const { supabase } = await getContext();
+  await supabase.from("leads").update({ geocoded_at: new Date().toISOString() }).eq("id", id);
+}
+
+export async function refreshLeads() {
+  revalidatePath(PATH);
 }

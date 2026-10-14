@@ -7,6 +7,8 @@ import {
 } from "@/lib/commission";
 import { Icon, type IconName } from "@/components/icons";
 import { MaskedInput } from "@/components/masked-input";
+import { LogoField } from "@/components/logo-field";
+import { logoUrl } from "@/lib/storage";
 import { AddressFields } from "@/components/address-fields";
 import {
   PageHeader, Field, FormSection, ErrorNote, OkNote, Badge, Avatar, inputCls, primaryBtn, ghostBtn,
@@ -52,7 +54,7 @@ export default async function PrincipalPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { supabase, canManage } = await getContext();
+  const { supabase, canManage, orgId } = await getContext();
 
   const [{ data: p }, { data: contacts }] = await Promise.all([
     supabase.from("principals").select("*").eq("id", id).maybeSingle(),
@@ -75,6 +77,9 @@ export default async function PrincipalPage({
         title={p.name}
         hint={p.legal_name || undefined}
         back={{ href: PATH, label: "Representadas" }}
+        leading={
+          <LogoField kind="representadas" id={id} orgId={orgId} name={p.name} url={logoUrl(p.logo_path)} size={52} editable={canManage} />
+        }
         action={<Badge tone={p.active ? "ok" : "neutral"}>{p.active ? "Ativa" : "Inativa"}</Badge>}
       />
 

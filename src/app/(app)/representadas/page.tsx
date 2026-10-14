@@ -2,6 +2,7 @@ import { getContext } from "@/lib/session";
 import { createPrincipal, setPrincipalActive } from "./actions";
 import { pct, safeQ } from "@/lib/format";
 import { Sheet } from "@/components/sheet";
+import { logoUrl } from "@/lib/storage";
 import { MaskedInput } from "@/components/masked-input";
 import { AddressFields } from "@/components/address-fields";
 import { SearchBox } from "@/components/search";
@@ -23,7 +24,7 @@ export default async function PrincipalsPage({
 
   let query = supabase
     .from("principals")
-    .select("id, name, legal_name, cnpj, default_commission_pct, commission_close_mode, commission_days_after, city, state, contact, active")
+    .select("*")
     .order("name");
   if (q) query = query.or(`name.ilike.*${q}*,cnpj.ilike.*${q}*`);
   const { data } = await query;
@@ -118,7 +119,7 @@ export default async function PrincipalsPage({
                         <td className={td}>
                           <div className="flex items-center gap-3">
                             <span className={p.active ? "" : "opacity-50 grayscale"}>
-                              <Avatar name={p.name} size={30} />
+                              <Avatar name={p.name} size={30} src={logoUrl(p.logo_path)} />
                             </span>
                             <div className="min-w-0">
                               <RowLink href={`${PATH}/${p.id}`} className={`block truncate font-medium ${p.active ? "text-ink" : "text-ink-2"}`}>
@@ -171,7 +172,7 @@ export default async function PrincipalsPage({
                 {list.map((p) => (
                   <ListRow key={p.id} href={`${PATH}/${p.id}`}>
                     <span className={p.active ? "" : "opacity-50 grayscale"}>
-                      <Avatar name={p.name} size={38} />
+                      <Avatar name={p.name} size={38} src={logoUrl(p.logo_path)} />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className={`truncate text-[15px] font-medium ${p.active ? "" : "text-muted"}`}>{p.name}</p>

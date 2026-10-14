@@ -10,7 +10,7 @@ import { Combobox, type ComboOption } from "@/components/combobox";
 import { Icon } from "@/components/icons";
 import { ErrorNote, Field, SaveBar, ghostBtn, iconBtn, inputCls, primaryBtn, textareaCls } from "@/components/ui";
 
-export type EditorCustomer = { id: string; name: string; city: string | null; state: string | null; cnpj: string | null; principal_id: string | null };
+export type EditorCustomer = { id: string; name: string; city: string | null; state: string | null; cnpj: string | null; last_principal_id: string | null };
 export type EditorPrincipal = { id: string; name: string; commission: number | null };
 export type EditorProduct = { id: string; principal_id: string; code: string; name: string; unit: string; lastPrice: number | null };
 export type EditorUnit = { value: string; label: string };
@@ -57,6 +57,8 @@ export function OrderEditor({
   );
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  // A representada veio da sugestão (última compra)? Então troca junto se trocar de cliente.
+  const [principalAuto, setPrincipalAuto] = useState(false);
   const [pending, start] = useTransition();
   const top = useRef<HTMLDivElement>(null);
 
@@ -235,7 +237,11 @@ export function OrderEditor({
                   const c = customers.find((x) => x.id === o.id);
                   setCustomerText(o.label);
                   set("customer_id", o.id);
-                  if (c?.principal_id && !f.principal_id) pickPrincipal(c.principal_id);
+                  // Sugere a representada da última compra do cliente (se a pessoa não escolheu outra à mão).
+                  if (c?.last_principal_id && (!f.principal_id || principalAuto)) {
+                    pickPrincipal(c.last_principal_id);
+                    setPrincipalAuto(true);
+                  }
                 }}
                 options={customerOptions}
                 placeholder="Buscar por nome, CNPJ ou cidade"
@@ -255,7 +261,14 @@ export function OrderEditor({
               />
             </div>
             <Field label="Representada" className="col-span-2 lg:col-span-1">
-              <select value={f.principal_id} onChange={(e) => pickPrincipal(e.target.value)} className={inputCls}>
+              <select
+                value={f.principal_id}
+                onChange={(e) => {
+                  pickPrincipal(e.target.value);
+                  setPrincipalAuto(false);
+                }}
+                className={inputCls}
+              >
                 <option value="" disabled>
                   Escolha
                 </option>
@@ -265,6 +278,7 @@ export function OrderEditor({
                   </option>
                 ))}
               </select>
+              {principalAuto ? <span className="mt-1.5 block text-xs text-muted">Sugerida pela última compra do cliente.</span> : null}
             </Field>
             <Field label="Data">
               <input type="date" value={f.order_date} onChange={(e) => set("order_date", e.target.value)} className={inputCls} />

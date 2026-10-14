@@ -9,6 +9,8 @@ import { brl, formatDate, todayISO } from "@/lib/format";
 import { Sheet } from "@/components/sheet";
 import { Icon } from "@/components/icons";
 import { WhatsAppButton } from "@/components/whatsapp";
+import { LogoField } from "@/components/logo-field";
+import { logoUrl } from "@/lib/storage";
 import { ConfirmButton } from "@/components/confirm-button";
 import { SubmitButton } from "@/components/submit";
 import {
@@ -41,13 +43,13 @@ export default async function CustomerPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { supabase, canManage, role } = await getContext();
+  const { supabase, canManage, role, orgId } = await getContext();
   const settings = await getSettings();
 
-  const [{ data: c }, { data: orders }, { data: interactions }, { data: principals }] = await Promise.all([
+  const [{ data: c }, { data: orders }, { data: interactions }] = await Promise.all([
     supabase
       .from("customers")
-      .select("*, principals(name)")
+      .select("*")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -60,14 +62,21 @@ export default async function CustomerPage({
       .select("id, happened_at, note")
       .eq("customer_id", id)
       .order("happened_at", { ascending: false }),
-    supabase.from("principals").select("id, name").eq("active", true).order("name"),
   ]);
   if (!c) notFound();
 
   const here = `${PATH}/${id}`;
   const tab = sp.aba === "interacoes" ? "interacoes" : "pedidos";
   const editing = sp.editar === "1";
-  const principal = (c.principals as unknown as { name: string } | null)?.name;
+  // Representadas que aparecem nos pedidos do cliente (a mais recente primeiro).
+  const boughtFrom = [
+    ...new Set(
+      (orders ?? [])
+        .filter((o) => o.status !== "cancelado")
+        .map((o) => (o.principals as unknown as { name: string } | null)?.name)
+        .filter(Boolean) as string[],
+    ),
+  ];
   const place = [c.city, c.state].filter(Boolean).join(" / ");
   const streetLine = [[c.street, c.street_number].filter(Boolean).join(", "), c.complement, c.district]
     .filter(Boolean)
@@ -83,7 +92,7 @@ export default async function CustomerPage({
     <>
       <PageHeader
         back={{ href: PATH, label: "Clientes" }}
-        leading={<Avatar name={c.name} size={44} />}
+        leading={<LogoField kind="clientes" id={id} orgId={orgId} name={c.name} url={logoUrl(c.logo_path)} size={52} />}
         title={c.name}
         meta={
           <>
@@ -261,7 +270,7 @@ export default async function CustomerPage({
               <Property label="Contato">{c.contact_name}</Property>
               <Property label="Telefone">{c.phone}</Property>
               <Property label="CNPJ">{c.cnpj ? <span className="font-mono text-xs">{c.cnpj}</span> : null}</Property>
-              <Property label="Representada">{principal}</Property>
+              <Property label="Compra de">{boughtFrom.length ? boughtFrom.join(", ") : null}</Property>
               <Property label="Próximo contato">
                 {c.next_contact ? (
                   <span className={c.next_contact <= todayISO() ? "font-medium text-alert" : ""}>{formatDate(c.next_contact)}</span>
@@ -306,7 +315,7 @@ export default async function CustomerPage({
       <Sheet open={editing} title="Editar cliente" closeHref={here}>
         <SheetForm action={updateCustomer.bind(null, id)} closeHref={here} submitLabel="Salvar alterações">
           <ErrorNote message={sp.erro} />
-          <CustomerFields principals={principals ?? []} values={c} />
+          <CustomerFields values={c} />
           {canManage ? (
             <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-alert/20 p-3 sm:col-span-2">
               <p className="text-[13px] text-muted">Excluir apaga o cliente e as interações. Só é possível sem pedidos.</p>

@@ -8,7 +8,6 @@ export type CustomerValues = {
   contact_name?: string | null;
   phone?: string | null;
   city?: string | null;
-  principal_id?: string | null;
   notes?: string | null;
   zip?: string | null;
   street?: string | null;
@@ -19,13 +18,7 @@ export type CustomerValues = {
 };
 
 // Campos do cliente, iguais no cadastro e na edição.
-export function CustomerFields({
-  principals,
-  values = {},
-}: {
-  principals: { id: string; name: string }[];
-  values?: CustomerValues;
-}) {
+export function CustomerFields({ values = {} }: { values?: CustomerValues }) {
   const v = (x: string | null | undefined) => x ?? "";
   return (
     <>
@@ -40,16 +33,6 @@ export function CustomerFields({
       </Field>
       <Field label="Telefone" hint="Com DDD. Usado no WhatsApp.">
         <MaskedInput mask="phone" name="phone" defaultValue={v(values.phone)} className={inputCls} />
-      </Field>
-      <Field label="Representada" className="sm:col-span-2">
-        <select name="principal_id" defaultValue={v(values.principal_id)} className={inputCls}>
-          <option value="">Nenhuma</option>
-          {principals.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
       </Field>
 
       <FormGroup title="Endereço" />

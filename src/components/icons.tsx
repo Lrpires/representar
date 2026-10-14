@@ -164,6 +164,13 @@ const paths = {
       <circle cx="12" cy="12" r="3" />
     </>
   ),
+  target: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1.5" />
+    </>
+  ),
   wallet: (
     <>
       <path d="M19.5 8V6.5A1.5 1.5 0 0 0 18 5H6a2 2 0 0 0 0 4h13.5v9.5A1.5 1.5 0 0 1 18 20H6a2 2 0 0 1-2-2V7" />

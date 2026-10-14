@@ -4,6 +4,9 @@ import {
   createLead, updateLead, setLeadStage, addLeadInteraction, convertLead, deleteLead,
 } from "./actions";
 import { LeadBoard, type BoardLead } from "./board";
+import { saveLeadLocation, markLeadNotFound, refreshLeads } from "./actions";
+import { PinMap, type PinPoint, type PinPending } from "@/components/pin-map";
+import { AddressFields } from "@/components/address-fields";
 import { LEAD_SOURCES, LEAD_STAGES, stageLabel } from "@/lib/leads";
 import { brl, formatDate, safeQ, todayISO } from "@/lib/format";
 import { priceText } from "@/lib/orders";
@@ -33,12 +36,26 @@ const dateTime = (iso: string) =>
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo",
   });
 
-type Lead = BoardLead & { email: string | null; city: string | null; notes: string | null; lost_reason: string | null; created_at: string };
+type Lead = BoardLead & {
+  email: string | null; city: string | null; notes: string | null; lost_reason: string | null; created_at: string;
+  zip?: string | null; street?: string | null; street_number?: string | null; complement?: string | null;
+  district?: string | null; state?: string | null;
+  latitude?: number | null; longitude?: number | null; geo_quality?: string | null; geocoded_at?: string | null;
+};
+
+// Cor do pin pela etapa do funil.
+const STAGE_COLORS: Record<string, string> = {
+  novo: "#9eaab1",
+  contato_feito: "#2b6f9e",
+  proposta: "#e09f3e",
+  ganho: "#23855a",
+  perdido: "#c8423a",
+};
 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; filtro?: string; novo?: string; lead?: string; editar?: string; ok?: string; erro?: string }>;
+  searchParams: Promise<{ q?: string; filtro?: string; ver?: string; novo?: string; lead?: string; editar?: string; ok?: string; erro?: string }>;
 }) {
   const sp = await searchParams;
   const q = safeQ(sp.q);
@@ -47,7 +64,7 @@ export default async function LeadsPage({
 
   let query = supabase
     .from("leads")
-    .select("id, name, company, phone, email, city, source, stage, next_contact, estimated_value, customer_id, notes, lost_reason, created_at")
+    .select("*")
     .order("position", { ascending: false });
   if (q) query = query.or(`name.ilike.*${q}*,company.ilike.*${q}*,phone.ilike.*${q}*`);
   const { data, error } = await query;
@@ -76,7 +93,49 @@ export default async function LeadsPage({
   const keep = new URLSearchParams();
   if (sp.q) keep.set("q", sp.q);
   if (sp.filtro) keep.set("filtro", sp.filtro);
+  if (sp.ver === "mapa") keep.set("ver", "mapa");
   const keepQs = keep.toString();
+  const view = sp.ver === "mapa" ? "mapa" : "quadro";
+  const viewHref = (v: string) => {
+    const p = new URLSearchParams();
+    if (sp.q) p.set("q", sp.q);
+    if (sp.filtro) p.set("filtro", sp.filtro);
+    if (v === "mapa") p.set("ver", "mapa");
+    const s = p.toString();
+    return s ? `${PATH}?${s}` : PATH;
+  };
+
+  // Mapa: leads com posição (respeitando o filtro escolhido) e os que ainda faltam localizar.
+  const mapPoints: PinPoint[] = (shown as Lead[])
+    .filter((l) => l.latitude != null && l.longitude != null)
+    .map((l) => {
+      const lateLead = !!l.next_contact && l.next_contact < today && l.stage !== "ganho" && l.stage !== "perdido";
+      return {
+        id: l.id,
+        name: l.company ? `${l.name} · ${l.company}` : l.name,
+        place: [l.district, [l.city, l.state].filter(Boolean).join("/")].filter(Boolean).join(" · "),
+        lat: Number(l.latitude),
+        lng: Number(l.longitude),
+        quality: l.geo_quality ?? null,
+        phone: l.phone,
+        color: STAGE_COLORS[l.stage] ?? "#9eaab1",
+        lines: [
+          { text: `Etapa: ${stageLabel(l.stage)}${l.estimated_value ? ` · ${brl(Number(l.estimated_value))}` : ""}` },
+          ...(l.next_contact && l.stage !== "ganho" && l.stage !== "perdido"
+            ? [{ text: `${lateLead ? "Contato atrasado" : "Próximo contato"}: ${formatDate(l.next_contact)}`, alert: lateLead }]
+            : []),
+        ],
+        href: `${PATH}?lead=${l.id}&ver=mapa`,
+        hrefLabel: "Abrir lead",
+      };
+    });
+  const pending: PinPending[] = (shown as Lead[])
+    .filter((l) => l.latitude == null && !l.geocoded_at && (l.street || l.zip || l.city))
+    .map((l) => ({
+      id: l.id, name: l.name, street: l.street, street_number: l.street_number, district: l.district,
+      city: l.city, state: l.state, zip: l.zip,
+    }));
+  const noAddress = (shown as Lead[]).filter((l) => l.latitude == null && (l.geocoded_at || !(l.street || l.zip || l.city))).length;
   const closeHref = keepQs ? `${PATH}?${keepQs}` : PATH;
   const leadHref = (id: string, extra = "") => `${PATH}?lead=${id}${extra}${keepQs ? `&${keepQs}` : ""}`;
   const filterHref = (f?: string) => {
@@ -153,9 +212,45 @@ export default async function LeadsPage({
             <div className="w-full sm:ml-auto sm:w-64">
               <SearchBox placeholder="Buscar lead" className="w-full" hint />
             </div>
+            <div className="inline-flex rounded-[0.6rem] bg-hover p-0.5" role="group" aria-label="Modo de exibição">
+              {(["quadro", "mapa"] as const).map((v) => (
+                <Link
+                  key={v}
+                  href={viewHref(v)}
+                  scroll={false}
+                  aria-current={view === v ? "true" : undefined}
+                  className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition sm:h-8 ${
+                    view === v ? "bg-white text-ink shadow-panel" : "text-muted hover:text-ink-2"
+                  }`}
+                >
+                  <Icon name={v === "quadro" ? "kanban" : "pin"} size={15} />
+                  {v === "quadro" ? "Quadro" : "Mapa"}
+                </Link>
+              ))}
+            </div>
           </Toolbar>
 
-          <LeadBoard leads={shown} today={today} qs={keepQs} />
+          {view === "mapa" ? (
+            <>
+              <PinMap
+                points={mapPoints}
+                pending={pending}
+                noun={{ one: "lead", many: "leads" }}
+                legend={LEAD_STAGES.map((s) => ({ color: STAGE_COLORS[s.value], label: s.label }))}
+                saveAction={saveLeadLocation}
+                notFoundAction={markLeadNotFound}
+                refreshAction={refreshLeads}
+              />
+              {noAddress ? (
+                <p className="mt-2 text-xs text-muted">
+                  {noAddress} {noAddress === 1 ? "lead não aparece" : "leads não aparecem"} no mapa por falta de endereço ou
+                  endereço não encontrado. Informe ao menos o CEP ou a cidade no cadastro.
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <LeadBoard leads={shown} today={today} qs={keepQs} />
+          )}
         </>
       )}
 
@@ -235,6 +330,11 @@ export default async function LeadsPage({
               <Properties>
                 <Property label="Telefone">{lead.phone}</Property>
                 <Property label="E-mail">{lead.email}</Property>
+                <Property label="Endereço">
+                  {[[lead.street, lead.street_number].filter(Boolean).join(", "), lead.district, [lead.city, lead.state].filter(Boolean).join("/")]
+                    .filter(Boolean)
+                    .join(" · ") || null}
+                </Property>
                 <Property label="Origem">{lead.source}</Property>
                 <Property label="Valor estimado">{lead.estimated_value ? brl(Number(lead.estimated_value)) : null}</Property>
                 <Property label="Próximo contato">
@@ -325,12 +425,11 @@ function LeadFields({ today, lead }: { today: string; lead?: Lead }) {
           ))}
         </datalist>
       </Field>
-      <Field label="E-mail">
+      <Field label="E-mail" className="sm:col-span-2">
         <input name="email" type="email" inputMode="email" defaultValue={v(lead?.email)} className={inputCls} />
       </Field>
-      <Field label="Cidade">
-        <input name="city" defaultValue={v(lead?.city)} className={inputCls} />
-      </Field>
+      <FormGroup title="Endereço" />
+      <AddressFields values={lead ?? {}} />
       <FormGroup title="Acompanhamento" />
       <Field label="Próximo contato">
         <input name="next_contact" type="date" defaultValue={lead ? v(lead.next_contact) : addDays(today, 2)} className={inputCls} />

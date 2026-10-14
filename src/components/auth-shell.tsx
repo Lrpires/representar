@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { Logo } from "./ui";
 import { Icon, type IconName } from "./icons";
 
@@ -13,10 +14,10 @@ export function AuthShell({ children, showcase = true }: { children: ReactNode; 
   return (
     <main className={`grid min-h-dvh bg-white ${showcase ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]" : ""}`}>
       <div className="flex flex-col px-6 py-8 sm:px-10">
-        <div className="flex items-center gap-2.5">
+        <Link href="/" className="flex w-fit items-center gap-2.5" aria-label="Representar, página inicial">
           <Logo size={30} />
           <span className="text-base font-semibold tracking-tight">Representar</span>
-        </div>
+        </Link>
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">{children}</div>
         <p className="text-center text-xs text-faint lg:text-left">
           Seus dados ficam protegidos e separados por conta.

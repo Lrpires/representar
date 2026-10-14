@@ -4,7 +4,7 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth", "/recuperar-senha"];
+const PUBLIC_PATHS = ["/login", "/auth", "/recuperar-senha", "/site"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -38,6 +38,15 @@ export async function updateSession(request: NextRequest) {
   const isPublic = PUBLIC_PATHS.some(
     (p) => path === p || path.startsWith(`${p}/`),
   );
+
+  // Visitante sem login na página inicial vê o site de apresentação (o endereço continua "/").
+  if (!user && path === "/") {
+    const siteUrl = request.nextUrl.clone();
+    siteUrl.pathname = "/site";
+    const rewrite = NextResponse.rewrite(siteUrl, { request });
+    response.cookies.getAll().forEach((c) => rewrite.cookies.set(c));
+    return rewrite;
+  }
 
   if (!user && !isPublic) {
     const loginUrl = request.nextUrl.clone();

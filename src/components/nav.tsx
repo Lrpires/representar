@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "./icons";
+import { Avatar } from "./ui";
+import type { MenuUser } from "./user-menu";
 
 type Item = { href: string; label: string; short: string; icon: IconName };
 
@@ -23,10 +25,10 @@ type Access = { showTeam?: boolean; showFinance?: boolean };
 // Grupos do menu conforme o perfil (financeiro e escritório só para quem pode ver).
 function groupsFor({ showTeam, showFinance }: Access): { title?: string; items: Item[] }[] {
   return [
-    { items: [home, orders, commissions] },
+    { items: [home, orders] },
     { title: "Carteira", items: [customers, leads] },
+    { title: "Financeiro", items: showFinance ? [commissions, payables] : [commissions] },
     { title: "Catálogo", items: [principals, products] },
-    ...(showFinance ? [{ title: "Financeiro", items: [payables] }] : []),
     ...(showTeam ? [{ title: "Escritório", items: [team, settings] }] : []),
   ];
 }
@@ -92,15 +94,13 @@ export function MobileTabs({
   showTeam = false,
   showFinance = false,
   orgName,
-  email,
-  roleName,
+  user,
   signOut,
 }: {
   showTeam?: boolean;
   showFinance?: boolean;
   orgName: string;
-  email: string;
-  roleName: string;
+  user: MenuUser;
   signOut: () => Promise<void>;
 }) {
   const isActive = useActive();
@@ -182,14 +182,16 @@ export function MobileTabs({
             className="absolute inset-x-0 bottom-0 animate-sheet-up rounded-t-2xl bg-white pb-[max(1rem,env(safe-area-inset-bottom))] shadow-sheet"
           >
             <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-line-strong" />
-            <div className="flex items-center gap-3 px-5 pb-4 pt-4">
+            <Link href="/perfil" className="flex items-center gap-3 px-5 pb-4 pt-4 active:bg-hover">
+              <Avatar name={user.name} size={44} round src={user.photoUrl} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-semibold">{orgName}</p>
+                <p className="truncate text-[15px] font-semibold">{user.name}</p>
                 <p className="truncate text-[13px] text-muted">
-                  {email} · {roleName}
+                  {user.roleName} · {orgName}
                 </p>
               </div>
-            </div>
+              <span className="text-[13px] font-medium text-pen">Meu perfil</span>
+            </Link>
             <ul className="mx-3 divide-y divide-line overflow-hidden rounded-xl border border-line">
               {moreItems.map((item) => {
                 const active = isActive(item.href);

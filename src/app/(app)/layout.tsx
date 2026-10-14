@@ -1,19 +1,22 @@
 import Link from "next/link";
-import { getContext, roleLabel } from "@/lib/session";
+import { getContext } from "@/lib/session";
 import { getCounts } from "@/lib/counts";
 import { getSettings, themeVars } from "@/lib/settings";
+import { getProfile } from "@/lib/profile";
+import { UserMenu } from "@/components/user-menu";
 import { setupSteps } from "@/lib/setup";
 import { SideNav, MobileTabs } from "@/components/nav";
 import { Icon } from "@/components/icons";
-import { Avatar, Logo, Progress } from "@/components/ui";
+import { Logo, Progress } from "@/components/ui";
 import { signOut } from "./actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { orgName, role, user, canManage } = await getContext();
+  const { orgName, role, canManage } = await getContext();
   const showTeam = role === "owner" || role === "manager";
   const showFinance = role !== "seller";
   const canOrder = role !== "finance";
-  const [counts, settings] = await Promise.all([getCounts(), getSettings()]);
+  const [counts, settings, profile] = await Promise.all([getCounts(), getSettings(), getProfile()]);
+  const menuUser = { name: profile.name, email: profile.email, roleName: profile.roleName, photoUrl: profile.photoUrl };
 
   const steps = setupSteps(counts, canManage);
   const done = steps.filter((s) => s.n > 0).length;
@@ -80,24 +83,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </Link>
           ) : null}
 
-          <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
-            <Avatar name={user.email ?? orgName} size={24} round />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] leading-tight text-ink-2" title={user.email ?? ""}>
-                {user.email}
-              </p>
-              <p className="text-[11px] leading-tight text-faint">{roleLabel[role]}</p>
-            </div>
-            <form action={signOut}>
-              <button
-                aria-label="Sair"
-                title="Sair"
-                className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-active hover:text-ink"
-              >
-                <Icon name="logout" size={15} />
-              </button>
-            </form>
-          </div>
+          <UserMenu user={menuUser} signOut={signOut} showSettings={showTeam} variant="sidebar" />
         </div>
       </aside>
 
@@ -115,14 +101,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </>
             )}
           </Link>
-          {next ? (
-            <Link
-              href={next.href}
-              className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-full bg-pen-soft px-3 text-xs font-medium text-pen-ink"
-            >
-              Configuração {done}/{steps.length}
-            </Link>
-          ) : null}
+          <div className="ml-auto flex items-center gap-2">
+            {next ? (
+              <Link
+                href={next.href}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full bg-pen-soft px-3 text-xs font-medium text-pen-ink"
+              >
+                Configuração {done}/{steps.length}
+              </Link>
+            ) : null}
+            <UserMenu user={menuUser} signOut={signOut} showSettings={showTeam} variant="header" />
+          </div>
         </div>
       </header>
 
@@ -139,8 +128,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         showTeam={showTeam}
         showFinance={showFinance}
         orgName={orgName}
-        email={user.email ?? ""}
-        roleName={roleLabel[role]}
+        user={menuUser}
         signOut={signOut}
       />
     </div>

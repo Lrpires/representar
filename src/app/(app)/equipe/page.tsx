@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getContext, roleLabel, roleHint, ROLES, type Role } from "@/lib/session";
 import { inviteMember, cancelInvite, updateMember, removeMember } from "./actions";
 import { brl, formatDate, todayISO } from "@/lib/format";
+import { avatarUrl } from "@/lib/storage";
 import { Sheet } from "@/components/sheet";
 import { Icon } from "@/components/icons";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -47,7 +48,7 @@ export default async function TeamPage({
   const [{ data: members }, { data: invites }, { data: orders }] = await Promise.all([
     supabase
       .from("members")
-      .select("id, user_id, role, full_name, email, created_at")
+      .select("*")
       .eq("org_id", orgId)
       .order("created_at"),
     isOwner
@@ -78,6 +79,7 @@ export default async function TeamPage({
   const editing = people.find((m) => m.id === sp.editar);
   const sheetOpen = isOwner && (sp.novo === "1");
   const nameOf = (m: { full_name: string | null; email: string | null }) => m.full_name || m.email || "Usuário";
+  const photo = (m: { avatar_path?: string | null }) => (m.avatar_path ? avatarUrl(m.avatar_path) : null);
 
   return (
     <>
@@ -128,7 +130,7 @@ export default async function TeamPage({
                 <tr key={m.id} className={tr}>
                   <td className={td}>
                     <div className="flex items-center gap-3">
-                      <Avatar name={nameOf(m)} size={32} round />
+                      <Avatar name={nameOf(m)} size={32} round src={photo(m)} />
                       <div className="min-w-0">
                         <p className="truncate font-medium">
                           {nameOf(m)} {mine ? <span className="text-xs font-normal text-muted">(você)</span> : null}
@@ -161,7 +163,7 @@ export default async function TeamPage({
             const s = sales.get(m.user_id);
             const content = (
               <>
-                <Avatar name={nameOf(m)} size={38} round />
+                <Avatar name={nameOf(m)} size={38} round src={photo(m)} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[15px] font-medium">
                     {nameOf(m)} {m.user_id === user.id ? <span className="text-xs font-normal text-muted">(você)</span> : null}

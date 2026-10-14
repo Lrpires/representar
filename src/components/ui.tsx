@@ -460,11 +460,27 @@ export function Avatar({
   name,
   size = 32,
   round,
+  src,
 }: {
   name: string;
   size?: number;
   round?: boolean;
+  src?: string | null;
 }) {
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        width={size}
+        height={size}
+        className="shrink-0 object-cover ring-1 ring-black/5"
+        style={{ width: size, height: size, borderRadius: round ? 9999 : Math.round(size * 0.26) }}
+      />
+    );
+  }
   const hue = hueOf(name);
   const initials = name
     .replace(/[^\p{L}\p{N}\s]/gu, "")

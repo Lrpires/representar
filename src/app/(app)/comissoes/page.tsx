@@ -1,33 +1,22 @@
 import Link from "next/link";
 import { getContext } from "@/lib/session";
 import { getSettings } from "@/lib/settings";
-import { markReceived, undoReceived } from "./actions";
-import { formatOrderNumber, numText, priceText } from "@/lib/orders";
+import { CommissionRow, expected, nfValue, type Row } from "./row";
+import { formatOrderNumber } from "@/lib/orders";
 import { brl, formatDate, todayISO } from "@/lib/format";
 import { monthInfo } from "@/lib/month";
-import { Sheet } from "@/components/sheet";
 import { Icon } from "@/components/icons";
 import { UrlSelect } from "@/components/url-select";
-import { SubmitButton } from "@/components/submit";
 import {
-  PageHeader, EmptyState, Badge, OkNote, ErrorNote, Field, SheetForm, TableShell, CardList,
-  FilterPill, Segmented, inputCls, th, td, tr, ghostBtn, quietBtn, iconBtn,
+  PageHeader, EmptyState, OkNote, ErrorNote, FilterPill, Segmented, iconBtn,
 } from "@/components/ui";
 
 const PATH = "/comissoes";
 
-type Row = {
-  id: string; order_id: string; base_value: number; pct: number; value: number; due_date: string;
-  status: string; received_at: string | null; received_value: number | null; principal_id: string;
-  orders: { number: number; customers: { name: string } | null } | null;
-  order_invoices: { number: string | null } | null;
-  principals: { name: string } | null;
-};
-
 export default async function CommissionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string; rep?: string; status?: string; receber?: string; ok?: string; erro?: string }>;
+  searchParams: Promise<{ mes?: string; rep?: string; status?: string; ok?: string; erro?: string }>;
 }) {
   const sp = await searchParams;
   const { supabase } = await getContext();
@@ -37,9 +26,11 @@ export default async function CommissionsPage({
 
   let query = supabase
     .from("commissions")
-    .select("id, order_id, base_value, pct, value, due_date, status, received_at, received_value, principal_id, orders(number, customers(name)), order_invoices(number), principals(name)")
+    .select(
+      "id, order_id, value, due_date, status, received_at, received_value, principal_id, orders(number, commission_pct, customers(name)), order_invoices(id, number, series, issued_at, value, file_path), principals(name)",
+    )
     .order("due_date");
-  // "Atrasadas" mostra as de qualquer mês; os outros filtros, só o mês escolhido.
+  // "Atrasadas" mostra as de qualquer mês; os outros filtros, só o mês escolhido (pelo vencimento).
   query =
     sp.status === "atrasadas"
       ? query.eq("status", "a_receber").lt("due_date", today)
@@ -48,37 +39,32 @@ export default async function CommissionsPage({
 
   const [{ data, error }, { data: lateData }, { data: principals }, { data: pipeline }] = await Promise.all([
     query,
-    // Atrasadas de qualquer mês.
     supabase.from("commissions").select("value").eq("status", "a_receber").lt("due_date", today),
     supabase.from("principals").select("id, name").order("name"),
-    // Comissão prevista em pedidos enviados que ainda não foram faturados.
     supabase.from("orders").select("subtotal, discount_pct, commission_pct").eq("status", "enviado"),
   ]);
 
   const rows = (data ?? []) as unknown as Row[];
   const isLate = (r: Row) => r.status === "a_receber" && r.due_date < today;
-  const filtered = rows.filter((r) =>
-    !sp.status ? true : sp.status === "atrasadas" ? isLate(r) : r.status === sp.status,
-  );
+  const filtered = rows.filter((r) => (!sp.status ? true : sp.status === "atrasadas" ? isLate(r) : r.status === sp.status));
 
   const live = rows.filter((r) => r.status !== "cancelada");
-  const previsto = live.reduce((s, r) => s + Number(r.value), 0);
-  const aReceber = live.filter((r) => r.status === "a_receber").reduce((s, r) => s + Number(r.value), 0);
-  const recebido = live
-    .filter((r) => r.status === "recebida")
-    .reduce((s, r) => s + Number(r.received_value ?? r.value), 0);
+  const previsto = live.reduce((s, r) => s + expected(r), 0);
+  const aReceber = live.filter((r) => r.status === "a_receber").reduce((s, r) => s + expected(r), 0);
+  const recebido = live.filter((r) => r.status === "recebida").reduce((s, r) => s + Number(r.received_value ?? r.value), 0);
+  const faturado = live.reduce((s, r) => s + nfValue(r), 0);
   const lateTotal = (lateData ?? []).reduce((s, r) => s + Number(r.value), 0);
   const pipelineTotal = (pipeline ?? []).reduce(
     (s, o) => s + (Number(o.subtotal) * (1 - Number(o.discount_pct) / 100) * Number(o.commission_pct ?? 0)) / 100,
     0,
   );
 
-  // Totais por representada (do mês).
-  const byPrincipal = new Map<string, { name: string; previsto: number; aReceber: number; recebido: number }>();
+  const byPrincipal = new Map<string, { name: string; nf: number; previsto: number; aReceber: number; recebido: number }>();
   for (const r of live) {
-    const cur = byPrincipal.get(r.principal_id) ?? { name: r.principals?.name ?? "—", previsto: 0, aReceber: 0, recebido: 0 };
-    cur.previsto += Number(r.value);
-    if (r.status === "a_receber") cur.aReceber += Number(r.value);
+    const cur = byPrincipal.get(r.principal_id) ?? { name: r.principals?.name ?? "—", nf: 0, previsto: 0, aReceber: 0, recebido: 0 };
+    cur.nf += nfValue(r);
+    cur.previsto += expected(r);
+    if (r.status === "a_receber") cur.aReceber += expected(r);
     if (r.status === "recebida") cur.recebido += Number(r.received_value ?? r.value);
     byPrincipal.set(r.principal_id, cur);
   }
@@ -90,16 +76,14 @@ export default async function CommissionsPage({
     const s = p.toString();
     return s ? `?${s}` : "";
   };
-  const backQs = qs({});
-  const receiving = rows.find((r) => r.id === sp.receber && r.status === "a_receber");
-  const count = (s?: string) =>
-    rows.filter((r) => (!s ? true : s === "atrasadas" ? isLate(r) : r.status === s)).length;
+  const backQs = qs({}) || "?";
+  const count = (s?: string) => rows.filter((r) => (!s ? true : s === "atrasadas" ? isLate(r) : r.status === s)).length;
 
   return (
     <>
       <PageHeader
         title="Comissões"
-        hint="O que cada representada tem para te pagar, mês a mês."
+        hint="Cada nota fiscal faturada gera uma comissão: valor da NF × % de comissão do pedido."
         action={
           <div className="flex items-center gap-1 rounded-lg border border-line-strong bg-white p-0.5 shadow-field">
             <Link href={`${PATH}${qs({ mes: month.prev })}`} className={`${iconBtn} h-9 w-9 sm:h-7 sm:w-7`} aria-label="Mês anterior">
@@ -114,7 +98,7 @@ export default async function CommissionsPage({
       />
 
       <div className="mb-4 grid gap-3 empty:hidden">
-        {!sp.receber ? <ErrorNote message={sp.erro} /> : null}
+        <ErrorNote message={sp.erro} />
         <OkNote message={sp.ok} />
       </div>
 
@@ -124,26 +108,31 @@ export default async function CommissionsPage({
         </EmptyState>
       ) : (
         <>
-          <dl className="mb-4 grid grid-cols-3 overflow-hidden rounded-xl border border-line bg-line [&>div]:bg-white" style={{ gap: 1 }}>
-            <div className="p-3.5 sm:p-5">
-              <dt className="text-xs text-muted sm:text-[13px]">Previsto</dt>
-              <dd className="mt-1.5 truncate text-base font-semibold tabular-nums tracking-[-0.02em] sm:text-2xl">{brl(previsto)}</dd>
+          <dl className="mb-4 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>div]:bg-white" style={{ gap: 1 }}>
+            <div className="p-4 sm:p-5">
+              <dt className="text-[13px] text-muted">Notas faturadas</dt>
+              <dd className="mt-1.5 truncate text-lg font-semibold tabular-nums tracking-[-0.02em] sm:text-2xl">{brl(faturado)}</dd>
+              <dd className="text-xs text-muted">{live.length} {live.length === 1 ? "nota" : "notas"}</dd>
             </div>
-            <div className="p-3.5 sm:p-5">
-              <dt className="flex items-center gap-1.5 text-xs text-muted sm:text-[13px]">
+            <div className="p-4 sm:p-5">
+              <dt className="text-[13px] text-muted">Previsto</dt>
+              <dd className="mt-1.5 truncate text-lg font-semibold tabular-nums tracking-[-0.02em] sm:text-2xl">{brl(previsto)}</dd>
+            </div>
+            <div className="p-4 sm:p-5">
+              <dt className="flex items-center gap-1.5 text-[13px] text-muted">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#e09f3e]" />A receber
               </dt>
-              <dd className="mt-1.5 truncate text-base font-semibold tabular-nums tracking-[-0.02em] text-warn sm:text-2xl">{brl(aReceber)}</dd>
+              <dd className="mt-1.5 truncate text-lg font-semibold tabular-nums tracking-[-0.02em] text-warn sm:text-2xl">{brl(aReceber)}</dd>
             </div>
-            <div className="p-3.5 sm:p-5">
-              <dt className="flex items-center gap-1.5 text-xs text-muted sm:text-[13px]">
+            <div className="p-4 sm:p-5">
+              <dt className="flex items-center gap-1.5 text-[13px] text-muted">
                 <span className="h-1.5 w-1.5 rounded-full bg-ok" />Recebido
               </dt>
-              <dd className="mt-1.5 truncate text-base font-semibold tabular-nums tracking-[-0.02em] text-ok sm:text-2xl">{brl(recebido)}</dd>
+              <dd className="mt-1.5 truncate text-lg font-semibold tabular-nums tracking-[-0.02em] text-ok sm:text-2xl">{brl(recebido)}</dd>
             </div>
           </dl>
 
-          <div className="mb-6 grid gap-3 sm:grid-cols-2">
+          <div className="mb-6 grid gap-3 empty:hidden sm:grid-cols-2">
             {lateTotal > 0 ? (
               <Link
                 href={`${PATH}${qs({ status: "atrasadas", mes: undefined })}`}
@@ -163,7 +152,7 @@ export default async function CommissionsPage({
               >
                 <Icon name="clock" size={18} className="text-muted" />
                 <span className="flex-1">
-                  <span className="font-semibold text-ink">{brl(pipelineTotal)}</span> previstos em pedidos enviados ainda não faturados
+                  <span className="font-semibold text-ink">{brl(pipelineTotal)}</span> previstos em pedidos enviados ainda sem nota
                 </span>
                 <Icon name="chevron-right" size={16} className="text-faint" />
               </Link>
@@ -174,10 +163,11 @@ export default async function CommissionsPage({
             <section className="mb-6">
               <h2 className="mb-3 text-sm font-semibold">Por representada</h2>
               <div className="overflow-x-auto rounded-xl border border-line bg-white">
-                <table className="w-full min-w-[30rem] text-sm">
+                <table className="w-full min-w-[36rem] text-sm">
                   <thead className="border-b border-line bg-subtle text-xs text-muted">
                     <tr>
                       <th className="px-4 py-2 text-left font-medium">Representada</th>
+                      <th className="px-4 py-2 text-right font-medium">Notas</th>
                       <th className="px-4 py-2 text-right font-medium">Previsto</th>
                       <th className="px-4 py-2 text-right font-medium">A receber</th>
                       <th className="px-4 py-2 text-right font-medium">Recebido</th>
@@ -191,6 +181,7 @@ export default async function CommissionsPage({
                             {v.name}
                           </Link>
                         </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink-2">{brl(v.nf)}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums">{brl(v.previsto)}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-warn">{brl(v.aReceber)}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-ok">{brl(v.recebido)}</td>
@@ -232,160 +223,25 @@ export default async function CommissionsPage({
 
           {filtered.length === 0 ? (
             <EmptyState icon="percent" title="Sem comissões no mês" compact>
-              As comissões aparecem aqui quando um pedido é marcado como faturado. O mês é o do vencimento.
+              Cada nota fiscal registrada num pedido gera uma comissão aqui. O mês é o do vencimento da comissão.
             </EmptyState>
           ) : (
-            <>
-              <TableShell>
-                <thead>
-                  <tr>
-                    <th className={th}>Vencimento</th>
-                    <th className={th}>Pedido</th>
-                    <th className={th}>Cliente</th>
-                    <th className={th}>Representada</th>
-                    <th className={`${th} text-right`}>Faturado</th>
-                    <th className={`${th} text-right`}>Comissão</th>
-                    <th className={th}>Situação</th>
-                    <th className={`${th} w-40 text-right`}>
-                      <span className="sr-only">Ações</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((r) => {
-                    const late = isLate(r);
-                    return (
-                      <tr key={r.id} className={`${tr} ${late ? "bg-alert-soft/40" : ""}`}>
-                        <td className={`${td} whitespace-nowrap tabular-nums ${late ? "font-medium text-alert" : "text-ink-2"}`}>
-                          {formatDate(r.due_date)}
-                        </td>
-                        <td className={`${td} whitespace-nowrap`}>
-                          <Link href={`/pedidos/${r.order_id}`} className="font-mono text-[13px] font-medium hover:text-pen">
-                            {r.orders ? formatOrderNumber(r.orders.number, settings) : "—"}
-                          </Link>
-                          {r.order_invoices?.number ? <p className="text-xs text-muted">NF {r.order_invoices.number}</p> : null}
-                        </td>
-                        <td className={`${td} max-w-[14rem] truncate`}>{r.orders?.customers?.name}</td>
-                        <td className={`${td} text-ink-2`}>{r.principals?.name}</td>
-                        <td className={`${td} text-right tabular-nums text-ink-2`}>
-                          {brl(Number(r.base_value))}
-                          <p className="text-xs text-muted">{numText(Number(r.pct), 2)}%</p>
-                        </td>
-                        <td className={`${td} text-right font-semibold tabular-nums`}>{brl(Number(r.value))}</td>
-                        <td className={td}>
-                          <StatusBadge row={r} late={late} />
-                        </td>
-                        <td className={`${td} text-right`}>
-                          <RowAction row={r} backQs={backQs} receiveHref={`${PATH}${qs({ receber: r.id })}`} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </TableShell>
-
-              <CardList>
-                {filtered.map((r) => {
-                  const late = isLate(r);
-                  return (
-                    <li key={r.id} className={`px-4 py-3 ${late ? "bg-alert-soft/40" : ""}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-[15px] font-medium">{r.orders?.customers?.name}</p>
-                          <p className="text-[13px] text-muted">
-                            <Link href={`/pedidos/${r.order_id}`} className="font-mono text-xs">
-                              {r.orders ? formatOrderNumber(r.orders.number, settings) : "—"}
-                            </Link>{" "}
-                            · {r.principals?.name}
-                          </p>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <p className="font-semibold tabular-nums">{brl(Number(r.value))}</p>
-                          <p className={`text-xs tabular-nums ${late ? "font-medium text-alert" : "text-muted"}`}>
-                            vence {formatDate(r.due_date)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <StatusBadge row={r} late={late} />
-                        <RowAction row={r} backQs={backQs} receiveHref={`${PATH}${qs({ receber: r.id })}`} />
-                      </div>
-                    </li>
-                  );
-                })}
-              </CardList>
-            </>
+            <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-white">
+              {/* Cabeçalho (computador) */}
+              <li className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.4fr)_7rem_6rem_minmax(15rem,1.2fr)] items-center gap-4 bg-subtle px-5 py-2 text-xs font-medium text-muted lg:grid">
+                <span>Nota fiscal</span>
+                <span>Pedido e cliente</span>
+                <span className="text-right">Valor da NF</span>
+                <span>Vencimento</span>
+                <span className="text-right">Comissão recebida</span>
+              </li>
+              {filtered.map((r) => (
+                <CommissionRow key={r.id} r={r} late={isLate(r)} backQs={backQs} label={r.orders ? formatOrderNumber(r.orders.number, settings) : "—"} today={today} />
+              ))}
+            </ul>
           )}
         </>
       )}
-
-      <Sheet
-        open={!!receiving}
-        title="Marcar como recebida"
-        description={
-          receiving
-            ? `${receiving.principals?.name ?? ""} · pedido ${receiving.orders ? formatOrderNumber(receiving.orders.number, settings) : ""}`
-            : undefined
-        }
-        closeHref={`${PATH}${qs({ receber: undefined })}`}
-      >
-        {receiving ? (
-          <SheetForm
-            action={markReceived.bind(null, receiving.id)}
-            closeHref={`${PATH}${qs({ receber: undefined })}`}
-            submitLabel="Confirmar recebimento"
-          >
-            <input type="hidden" name="back" value={qs({ receber: undefined }) || "?"} />
-            <ErrorNote message={sp.erro} />
-            <Field label="Data do recebimento">
-              <input name="received_at" type="date" required defaultValue={today} className={inputCls} />
-            </Field>
-            <Field label="Valor recebido (R$)" hint={`Previsto: ${brl(Number(receiving.value))}`}>
-              <input
-                name="received_value"
-                inputMode="decimal"
-                defaultValue={priceText(Number(receiving.value))}
-                className={`${inputCls} text-right tabular-nums`}
-              />
-            </Field>
-          </SheetForm>
-        ) : null}
-      </Sheet>
     </>
   );
-}
-
-function StatusBadge({ row, late }: { row: Row; late: boolean }) {
-  if (row.status === "recebida") {
-    return (
-      <span className="flex flex-col items-start">
-        <Badge tone="ok" dot>Recebida</Badge>
-        {row.received_at ? <span className="mt-0.5 text-[11px] text-muted">em {formatDate(row.received_at)}</span> : null}
-      </span>
-    );
-  }
-  if (row.status === "cancelada") return <Badge tone="neutral" dot>Cancelada</Badge>;
-  return late ? <Badge tone="alert" dot>Atrasada</Badge> : <Badge tone="warn" dot>A receber</Badge>;
-}
-
-function RowAction({ row, backQs, receiveHref }: { row: Row; backQs: string; receiveHref: string }) {
-  if (row.status === "a_receber") {
-    return (
-      <Link href={receiveHref} scroll={false} className={`${ghostBtn} relative z-10`}>
-        <Icon name="check" size={14} strokeWidth={2.2} />
-        Marcar como recebida
-      </Link>
-    );
-  }
-  if (row.status === "recebida") {
-    return (
-      <form action={undoReceived.bind(null, row.id)} className="relative z-10 inline">
-        <input type="hidden" name="back" value={backQs || "?"} />
-        <SubmitButton className={quietBtn} pending="Desfazendo…">
-          Desfazer
-        </SubmitButton>
-      </form>
-    );
-  }
-  return null;
 }

@@ -72,7 +72,7 @@ export function RankList({
   more?: { href: string; label: string };
 }) {
   return (
-    <section className="flex min-w-0 flex-col rounded-xl border border-line bg-white">
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-white">
       <header className="flex items-center justify-between border-b border-line px-4 py-3">
         <h2 className="text-sm font-semibold">{title}</h2>
         {more ? (
@@ -85,7 +85,7 @@ export function RankList({
       {rows.length === 0 ? (
         <p className="px-4 py-8 text-center text-[13px] text-muted">{empty}</p>
       ) : (
-        <ol className="grid gap-0.5 p-1.5">
+        <ol className="grid min-w-0 grid-cols-1 gap-0.5 p-1.5">
           {rows.map((r, i) => {
             const inner = (
               <>
@@ -104,7 +104,7 @@ export function RankList({
               </>
             );
             return (
-              <li key={r.key}>
+              <li key={r.key} className="min-w-0">
                 {r.href ? (
                   <Link
                     href={r.href}

@@ -1,17 +1,30 @@
-# Representantes: Fase 1 (núcleo e catálogo)
+# Representar
 
-Next.js (App Router) + Supabase + Tailwind. Telas: login, criação do escritório,
-representadas, clientes, produtos e tabelas de preço com lançamento de preços.
+Pedidos, clientes, comissões e contas do representante comercial em um só lugar.
+Next.js (App Router) + Supabase (Postgres, Auth, RLS) + Tailwind. Web app responsivo e instalável (PWA).
+
+## Módulos
+
+- **Painel**: vendido no mês, comissão a receber, contas dos próximos 7 dias, saldo do mês e follow-ups do dia.
+- **Pedidos**: lançamento em tela cheia (itens do catálogo ou digitados), comissão prevista, envio,
+  faturamento com notas fiscais (parcial ou total, com PDF/XML), impressão/PDF com a logo, duplicar.
+- **Comissões**: previsto, a receber e recebido por mês e por representada; atrasadas em destaque.
+- **Clientes**: busca por nome/CNPJ, preenchimento automático por CNPJ (BrasilAPI) e CEP (ViaCEP),
+  WhatsApp, histórico de pedidos e interações, próximo contato.
+- **Leads**: funil em quadro (Novo → Contato feito → Proposta → Ganho/Perdido), interações, conversão em cliente.
+- **Contas a pagar**: despesas por categoria, vencidas em vermelho, contas fixas repetidas por mês.
+- **Representadas** e **Produtos** (catálogo opcional com fotos e variações).
+- **Equipe** (perfis Administrador, Gerente, Vendedor, Financeiro) e **Configurações** (logo, cor,
+  unidades, numeração dos pedidos, exclusão do escritório e dados).
 
 ## Como rodar
 
 1. Crie um projeto no [Supabase](https://supabase.com).
-2. No SQL Editor, rode `supabase/migrations/001_nucleo_catalogo.sql`.
+2. No SQL Editor, rode **em ordem** os arquivos de `supabase/migrations/` (001 a 009).
+   Da 006 em diante, todos podem ser rodados de novo sem erro.
 3. Em Authentication, defina a Site URL como `http://localhost:3000` e adicione
    `http://localhost:3000/auth/callback` nas Redirect URLs.
-   Para testar sem e-mail de confirmação, desligue "Confirm email".
-4. Copie `.env.example` para `.env.local` e preencha a URL e a chave pública
-   (Project Settings > API).
+4. Copie `.env.example` para `.env.local` e preencha a URL e a chave pública (Project Settings > API).
 5. Instale e rode:
 
 ```bash
@@ -21,22 +34,7 @@ npm run dev
 
 Abra http://localhost:3000, crie uma conta e depois o escritório.
 
-## Como funciona o acesso
+## Segurança
 
-- Quem cria o escritório vira dono.
-- Dono e gerente cadastram representadas, produtos e tabelas de preço.
-- Vendedor só lê o catálogo e vê apenas os próprios clientes.
-- Tudo isso é garantido pelo banco (RLS), não só pelas telas.
-
-## Checagem recomendada antes de seguir
-
-Crie dois usuários em escritórios diferentes e confirme que um não vê nada do outro.
-
-## Limitações conhecidas da Fase 1
-
-- Sem convite de vendedores ainda (entra na Fase 5; por enquanto, só via SQL em `members`).
-- Usa o primeiro escritório do usuário; a troca entre escritórios fica para depois.
-- Sem edição nem exclusão nas telas, só cadastro e consulta.
-- Sem importação de tabelas de preço por planilha.
-- Para o app ser instalável (PWA), faltam ícones PNG 192 e 512 em `/public` e a entrada
-  `icons` em `src/app/manifest.ts`. O modo offline entra na Fase 2.
+Cada escritório só enxerga os próprios dados: isso é garantido pelo banco (RLS), não só pelas telas.
+As notas fiscais ficam numa pasta privada e são abertas por link temporário.

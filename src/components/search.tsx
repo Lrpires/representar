@@ -8,7 +8,7 @@ import { Icon } from "./icons";
 // "hint" mostra o atalho ⌘K / Ctrl+K, que leva o cursor ao campo.
 export function SearchBox({
   placeholder = "Buscar",
-  className = "min-w-0 flex-1 sm:max-w-sm",
+  className = "min-w-0 flex-1 sm:max-w-xs",
   hint = false,
 }: {
   placeholder?: string;
@@ -53,8 +53,8 @@ export function SearchBox({
     <div className={`relative ${className}`}>
       <Icon
         name="search"
-        size={18}
-        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted"
+        size={16}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
       />
       <input
         ref={inputRef}
@@ -63,36 +63,15 @@ export function SearchBox({
         onChange={(e) => setValue(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className={`h-12 w-full rounded-2xl border border-line-strong bg-white pl-11 text-base text-ink shadow-field transition placeholder:text-muted hover:border-faint focus:border-pen focus:ring-4 focus:ring-pen/15 sm:h-11 sm:text-sm ${
-          hint ? "pr-16" : "pr-4"
+        className={`h-11 w-full rounded-lg border border-line-strong bg-white pl-9 text-base text-ink shadow-field outline-none transition-[border-color,box-shadow] placeholder:text-faint hover:border-[#c5cdd1] focus:border-pen focus:ring-[3px] focus:ring-pen/15 sm:h-8 sm:text-[13px] ${
+          hint ? "pr-3 sm:pr-12" : "pr-3"
         }`}
       />
       {hint ? (
-        <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border border-line bg-subtle px-2 py-1 text-[11px] font-medium text-muted shadow-float">
-          ⌘ K
+        <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-line bg-subtle px-1.5 py-px font-sans text-[11px] font-medium text-muted sm:block">
+          ⌘K
         </kbd>
       ) : null}
     </div>
-  );
-}
-
-// Busca do topo: aparece só nas telas que têm lista pesquisável.
-const placeholders: Record<string, string> = {
-  "/clientes": "Buscar clientes",
-  "/representadas": "Buscar representadas",
-  "/produtos": "Buscar produtos",
-};
-
-export function TopSearch() {
-  const pathname = usePathname();
-  const placeholder = placeholders[pathname];
-  if (!placeholder) return <div className="hidden lg:block" />;
-  return (
-    <SearchBox
-      key={pathname}
-      hint
-      placeholder={placeholder}
-      className="hidden w-full max-w-sm lg:block"
-    />
   );
 }

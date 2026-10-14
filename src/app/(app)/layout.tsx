@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { getContext, roleLabel } from "@/lib/session";
 import { getCounts } from "@/lib/counts";
+import { getSettings, themeVars } from "@/lib/settings";
 import { setupSteps } from "@/lib/setup";
-import { Nav } from "@/components/nav";
-import { TopSearch } from "@/components/search";
+import { SideNav, MobileTabs } from "@/components/nav";
 import { Icon } from "@/components/icons";
-import { Avatar, Logo } from "@/components/ui";
+import { Avatar, Logo, Progress } from "@/components/ui";
 import { signOut } from "./actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { orgName, role, user, canManage } = await getContext();
   const showTeam = role === "owner" || role === "manager";
-  const counts = await getCounts();
+  const showFinance = role !== "seller";
+  const canOrder = role !== "finance";
+  const [counts, settings] = await Promise.all([getCounts(), getSettings()]);
 
   const steps = setupSteps(counts, canManage);
   const done = steps.filter((s) => s.n > 0).length;
@@ -21,103 +23,126 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     "/clientes": counts.clientes,
     "/representadas": counts.representadas,
     "/produtos": counts.produtos,
-    "/tabelas-de-preco": counts.tabelas,
     "/pedidos": counts.pedidos,
-    "/equipe": 0,
   };
 
   return (
-    <div className="min-h-dvh bg-white">
-      {/* Barra lateral (computador) */}
-      <aside className="fixed inset-y-0 left-0 hidden w-[17rem] flex-col border-r border-line bg-subtle px-4 py-6 lg:flex">
-        <div className="flex items-center gap-3 px-2">
-          <Logo size={38} />
-          <span className="text-[1.35rem] font-semibold tracking-tight">Representantes</span>
-        </div>
+    <div className="min-h-dvh">
+      {/* Cor escolhida nas configurações do escritório */}
+      <style>{`:root{${themeVars(settings.color)}}`}</style>
+      {/* ---------- Barra lateral (computador) ---------- */}
+      <aside className="scroll-thin fixed inset-y-0 left-0 hidden w-60 flex-col overflow-y-auto px-3 pb-3 pt-3 lg:flex">
+        <Link href="/" className="flex min-h-10 items-center gap-2.5 rounded-md px-2 py-1 transition hover:bg-active/60">
+          {settings.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={settings.logoUrl} alt={orgName} className="max-h-9 max-w-[10rem] object-contain" />
+          ) : (
+            <>
+              <Logo size={24} />
+              <p className="min-w-0 flex-1 truncate text-[13.5px] font-semibold leading-tight">{orgName}</p>
+            </>
+          )}
+        </Link>
 
-        <div className="mt-6 flex items-center gap-3 rounded-2xl border border-line bg-white px-3 py-2.5 shadow-float">
-          <Avatar name={orgName} size={34} />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium leading-tight">{orgName}</p>
-            <p className="text-xs text-muted">{roleLabel[role]}</p>
-          </div>
-        </div>
+        {canOrder ? (
+          <Link
+            href="/pedidos/novo"
+            className="mt-3 flex h-8 items-center gap-2 rounded-md border border-line-strong bg-white px-2 text-[13px] font-medium text-ink shadow-field transition hover:bg-subtle"
+          >
+            <span className="flex h-4 w-4 items-center justify-center rounded bg-pen text-white">
+              <Icon name="plus" size={12} strokeWidth={2.4} />
+            </span>
+            Novo pedido
+          </Link>
+        ) : null}
 
-        <Nav variant="side" counts={navCounts} showTeam={showTeam} />
+        <SideNav counts={navCounts} showTeam={showTeam} showFinance={showFinance} />
 
-        <div className="mt-auto flex items-center gap-3 rounded-2xl px-2 py-2">
-          <Avatar name={user.email ?? orgName} size={34} />
-          <p className="min-w-0 flex-1 truncate text-xs text-muted" title={user.email ?? ""}>
-            {user.email}
-          </p>
-          <form action={signOut}>
-            <button
-              aria-label="Sair"
-              title="Sair"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-muted transition hover:bg-hover hover:text-ink"
+        <div className="mt-auto grid gap-2 pt-6">
+          {next ? (
+            <Link
+              href={next.href}
+              className="group block rounded-lg border border-line bg-white p-3 shadow-field transition hover:border-line-strong"
             >
-              <Icon name="logout" size={18} />
-            </button>
-          </form>
+              <span className="flex items-center justify-between text-xs">
+                <span className="font-medium text-ink">Configuração inicial</span>
+                <span className="tabular-nums text-muted">
+                  {done}/{steps.length}
+                </span>
+              </span>
+              <span className="mt-2 block">
+                <Progress value={done} max={steps.length} />
+              </span>
+              <span className="mt-2 flex items-center gap-1 text-xs text-muted group-hover:text-ink-2">
+                {next.title}
+                <Icon name="arrow-right" size={12} className="transition group-hover:translate-x-0.5" />
+              </span>
+            </Link>
+          ) : null}
+
+          <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
+            <Avatar name={user.email ?? orgName} size={24} round />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] leading-tight text-ink-2" title={user.email ?? ""}>
+                {user.email}
+              </p>
+              <p className="text-[11px] leading-tight text-faint">{roleLabel[role]}</p>
+            </div>
+            <form action={signOut}>
+              <button
+                aria-label="Sair"
+                title="Sair"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-active hover:text-ink"
+              >
+                <Icon name="logout" size={15} />
+              </button>
+            </form>
+          </div>
         </div>
       </aside>
 
-      <div className="lg:pl-[17rem]">
-        <header className="sticky top-0 z-30 border-b border-line bg-white/85 backdrop-blur-xl">
-          <div className="mx-auto flex h-[4.25rem] max-w-6xl items-center justify-between gap-4 px-4 md:px-8">
-            {/* celular e tablet: marca + escritório */}
-            <div className="flex min-w-0 items-center gap-3 lg:hidden">
-              <Logo size={36} />
-              <div className="min-w-0">
-                <p className="truncate text-[15px] font-semibold leading-tight">{orgName}</p>
-                <p className="text-xs text-muted">{roleLabel[role]}</p>
-              </div>
-            </div>
+      {/* ---------- Topo (celular e tablet) ---------- */}
+      <header className="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur-xl lg:hidden">
+        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2.5 px-4">
+          <Link href="/" className="flex min-w-0 items-center gap-2.5">
+            {settings.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={settings.logoUrl} alt={orgName} className="max-h-8 max-w-[9rem] object-contain" />
+            ) : (
+              <>
+                <Logo size={28} />
+                <span className="truncate text-[15px] font-semibold">{orgName}</span>
+              </>
+            )}
+          </Link>
+          {next ? (
+            <Link
+              href={next.href}
+              className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-full bg-pen-soft px-3 text-xs font-medium text-pen-ink"
+            >
+              Configuração {done}/{steps.length}
+            </Link>
+          ) : null}
+        </div>
+      </header>
 
-            <TopSearch />
-
-            <div className="flex items-center gap-3">
-              {next ? (
-                <Link
-                  href={next.href}
-                  className="hidden items-center gap-3 rounded-full bg-ink py-1.5 pl-1.5 pr-5 text-white shadow-btn transition hover:bg-ink-2 md:flex"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-ink">
-                    <Icon name="sparkle" size={18} />
-                  </span>
-                  <span className="leading-tight">
-                    <span className="flex items-center gap-2 text-sm font-medium">
-                      Configuração
-                      <span className="rounded-md bg-tint-green px-1.5 py-0.5 text-xs font-semibold text-ok">
-                        {done} de {steps.length}
-                      </span>
-                    </span>
-                    <span className="block text-xs text-white/70 underline underline-offset-2">
-                      {next.title}
-                    </span>
-                  </span>
-                </Link>
-              ) : null}
-              <span title={user.email ?? ""} className="hidden sm:block lg:hidden">
-                <Avatar name={user.email ?? orgName} size={38} />
-              </span>
-              <form action={signOut} className="lg:hidden">
-                <button
-                  aria-label="Sair"
-                  title="Sair"
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-white text-ink-2 shadow-float transition active:scale-95"
-                >
-                  <Icon name="logout" size={18} />
-                </button>
-              </form>
-            </div>
-          </div>
-        </header>
-
-        <main className="mx-auto max-w-6xl px-4 pb-32 pt-6 md:px-8 md:pt-8 lg:pb-16">{children}</main>
+      {/* ---------- Conteúdo ---------- */}
+      <div className="lg:py-2 lg:pl-60 lg:pr-2">
+        <div className="min-h-[calc(100dvh-1rem)] bg-white lg:rounded-xl lg:shadow-panel">
+          <main className="mx-auto max-w-6xl px-4 pb-32 pt-5 sm:px-6 sm:pt-8 lg:px-10 lg:pb-16 lg:pt-10">
+            {children}
+          </main>
+        </div>
       </div>
 
-      <Nav variant="tabs" />
+      <MobileTabs
+        showTeam={showTeam}
+        showFinance={showFinance}
+        orgName={orgName}
+        email={user.email ?? ""}
+        roleName={roleLabel[role]}
+        signOut={signOut}
+      />
     </div>
   );
 }

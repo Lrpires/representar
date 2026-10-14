@@ -72,7 +72,7 @@ export default function ImageManager({
       {images.length > 0 ? (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {images.map((img) => (
-            <li key={img.id} className="overflow-hidden rounded-2xl border border-line bg-white">
+            <li key={img.id} className="overflow-hidden rounded-lg border border-line bg-white">
               <div className="relative aspect-square bg-subtle">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={productImageUrl(img.path)} alt="" className="h-full w-full object-cover" />
@@ -89,12 +89,12 @@ export default function ImageManager({
                   ) : (
                     <form action={onSetCover}>
                       <input type="hidden" name="image_id" value={img.id} />
-                      <button className="rounded-lg px-2 py-1 text-pen hover:bg-subtle">Usar como capa</button>
+                      <button className="rounded-md px-2 py-1 text-pen hover:bg-pen-soft">Usar como capa</button>
                     </form>
                   )}
                   <form action={onDelete}>
                     <input type="hidden" name="image_id" value={img.id} />
-                    <button className="rounded-lg px-2 py-1 text-alert hover:bg-subtle">Excluir</button>
+                    <button className="rounded-md px-2 py-1 text-alert hover:bg-alert-soft">Excluir</button>
                   </form>
                 </div>
               ) : null}

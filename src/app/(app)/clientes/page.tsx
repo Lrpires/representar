@@ -1,24 +1,24 @@
+import Link from "next/link";
 import { getContext } from "@/lib/session";
 import { createCustomer } from "./actions";
+import { CustomerFields } from "./fields";
 import { safeQ } from "@/lib/format";
+import { digits } from "@/lib/br";
+import { WhatsAppButton } from "@/components/whatsapp";
 import { Sheet } from "@/components/sheet";
 import { SearchBox } from "@/components/search";
 import { Icon } from "@/components/icons";
 import {
-  PageHeader, Toolbar, Field, ErrorNote, EmptyState, Badge, Avatar, SheetForm, NewButton,
-  TableShell, CardList, inputCls, th, td,
+  PageHeader, Toolbar, ErrorNote, OkNote, EmptyState, Badge, Avatar, SheetForm, NewButton,
+  TableShell, CardList, RowLink, Count, th, td, tr,
 } from "@/components/ui";
 
 const PATH = "/clientes";
 
-function StatusBadge({ status }: { status: string }) {
-  return <Badge tone={status === "ativo" ? "ok" : "neutral"}>{status === "ativo" ? "Ativo" : status}</Badge>;
-}
-
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ erro?: string; novo?: string; q?: string }>;
+  searchParams: Promise<{ erro?: string; ok?: string; novo?: string; q?: string }>;
 }) {
   const sp = await searchParams;
   const q = safeQ(sp.q);
@@ -26,13 +26,22 @@ export default async function CustomersPage({
 
   let query = supabase
     .from("customers")
-    .select("id, name, cnpj, address, status")
+    .select("id, name, cnpj, contact_name, phone, city, state, status, principals(name)")
     .order("name");
-  if (q) query = query.or(`name.ilike.*${q}*,cnpj.ilike.*${q}*,address.ilike.*${q}*`);
-  const { data } = await query;
+  if (q) {
+    // CNPJ é guardado formatado; quem digita só números também encontra.
+    const d = digits(q);
+    const cnpjPattern = d.length >= 3 && d.length === q.replace(/[.\-/\s]/g, "").length ? `*${d.split("").join("*")}*` : `*${q}*`;
+    query = query.or(`name.ilike.*${q}*,cnpj.ilike.${cnpjPattern}`);
+  }
+
+  const [{ data }, { data: principals }] = await Promise.all([
+    query,
+    supabase.from("principals").select("id, name").eq("active", true).order("name"),
+  ]);
   const customers = data ?? [];
 
-  const sheetOpen = sp.novo === "1" || !!sp.erro;
+  const sheetOpen = sp.novo === "1";
   const empty = customers.length === 0;
 
   return (
@@ -40,76 +49,92 @@ export default async function CustomersPage({
       <PageHeader
         title="Clientes"
         hint={canManage ? "Todos os clientes do escritório." : "Os clientes da sua carteira."}
-        action={<NewButton label="Novo cliente" />}
+        action={<NewButton label="Novo cliente" fab />}
       />
 
+      {sp.ok ? (
+        <div className="mb-4">
+          <OkNote message={sp.ok} />
+        </div>
+      ) : null}
+
       {empty && !q ? (
-        <EmptyState icon="users" title="Nenhum cliente ainda" action={<NewButton label="Novo cliente" />}>
-          Cadastre os clientes que você atende. Eles ficam disponíveis na hora de fazer um pedido.
+        <EmptyState icon="users" title="Nenhum cliente cadastrado" action={<NewButton label="Novo cliente" />}>
+          Cadastre as lojas e empresas que você atende. Elas ficam disponíveis na hora de fazer um
+          pedido.
         </EmptyState>
       ) : (
         <>
           <Toolbar>
-            <div className="lg:hidden"><SearchBox placeholder="Buscar cliente" /></div>
-            <span className="ml-auto hidden text-sm tabular-nums text-muted sm:block">
-              {customers.length} {customers.length === 1 ? "cliente" : "clientes"}
-            </span>
+            <SearchBox placeholder="Buscar por nome ou CNPJ" hint />
+            <Count n={customers.length} one="cliente" many="clientes" />
           </Toolbar>
 
           {empty ? (
-            <EmptyState icon="search" title="Nada encontrado">
-              Nenhum cliente combina com “{q}”.
+            <EmptyState icon="search" title="Nada encontrado" compact>
+              Nenhum cliente combina com “{q}”. Confira a grafia ou busque pelo CNPJ.
             </EmptyState>
           ) : (
             <>
               <TableShell>
-                <thead className="border-b border-line bg-subtle">
+                <thead>
                   <tr>
                     <th className={th}>Cliente</th>
-                    <th className={th}>Endereço</th>
-                    <th className={th}>Situação</th>
+                    <th className={th}>Cidade</th>
+                    <th className={th}>Telefone</th>
+                    <th className={th}>Representada</th>
+                    <th className={`${th} w-14`}>
+                      <span className="sr-only">WhatsApp</span>
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line">
-                  {customers.map((c) => (
-                    <tr key={c.id} className="transition hover:bg-subtle">
-                      <td className={td}>
-                        <div className="flex items-center gap-3">
-                          <Avatar name={c.name} />
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{c.name}</p>
-                            {c.cnpj ? <p className="font-mono text-xs text-muted">{c.cnpj}</p> : null}
+                <tbody>
+                  {customers.map((c) => {
+                    const principal = (c.principals as unknown as { name: string } | null)?.name;
+                    return (
+                      <tr key={c.id} className={tr}>
+                        <td className={td}>
+                          <div className="flex items-center gap-3">
+                            <Avatar name={c.name} size={30} />
+                            <div className="min-w-0">
+                              <RowLink href={`${PATH}/${c.id}`} className="block truncate font-medium text-ink">
+                                {c.name}
+                              </RowLink>
+                              <p className="truncate text-xs text-muted">
+                                {c.contact_name || (c.cnpj ? <span className="font-mono">{c.cnpj}</span> : "Sem contato")}
+                              </p>
+                            </div>
+                            {c.status !== "ativo" ? <Badge>Inativo</Badge> : null}
                           </div>
-                        </div>
-                      </td>
-                      <td className={`${td} text-ink-2`}>
-                        {c.address || <span className="text-faint">—</span>}
-                      </td>
-                      <td className={td}>
-                        <StatusBadge status={c.status} />
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className={`${td} text-ink-2`}>{[c.city, c.state].filter(Boolean).join(" / ") || <span className="text-faint">—</span>}</td>
+                        <td className={`${td} tabular-nums text-ink-2`}>{c.phone || <span className="text-faint">—</span>}</td>
+                        <td className={`${td} text-ink-2`}>{principal || <span className="text-faint">—</span>}</td>
+                        <td className={`${td} text-right`}>
+                          <WhatsAppButton phone={c.phone} />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </TableShell>
 
               <CardList>
                 {customers.map((c) => (
-                  <li key={c.id} className="flex items-start gap-3 px-4 py-3.5">
-                    <Avatar name={c.name} size={36} />
+                  <li key={c.id} className="relative flex items-center gap-3 px-4 py-3 active:bg-hover">
+                    <Avatar name={c.name} size={38} />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-medium leading-snug">{c.name}</p>
-                        <StatusBadge status={c.status} />
-                      </div>
-                      {c.cnpj ? <p className="font-mono text-xs text-muted">{c.cnpj}</p> : null}
-                      {c.address ? (
-                        <p className="mt-1.5 flex items-start gap-1.5 text-sm text-muted">
-                          <Icon name="pin" size={13} className="mt-1 shrink-0" />
-                          {c.address}
-                        </p>
-                      ) : null}
+                      <Link
+                        href={`${PATH}/${c.id}`}
+                        className="block truncate text-[15px] font-medium after:absolute after:inset-0"
+                      >
+                        {c.name}
+                      </Link>
+                      <p className="mt-0.5 truncate text-[13px] text-muted">
+                        {[[c.city, c.state].filter(Boolean).join("/"), c.contact_name].filter(Boolean).join(" · ") || c.phone || "Sem dados de contato"}
+                      </p>
                     </div>
+                    <WhatsAppButton phone={c.phone} />
                   </li>
                 ))}
               </CardList>
@@ -118,31 +143,10 @@ export default async function CustomersPage({
         </>
       )}
 
-      <Sheet
-        open={sheetOpen}
-        title="Novo cliente"
-        description="Entra na sua carteira."
-        closeHref={PATH}
-      >
-        <SheetForm action={createCustomer} closeHref={PATH} submitLabel="Salvar">
-          <div className="sm:col-span-2">
-            <ErrorNote message={sp.erro} />
-          </div>
-          <div className="sm:col-span-2">
-            <Field label="Nome ou razão social">
-              <input name="name" required className={inputCls} />
-            </Field>
-          </div>
-          <div className="sm:col-span-2">
-            <Field label="CNPJ">
-              <input name="cnpj" inputMode="numeric" placeholder="00.000.000/0000-00" className={inputCls} />
-            </Field>
-          </div>
-          <div className="sm:col-span-2">
-            <Field label="Endereço">
-              <input name="address" className={inputCls} />
-            </Field>
-          </div>
+      <Sheet open={sheetOpen} title="Novo cliente" description="Entra na sua carteira e já pode receber pedidos." closeHref={PATH}>
+        <SheetForm action={createCustomer} closeHref={PATH} submitLabel="Salvar cliente">
+          <ErrorNote message={sp.erro} />
+          <CustomerFields principals={principals ?? []} />
         </SheetForm>
       </Sheet>
     </>

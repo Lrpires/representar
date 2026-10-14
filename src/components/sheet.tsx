@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Icon } from "./icons";
 
-// Painel flutuante (computador) que vira folha deslizante de baixo (celular).
+// Painel que entra pela direita (computador) ou sobe de baixo (celular).
 // Quem decide se está aberto é a página, pelo endereço (?novo=1).
 export function Sheet({
   open,
@@ -34,7 +34,7 @@ export function Sheet({
 
     // No computador, já cai no primeiro campo. No celular não, para não abrir o teclado.
     if (window.matchMedia("(min-width: 768px)").matches) {
-      ref.current?.querySelector<HTMLElement>("input, select, textarea")?.focus();
+      ref.current?.querySelector<HTMLElement>("input:not([type=hidden]), select, textarea")?.focus();
     }
     return () => {
       document.removeEventListener("keydown", onKey);
@@ -52,33 +52,34 @@ export function Sheet({
         scroll={false}
         aria-label="Fechar"
         tabIndex={-1}
-        className="absolute inset-0 animate-fade-in bg-ink/30 backdrop-blur-[3px]"
+        className="absolute inset-0 animate-fade-in bg-[rgb(20_33_42/0.32)] md:bg-[rgb(20_33_42/0.18)]"
       />
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-labelledby="sheet-title"
-        className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] animate-sheet-up flex-col rounded-t-[1.75rem] bg-sheet shadow-sheet md:inset-y-3 md:left-auto md:right-3 md:max-h-none md:w-[29rem] md:animate-sheet-in md:rounded-[1.75rem]"
+        className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] animate-sheet-up flex-col overflow-hidden rounded-t-2xl bg-sheet shadow-sheet md:inset-y-2 md:left-auto md:right-2 md:max-h-none md:w-[28rem] md:animate-sheet-in md:rounded-xl"
       >
-        <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-line-strong md:hidden" />
-        <header className="flex items-start justify-between gap-4 border-b border-line px-6 pb-4 pt-5">
-          <div>
-            <h2 id="sheet-title" className="text-lg font-semibold tracking-tight">
+        <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-line-strong md:hidden" />
+        <header className="flex shrink-0 items-start justify-between gap-4 px-5 pb-4 pt-3 md:pt-5">
+          <div className="min-w-0">
+            <h2 id="sheet-title" className="text-base font-semibold tracking-[-0.01em] text-ink">
               {title}
             </h2>
-            {description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}
+            {description ? <p className="mt-1 text-[13px] leading-relaxed text-muted">{description}</p> : null}
           </div>
           <Link
             href={closeHref}
             replace
             scroll={false}
             aria-label="Fechar"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-white text-ink-2 shadow-float transition hover:bg-hover hover:text-ink"
+            className="-mr-1.5 -mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-hover hover:text-ink md:h-8 md:w-8"
           >
             <Icon name="x" size={17} />
           </Link>
         </header>
+        <div className="h-px shrink-0 bg-line" />
         {children}
       </div>
     </div>

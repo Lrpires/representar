@@ -8,7 +8,7 @@ import { Sheet } from "@/components/sheet";
 import { Icon } from "@/components/icons";
 import {
   PageHeader, Field, ErrorNote, EmptyState, Badge, SheetForm, NewButton, TableShell, CardList,
-  Notice, inputCls, th, td,
+  Notice, inputCls, th, td, tr,
 } from "@/components/ui";
 
 type Product = { name: string; code: string; unit: string };
@@ -87,7 +87,7 @@ export default async function PriceTablePage({
         back={{ href: "/tabelas-de-preco", label: "Tabelas de preço" }}
         title={table.name}
         hint={principal?.name}
-        action={canManage && !noVariants ? <NewButton label="Lançar preço" /> : null}
+        action={canManage && !noVariants ? <NewButton label="Lançar preço" fab /> : null}
       />
 
       <div className="-mt-2 mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
@@ -119,7 +119,7 @@ export default async function PriceTablePage({
       ) : (
         <>
           <TableShell>
-            <thead className="border-b border-line bg-subtle">
+            <thead>
               <tr>
                 <th className={th}>Produto</th>
                 <th className={th}>Código</th>
@@ -127,9 +127,9 @@ export default async function PriceTablePage({
                 <th className={`${th} text-right`}>Preço</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
+            <tbody>
               {items.map((i) => (
-                <tr key={i.id} className="transition hover:bg-subtle">
+                <tr key={i.id} className={tr}>
                   <td className={td}>
                     <p className="font-medium">{i.variant.products.name}</p>
                     {variantExtra(i.variant) ? (

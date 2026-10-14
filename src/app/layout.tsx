@@ -15,12 +15,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Representantes",
+  title: { default: "Representar", template: "%s · Representar" },
+  icons: { icon: "/icon.svg", apple: "/icon-180.png" },
+  appleWebApp: { capable: true, title: "Representar", statusBarStyle: "default" },
   description: "Catálogo, pedidos, comissões e clientes do representante comercial.",
 };
 
 export const viewport: Viewport = {
   themeColor: "#ffffff",
+  viewportFit: "cover",
   width: "device-width",
   initialScale: 1,
 };

@@ -232,3 +232,32 @@ export async function deleteImage(id: string, imageId: string) {
   }
   done(id, "Imagem excluída.");
 }
+
+// Exclui o produto (com variações e fotos). Produto que já entrou em pedido não pode
+// ser excluído, só desativado, para não apagar o histórico.
+export async function deleteProduct(id: string) {
+  const { supabase, canManage } = await getContext();
+  const path = here(id);
+  if (!canManage) fail(path, "Só administrador e gerente podem excluir produtos.");
+
+  const { data: variants } = await supabase.from("product_variants").select("id").eq("product_id", id);
+  const ids = (variants ?? []).map((v) => v.id);
+  if (ids.length) {
+    const { count } = await supabase
+      .from("order_items")
+      .select("id", { count: "exact", head: true })
+      .in("variant_id", ids);
+    if ((count ?? 0) > 0) {
+      fail(path, "Este produto já está em pedidos e não pode ser excluído. Desmarque “Produto ativo” para escondê-lo.");
+    }
+  }
+
+  const { data: images } = await supabase.from("product_images").select("path").eq("product_id", id);
+  if ((images ?? []).length) await supabase.storage.from("product-images").remove((images ?? []).map((i) => i.path));
+
+  const { error } = await supabase.from("products").delete().eq("id", id);
+  if (error) fail(path, `Não foi possível excluir: ${error.message}`);
+
+  revalidatePath("/produtos");
+  redirect(`/produtos?ok=${encodeURIComponent("Produto excluído.")}`);
+}

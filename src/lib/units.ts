@@ -28,3 +28,11 @@ export const UNITS: { value: string; label: string }[] = UNIT_GROUPS.flatMap((g)
 export function unitLabel(value: string): string {
   return UNITS.find((u) => u.value === value)?.label ?? value;
 }
+
+// Só as unidades ligadas nas configurações. "keep" mantém a unidade atual de um
+// produto mesmo que ela tenha sido desligada depois.
+export function unitGroupsFor(enabled: string[], keep?: string) {
+  const on = new Set(enabled);
+  if (keep) on.add(keep);
+  return UNIT_GROUPS.map((g) => ({ ...g, units: g.units.filter(([v]) => on.has(v)) })).filter((g) => g.units.length > 0);
+}

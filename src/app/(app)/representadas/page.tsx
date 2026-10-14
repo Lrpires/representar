@@ -1,13 +1,13 @@
-import Link from "next/link";
 import { getContext } from "@/lib/session";
 import { createPrincipal, setPrincipalActive } from "./actions";
 import { pct, safeQ } from "@/lib/format";
 import { Sheet } from "@/components/sheet";
+import { MaskedInput } from "@/components/masked-input";
+import { AddressFields } from "@/components/address-fields";
 import { SearchBox } from "@/components/search";
-import { Icon } from "@/components/icons";
 import {
-  PageHeader, Toolbar, Field, ErrorNote, EmptyState, Badge, Avatar, SheetForm, NewButton,
-  FilterPill, Switch, inputCls,
+  PageHeader, Toolbar, Field, FormGroup, ErrorNote, OkNote, EmptyState, Badge, Avatar, SheetForm, NewButton,
+  FilterPill, Segmented, Switch, TableShell, CardList, ListRow, RowLink, Count, inputCls, th, td, tr,
 } from "@/components/ui";
 
 const PATH = "/representadas";
@@ -15,7 +15,7 @@ const PATH = "/representadas";
 export default async function PrincipalsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ erro?: string; novo?: string; q?: string; status?: string }>;
+  searchParams: Promise<{ erro?: string; ok?: string; novo?: string; q?: string; status?: string }>;
 }) {
   const sp = await searchParams;
   const q = safeQ(sp.q);
@@ -23,7 +23,7 @@ export default async function PrincipalsPage({
 
   let query = supabase
     .from("principals")
-    .select("id, name, cnpj, default_commission_pct, city, state, contact, active")
+    .select("id, name, legal_name, cnpj, default_commission_pct, commission_close_mode, commission_days_after, city, state, contact, active")
     .order("name");
   if (q) query = query.or(`name.ilike.*${q}*,cnpj.ilike.*${q}*`);
   const { data } = await query;
@@ -44,113 +44,148 @@ export default async function PrincipalsPage({
 
   const sheetOpen = canManage && (sp.novo === "1" || !!sp.erro);
   const noneAtAll = all.length === 0 && !q;
+  const place = (p: { city: string | null; state: string | null }) =>
+    p.city ? `${p.city}${p.state ? ` / ${p.state}` : ""}` : "";
+  const payDays = (p: { commission_close_mode: string; commission_days_after: number | null }) =>
+    p.commission_close_mode === "dias_apos_evento" && p.commission_days_after != null
+      ? `${p.commission_days_after} ${p.commission_days_after === 1 ? "dia" : "dias"}`
+      : "";
 
   return (
     <>
       <PageHeader
         title="Representadas"
-        hint={noneAtAll ? "As fábricas e marcas que você representa." : undefined}
-        filters={
-          all.length > 0 ? (
-            <>
-              <FilterPill href={href("todas")} active={status === "todas"} count={all.length} tone="green">
-                Todas
-              </FilterPill>
-              <FilterPill href={href("ativas")} active={status === "ativas"} count={nActive} tone="blue">
-                Ativas
-              </FilterPill>
-              <FilterPill
-                href={href("inativas")}
-                active={status === "inativas"}
-                count={all.length - nActive}
-                tone="orange"
-              >
-                Inativas
-              </FilterPill>
-            </>
-          ) : undefined
-        }
-        action={canManage ? <NewButton label="Nova representada" /> : null}
+        hint="As fábricas e marcas que você representa, com a regra de comissão de cada uma."
+        action={canManage ? <NewButton label="Nova representada" fab /> : null}
       />
+
+      {sp.ok ? (
+        <div className="mb-4">
+          <OkNote message={sp.ok} />
+        </div>
+      ) : null}
 
       {noneAtAll ? (
         <EmptyState
           icon="factory"
-          title="Nenhuma representada ainda"
+          title="Cadastre as empresas que você representa"
           action={canManage ? <NewButton label="Nova representada" /> : null}
         >
-          Cadastre as fábricas que você representa. Depois, cadastre os produtos e as tabelas de
-          preço de cada uma.
+          Informe o nome e a comissão padrão de cada fábrica. A comissão é sugerida
+          automaticamente em cada pedido.
         </EmptyState>
       ) : (
         <>
-          <div className="lg:hidden">
-            <Toolbar>
-              <SearchBox placeholder="Buscar representada" />
-            </Toolbar>
-          </div>
+          <Toolbar>
+            <Segmented>
+              <FilterPill href={href("todas")} active={status === "todas"} count={all.length}>
+                Todas
+              </FilterPill>
+              <FilterPill href={href("ativas")} active={status === "ativas"} count={nActive}>
+                Ativas
+              </FilterPill>
+              <FilterPill href={href("inativas")} active={status === "inativas"} count={all.length - nActive}>
+                Inativas
+              </FilterPill>
+            </Segmented>
+            <div className="ml-auto w-full sm:w-72">
+              <SearchBox placeholder="Buscar representada" className="w-full" hint />
+            </div>
+          </Toolbar>
 
           {list.length === 0 ? (
-            <EmptyState icon="search" title="Nada encontrado">
+            <EmptyState icon="search" title="Nada encontrado" compact>
               {q ? `Nenhuma representada combina com “${q}”.` : "Nenhuma representada nesse filtro."}
             </EmptyState>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 lg:gap-4">
-              {list.map((p) => {
-                const toggle = setPrincipalActive.bind(null, p.id, !p.active);
-                return (
-                  <li
-                    key={p.id}
-                    className={`overflow-hidden rounded-[1.75rem] border transition ${
-                      p.active
-                        ? "border-pen/15 bg-linear-to-b from-[#eef2ff] to-[#f5f7ff]"
-                        : "border-line bg-subtle"
-                    }`}
-                  >
-                    <Link href={`${PATH}/${p.id}`} className="block p-5 pb-4 transition hover:bg-white/50">
-                      <div className="flex items-start justify-between gap-3">
-                        <Avatar name={p.name} size={48} />
-                        {p.default_commission_pct != null ? (
-                          <Badge tone={p.active ? "solid" : "neutral"}>
-                            Comissão {pct(p.default_commission_pct)}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className={`mt-4 text-lg font-semibold leading-snug ${p.active ? "" : "text-ink-2"}`}>
-                        {p.name}
+            <>
+              <TableShell>
+                <thead>
+                  <tr>
+                    <th className={th}>Representada</th>
+                    <th className={th}>Cidade</th>
+                    <th className={th}>Contato</th>
+                    <th className={`${th} text-right`}>Comissão</th>
+                    <th className={`${th} text-right`}>Pagamento</th>
+                    <th className={`${th} w-24 text-right`}>Ativa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((p) => {
+                    const toggle = setPrincipalActive.bind(null, p.id, !p.active);
+                    return (
+                      <tr key={p.id} className={`${tr} ${p.active ? "" : "text-muted"}`}>
+                        <td className={td}>
+                          <div className="flex items-center gap-3">
+                            <span className={p.active ? "" : "opacity-50 grayscale"}>
+                              <Avatar name={p.name} size={30} />
+                            </span>
+                            <div className="min-w-0">
+                              <RowLink href={`${PATH}/${p.id}`} className={`block truncate font-medium ${p.active ? "text-ink" : "text-ink-2"}`}>
+                                {p.name}
+                              </RowLink>
+                              <p className="truncate font-mono text-xs text-muted">{p.cnpj || p.legal_name || "Sem CNPJ"}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className={`${td} text-ink-2`}>{place(p) || <span className="text-faint">—</span>}</td>
+                        <td className={`${td} max-w-[14rem] truncate text-ink-2`}>
+                          {p.contact || <span className="text-faint">—</span>}
+                        </td>
+                        <td className={`${td} text-right tabular-nums`}>
+                          {p.default_commission_pct != null ? (
+                            <span className="font-medium text-ink">{pct(p.default_commission_pct)}</span>
+                          ) : (
+                            <span className="text-faint">—</span>
+                          )}
+                        </td>
+                        <td className={`${td} text-right text-ink-2`}>
+                          {payDays(p) ? (
+                            <span title="Dias após o faturamento">{payDays(p)}</span>
+                          ) : (
+                            <span className="text-faint">—</span>
+                          )}
+                        </td>
+                        <td className={`${td} text-right`}>
+                          {canManage ? (
+                            <form action={toggle} className="relative z-10 inline-flex">
+                              <button
+                                aria-label={p.active ? "Desativar representada" : "Ativar representada"}
+                                title={p.active ? "Desativar" : "Ativar"}
+                                className="inline-flex rounded-full p-1"
+                              >
+                                <Switch on={p.active} />
+                              </button>
+                            </form>
+                          ) : (
+                            <Switch on={p.active} disabled />
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </TableShell>
+
+              <CardList>
+                {list.map((p) => (
+                  <ListRow key={p.id} href={`${PATH}/${p.id}`}>
+                    <span className={p.active ? "" : "opacity-50 grayscale"}>
+                      <Avatar name={p.name} size={38} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`truncate text-[15px] font-medium ${p.active ? "" : "text-muted"}`}>{p.name}</p>
+                      <p className="mt-0.5 truncate text-[13px] text-muted">
+                        {[place(p), p.default_commission_pct != null ? `Comissão ${pct(p.default_commission_pct)}` : ""]
+                          .filter(Boolean)
+                          .join(" · ") || "Sem dados de cidade"}
                       </p>
-                      <p className="mt-0.5 truncate font-mono text-[13px] text-muted">
-                        {p.cnpj || "Sem CNPJ"}
-                      </p>
-                      {p.contact ? (
-                        <p className="mt-2 flex items-center gap-1.5 truncate text-[13px] text-muted">
-                          <Icon name="phone" size={13} className="shrink-0" />
-                          <span className="truncate">{p.contact}</span>
-                        </p>
-                      ) : null}
-                    </Link>
-                    <div className="flex items-center justify-between gap-3 border-t border-line/80 px-5 py-3.5">
-                      <span className="min-w-0 truncate text-[13px] text-muted">
-                        {p.city ? `${p.city}${p.state ? ` / ${p.state}` : ""}` : "Cidade não informada"}
-                      </span>
-                      {canManage ? (
-                        <form action={toggle}>
-                          <button
-                            aria-label={p.active ? "Desativar representada" : "Ativar representada"}
-                            title={p.active ? "Desativar" : "Ativar"}
-                            className="rounded-full transition active:scale-95"
-                          >
-                            <Switch on={p.active} />
-                          </button>
-                        </form>
-                      ) : (
-                        <Switch on={p.active} disabled />
-                      )}
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
+                    {!p.active ? <Badge>Inativa</Badge> : null}
+                  </ListRow>
+                ))}
+              </CardList>
+            </>
           )}
         </>
       )}
@@ -158,29 +193,35 @@ export default async function PrincipalsPage({
       <Sheet
         open={sheetOpen}
         title="Nova representada"
-        description="Dados da fábrica e condições comerciais."
+        description="Na ficha da representada você completa depois endereço, contrato e contatos."
         closeHref={PATH}
       >
-        <SheetForm action={createPrincipal} closeHref={PATH} submitLabel="Salvar">
-          <div className="sm:col-span-2">
-            <ErrorNote message={sp.erro} />
-          </div>
-          <div className="sm:col-span-2">
-            <Field label="Nome">
-              <input name="name" required className={inputCls} />
-            </Field>
-          </div>
-          <Field label="CNPJ">
-            <input name="cnpj" inputMode="numeric" placeholder="00.000.000/0000-00" className={inputCls} />
+        <SheetForm action={createPrincipal} closeHref={PATH} submitLabel="Salvar representada">
+          <ErrorNote message={sp.erro} />
+          <Field label="CNPJ" className="sm:col-span-2">
+            <MaskedInput mask="cnpj" lookup="principal" name="cnpj" className={inputCls} />
           </Field>
-          <Field label="Comissão padrão (%)">
-            <input name="commission" inputMode="decimal" placeholder="5,0" className={inputCls} />
+          <Field label="Nome" hint="Como você chama a empresa no dia a dia." className="sm:col-span-2">
+            <input name="name" required placeholder="Ex.: Malharia Aurora" className={inputCls} />
           </Field>
-          <div className="sm:col-span-2">
-            <Field label="Contato na fábrica">
-              <input name="contact" className={inputCls} />
-            </Field>
-          </div>
+          <Field label="Razão social" className="sm:col-span-2">
+            <input name="legal_name" className={inputCls} />
+          </Field>
+          <Field label="% Comissão padrão" hint="Sugerida em cada pedido.">
+            <input
+              name="commission"
+              inputMode="decimal"
+              placeholder="5,0"
+              pattern="^\d{1,3}([.,]\d{1,2})?$"
+              title="Informe um percentual entre 0 e 100"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Dias para pagamento da comissão" hint="Contados a partir do faturamento.">
+            <input name="days" inputMode="numeric" placeholder="30" pattern="^\d{1,3}$" className={inputCls} />
+          </Field>
+          <FormGroup title="Endereço" />
+          <AddressFields />
         </SheetForm>
       </Sheet>
     </>

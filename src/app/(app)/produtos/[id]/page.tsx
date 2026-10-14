@@ -1,40 +1,39 @@
 import { notFound } from "next/navigation";
 import { getContext } from "@/lib/session";
 import {
-  updateProduct, addVariant, deleteVariant, setCoverImage, deleteImage,
+  updateProduct, addVariant, deleteVariant, setCoverImage, deleteImage, deleteProduct,
 } from "./actions";
-import { UNIT_GROUPS } from "@/lib/units";
+import { unitGroupsFor, unitLabel } from "@/lib/units";
+import { getSettings } from "@/lib/settings";
 import { Icon, type IconName } from "@/components/icons";
 import {
-  PageHeader, Field, ErrorNote, OkNote, Badge, inputCls, primaryBtn, ghostBtn,
+  PageHeader, Field, FormSection, ErrorNote, OkNote, Badge, inputCls, primaryBtn, ghostBtn, dangerBtn,
+ SaveBar,
 } from "@/components/ui";
+import { SubmitButton } from "@/components/submit";
 import ImageManager from "./ImageManager";
+import Link from "next/link";
+import { ConfirmButton } from "@/components/confirm-button";
+import { productImageUrl } from "@/lib/storage";
+import { brl, formatDate } from "@/lib/format";
+import { formatOrderNumber, numText } from "@/lib/orders";
 import SpecsEditor from "./SpecsEditor";
 import type { ReactNode } from "react";
 
 const PATH = "/produtos";
 
 function Section({
-  icon, title, hint, children,
-}: { icon: IconName; title: string; hint?: string; children: ReactNode }) {
+  title, hint, children,
+}: { icon?: IconName; title: string; hint?: string; children: ReactNode }) {
   return (
-    <section className="rounded-[1.75rem] border border-line bg-white p-5 sm:p-6">
-      <div className="mb-5 flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-subtle text-pen">
-          <Icon name={icon} size={18} />
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold leading-tight">{title}</h2>
-          {hint ? <p className="mt-0.5 text-[13px] leading-snug text-muted">{hint}</p> : null}
-        </div>
-      </div>
+    <FormSection title={title} hint={hint}>
       {children}
-    </section>
+    </FormSection>
   );
 }
 
 const grid = "grid gap-4 sm:grid-cols-2";
-const check = "h-5 w-5 shrink-0 rounded border-line-strong accent-[#0b0b0f]";
+const check = "h-5 w-5 shrink-0 rounded border-line-strong ";
 
 export default async function ProductPage({
   params,
@@ -46,6 +45,7 @@ export default async function ProductPage({
   const { id } = await params;
   const sp = await searchParams;
   const { supabase, orgId, canManage } = await getContext();
+  const settings = await getSettings();
 
   const [{ data: p }, { data: variants }, { data: images }] = await Promise.all([
     supabase.from("products").select("*, principals(name)").eq("id", id).maybeSingle(),
@@ -62,6 +62,26 @@ export default async function ProductPage({
   ]);
   if (!p) notFound();
 
+  // Vendas deste produto (todas as variações), dos pedidos mais novos para os mais antigos.
+  const variantIds = (variants ?? []).map((vr) => vr.id);
+  const { data: soldRows } = variantIds.length
+    ? await supabase
+        .from("order_items")
+        .select("qty, list_price, line_total, orders!inner(id, number, order_date, status, customers(name))")
+        .in("variant_id", variantIds)
+        .neq("orders.status", "cancelado")
+        .order("created_at", { ascending: false })
+        .limit(200)
+    : { data: [] as never[] };
+  type Sold = {
+    qty: number; list_price: number; line_total: number;
+    orders: { id: string; number: number; order_date: string; status: string; customers: { name: string } | null };
+  };
+  const sales = (soldRows ?? []) as unknown as Sold[];
+  const soldQty = sales.reduce((s, r) => s + Number(r.qty), 0);
+  const soldValue = sales.reduce((s, r) => s + Number(r.line_total), 0);
+  const cover = (images ?? []).find((i) => i.is_cover) ?? (images ?? [])[0];
+
   const principal = p.principals as unknown as { name: string } | null;
   const v = (x: string | number | null | undefined) => (x == null ? "" : String(x));
   const save = updateProduct.bind(null, id);
@@ -69,7 +89,7 @@ export default async function ProductPage({
   const specs = Object.entries((p.specs ?? {}) as Record<string, string>);
   const tags = ((p.tags ?? []) as string[]).join(", ");
 
-  async function cover(fd: FormData) {
+  async function setCover(fd: FormData) {
     "use server";
     await setCoverImage(id, String(fd.get("image_id") ?? ""));
   }
@@ -82,30 +102,67 @@ export default async function ProductPage({
     <>
       <PageHeader
         title={p.name}
-        hint={[principal?.name, p.code].filter(Boolean).join(" · ")}
         back={{ href: PATH, label: "Produtos" }}
-        action={<Badge tone={p.active ? "ok" : "neutral"}>{p.active ? "Ativo" : "Inativo"}</Badge>}
+        leading={
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-subtle text-faint">
+            {cover ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={productImageUrl(cover.path)} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Icon name="image" size={22} />
+            )}
+          </span>
+        }
+        meta={
+          <>
+            <Badge tone={p.active ? "ok" : "neutral"} dot>
+              {p.active ? "Ativo" : "Inativo"}
+            </Badge>
+            <span className="font-mono text-xs">{p.code}</span>
+            {principal?.name ? <span>{principal.name}</span> : null}
+            <span>Vendido por {unitLabel(p.unit).toLowerCase()}</span>
+          </>
+        }
       />
 
-      <div className="mb-4 max-w-3xl empty:hidden [&>*]:mb-3">
+      <dl className="mb-6 grid max-w-5xl grid-cols-2 overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4 [&>div]:bg-white" style={{ gap: 1 }}>
+        <div className="p-4">
+          <dt className="text-[13px] text-muted">Último preço</dt>
+          <dd className="mt-1 text-lg font-semibold tabular-nums">{sales[0] ? brl(Number(sales[0].list_price)) : "—"}</dd>
+        </div>
+        <div className="p-4">
+          <dt className="text-[13px] text-muted">Quantidade vendida</dt>
+          <dd className="mt-1 text-lg font-semibold tabular-nums">{numText(soldQty, 3) || "0"}</dd>
+        </div>
+        <div className="p-4">
+          <dt className="text-[13px] text-muted">Valor vendido</dt>
+          <dd className="mt-1 text-lg font-semibold tabular-nums">{brl(soldValue)}</dd>
+        </div>
+        <div className="p-4">
+          <dt className="text-[13px] text-muted">Último pedido</dt>
+          <dd className="mt-1 text-lg font-semibold tabular-nums">{sales[0] ? formatDate(sales[0].orders.order_date) : "—"}</dd>
+        </div>
+      </dl>
+
+      <div className="mb-4 max-w-5xl empty:hidden [&>*]:mb-3">
         <ErrorNote message={sp.erro} />
         <OkNote message={sp.ok} />
       </div>
 
-      <div className="grid max-w-3xl gap-4 lg:gap-5">
+      <div className="grid max-w-5xl gap-6 lg:gap-0">
         <Section icon="image" title="Imagens" hint="As fotos são reduzidas automaticamente. A capa aparece na lista.">
           <ImageManager
             productId={id}
             orgId={orgId}
             images={(images ?? []).map((i) => ({ id: i.id, path: i.path, is_cover: i.is_cover }))}
             canManage={canManage}
-            onSetCover={cover}
+            onSetCover={setCover}
             onDelete={remove}
           />
         </Section>
 
-        <form action={save} className="grid gap-4 lg:gap-5">
-          <fieldset disabled={!canManage} className="m-0 grid min-w-0 gap-4 border-0 p-0 lg:gap-5">
+        <form action={save} className="grid gap-6 lg:gap-0">
+          <fieldset disabled={!canManage} className="m-0 grid min-w-0 gap-6 border-0 p-0 lg:gap-0">
             <Section icon="box" title="Dados básicos">
               <div className={grid}>
                 <Field label="Código">
@@ -113,7 +170,7 @@ export default async function ProductPage({
                 </Field>
                 <Field label="Unidade de venda">
                   <select name="unit" defaultValue={p.unit} className={inputCls}>
-                    {UNIT_GROUPS.map((g) => (
+                    {unitGroupsFor(settings.units, p.unit).map((g) => (
                       <optgroup key={g.label} label={g.label}>
                         {g.units.map(([value, label]) => (
                           <option key={value} value={value}>{label}</option>
@@ -217,9 +274,11 @@ export default async function ProductPage({
           </fieldset>
 
           {canManage ? (
-            <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-10 flex justify-end lg:bottom-4">
-              <button className={`${primaryBtn} w-full shadow-float sm:w-auto sm:px-8`}>Salvar alterações</button>
-            </div>
+            <SaveBar note={<span className="hidden sm:inline">Dados do produto: lembre de salvar depois de alterar.</span>}>
+              <SubmitButton className={`${primaryBtn} w-full sm:w-auto`} pending="Salvando…">
+                Salvar alterações
+              </SubmitButton>
+            </SaveBar>
           ) : null}
         </form>
 
@@ -239,7 +298,7 @@ export default async function ProductPage({
                   </div>
                   {canManage ? (
                     <form action={deleteVariant.bind(null, id, vr.id)}>
-                      <button className="rounded-lg px-2 py-1 text-[13px] text-alert hover:bg-subtle">Excluir</button>
+                      <button className={dangerBtn}>Excluir</button>
                     </form>
                   ) : null}
                 </li>
@@ -266,6 +325,42 @@ export default async function ProductPage({
             </form>
           ) : null}
         </Section>
+        <Section icon="receipt" title="Pedidos com este produto" hint="Os mais recentes primeiro.">
+          {sales.length === 0 ? (
+            <p className="text-sm text-muted">Este produto ainda não entrou em nenhum pedido.</p>
+          ) : (
+            <ul className="-mx-4 -my-4 divide-y divide-line sm:-mx-5 sm:-my-5">
+              {sales.slice(0, 10).map((r, n) => (
+                <li key={n}>
+                  <Link href={`/pedidos/${r.orders.id}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-subtle sm:px-5">
+                    <span className="w-20 shrink-0 truncate font-mono text-xs text-muted">
+                      {formatOrderNumber(r.orders.number, settings)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{r.orders.customers?.name}</span>
+                      <span className="block text-xs text-muted">{formatDate(r.orders.order_date)}</span>
+                    </span>
+                    <span className="shrink-0 text-right text-sm tabular-nums">
+                      {numText(Number(r.qty), 3)} × {brl(Number(r.list_price))}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        {canManage ? (
+          <Section icon="trash" title="Excluir produto" hint="Produtos que já estão em pedidos não podem ser excluídos, só desativados.">
+            <form action={deleteProduct.bind(null, id)} className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted">Apaga o produto, as variações e as fotos.</p>
+              <ConfirmButton message={`Excluir ${p.name}? Essa ação não pode ser desfeita.`} className={dangerBtn}>
+                <Icon name="trash" size={15} />
+                Excluir produto
+              </ConfirmButton>
+            </form>
+          </Section>
+        ) : null}
       </div>
     </>
   );

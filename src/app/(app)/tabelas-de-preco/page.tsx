@@ -93,7 +93,7 @@ export default async function PriceTablesPage({
             </>
           ) : undefined
         }
-        action={canManage && !noPrincipals ? <NewButton label="Nova tabela" /> : null}
+        action={canManage && !noPrincipals ? <NewButton label="Nova tabela" fab /> : null}
       />
 
       {noPrincipals ? (
@@ -127,9 +127,9 @@ export default async function PriceTablesPage({
               <li key={t.id}>
                 <Link
                   href={`${PATH}/${t.id}`}
-                  className={`group flex h-full flex-col overflow-hidden rounded-[1.75rem] border transition hover:-translate-y-0.5 hover:shadow-float ${
+                  className={`group flex h-full flex-col overflow-hidden rounded-xl border transition hover:-translate-y-0.5 hover:shadow-float ${
                     state === "vigentes"
-                      ? "border-pen/15 bg-linear-to-b from-[#eef2ff] to-[#f5f7ff]"
+                      ? "border-line bg-white"
                       : "border-line bg-subtle"
                   }`}
                 >

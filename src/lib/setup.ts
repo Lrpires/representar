@@ -1,34 +1,27 @@
 import type { Counts } from "@/lib/counts";
 
-// Etapas de configuração inicial, na ordem em que fazem sentido.
+// Etapas de configuração inicial, na ordem do fluxo principal do playbook.
 export function setupSteps(c: Counts, canManage: boolean) {
   return [
     {
-      href: "/representadas",
+      href: "/representadas?novo=1",
       title: "Cadastre as representadas",
-      desc: "As fábricas e marcas que você representa.",
+      desc: "As empresas que você representa e a comissão de cada uma.",
       n: c.representadas,
       manage: true,
     },
     {
-      href: "/produtos",
-      title: "Cadastre os produtos",
-      desc: "Cada produto pertence a uma representada.",
-      n: c.produtos,
-      manage: true,
-    },
-    {
-      href: "/tabelas-de-preco",
-      title: "Crie a tabela de preço",
-      desc: "Lance os preços com a data de vigência.",
-      n: c.tabelas,
-      manage: true,
-    },
-    {
-      href: "/clientes",
+      href: "/clientes?novo=1",
       title: "Cadastre os seus clientes",
-      desc: "A sua carteira, pronta para receber pedidos.",
+      desc: "Com o CNPJ, os dados são preenchidos sozinhos.",
       n: c.clientes,
+      manage: false,
+    },
+    {
+      href: "/pedidos/novo",
+      title: "Faça o primeiro pedido",
+      desc: "Total e comissão calculados na hora.",
+      n: c.pedidos,
       manage: false,
     },
   ].filter((s) => canManage || !s.manage);

@@ -1,5 +1,6 @@
 "use server";
 
+import { formatCnpj, isValidCnpj } from "@/lib/br";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getContext } from "@/lib/session";
@@ -64,6 +65,9 @@ export async function updatePrincipal(id: string, formData: FormData) {
     if (!inRange(chargebackDays, 0, 730)) fail(path, "Os dias de estorno devem ficar entre 0 e 730.");
   }
 
+  const cnpjRaw = text(formData, "cnpj");
+  if (cnpjRaw && !isValidCnpj(cnpjRaw)) fail(path, "CNPJ inválido");
+
   const stateRaw = text(formData, "state").toUpperCase();
   if (stateRaw && !/^[A-Z]{2}$/.test(stateRaw)) fail(path, "Use a sigla do estado com 2 letras (ex.: PE).");
 
@@ -76,7 +80,7 @@ export async function updatePrincipal(id: string, formData: FormData) {
     .update({
       name,
       legal_name: optional(formData, "legal_name"),
-      cnpj: optional(formData, "cnpj"),
+      cnpj: cnpjRaw ? formatCnpj(cnpjRaw) : null,
       state_reg: optional(formData, "state_reg"),
       email: optional(formData, "email"),
       phone: optional(formData, "phone"),

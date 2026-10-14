@@ -1,68 +1,83 @@
+import Link from "next/link";
 import { login, signup } from "./actions";
-import { ErrorNote, OkNote, Field, Logo, inputCls, primaryBtn, ghostBtn } from "@/components/ui";
-
-const points = ["Pedido com a tabela certa", "Comissão sob controle", "Carteira no celular"];
+import { AuthShell } from "@/components/auth-shell";
+import { SubmitButton } from "@/components/submit";
+import { ErrorNote, OkNote, Field, inputCls, primaryBtn } from "@/components/ui";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ erro?: string; ok?: string }>;
+  searchParams: Promise<{ erro?: string; ok?: string; modo?: string }>;
 }) {
-  const { erro, ok } = await searchParams;
+  const { erro, ok, modo } = await searchParams;
+  const creating = modo === "criar";
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-4 py-12">
-      <div className="w-full max-w-md rounded-[1.75rem] border border-line bg-white p-7 shadow-float sm:p-10">
-        <div className="flex items-center gap-3">
-          <Logo size={40} />
-          <span className="text-xl font-semibold tracking-tight">Representantes</span>
-        </div>
-        <h1 className="mt-9 text-[1.75rem] font-semibold leading-tight tracking-tight">
-          Entre na sua conta
-        </h1>
-        <p className="mb-7 mt-2 text-sm leading-relaxed text-muted">
-          Ainda não tem conta? Preencha os campos e clique em Criar conta.
-        </p>
-
-        <div className="empty:hidden [&>*]:mb-4">
-          <ErrorNote message={erro} />
-          <OkNote message={ok} />
-        </div>
-
-        <form className="grid gap-4">
-          <Field label="E-mail">
-            <input name="email" type="email" autoComplete="email" required className={inputCls} />
-          </Field>
-          <Field label="Senha" hint="Mínimo de 8 caracteres para criar a conta.">
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              className={inputCls}
-            />
-          </Field>
-          <div className="mt-2 grid grid-cols-2 gap-3">
-            <button formAction={signup} className={ghostBtn}>
-              Criar conta
-            </button>
-            <button formAction={login} className={primaryBtn}>
+    <AuthShell>
+      <h1 className="text-2xl font-semibold tracking-[-0.02em]">
+        {creating ? "Crie sua conta" : "Entre na sua conta"}
+      </h1>
+      <p className="mt-2 text-sm leading-relaxed text-muted">
+        {creating ? (
+          <>
+            Já tem conta?{" "}
+            <Link href="/login" className="font-medium text-pen hover:underline">
               Entrar
-            </button>
-          </div>
-        </form>
+            </Link>
+          </>
+        ) : (
+          <>
+            Ainda não tem conta?{" "}
+            <Link href="/login?modo=criar" className="font-medium text-pen hover:underline">
+              Criar conta
+            </Link>
+          </>
+        )}
+      </p>
+
+      <div className="mt-6 grid gap-3 empty:hidden">
+        <ErrorNote message={erro} />
+        <OkNote message={ok} />
       </div>
 
-      <ul className="mt-6 flex max-w-md flex-wrap justify-center gap-2">
-        {points.map((p) => (
-          <li
-            key={p}
-            className="rounded-full border border-line bg-white px-3.5 py-1.5 text-xs text-ink-2 shadow-float"
-          >
-            {p}
-          </li>
-        ))}
-      </ul>
-    </main>
+      <form action={creating ? signup : login} className="mt-6 grid gap-4">
+        <Field label="E-mail">
+          <input
+            name="email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            placeholder="voce@empresa.com.br"
+            required
+            className={inputCls}
+          />
+        </Field>
+        <div>
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <label htmlFor="password" className="text-[13px] font-medium text-ink-2">
+              Senha
+            </label>
+            {!creating ? (
+              <Link href="/recuperar-senha" className="text-[13px] text-muted hover:text-pen">
+                Esqueci minha senha
+              </Link>
+            ) : null}
+          </div>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete={creating ? "new-password" : "current-password"}
+            minLength={creating ? 8 : undefined}
+            required
+            className={inputCls}
+          />
+          {creating ? <p className="mt-1.5 text-xs text-muted">Mínimo de 8 caracteres.</p> : null}
+        </div>
+        <SubmitButton className={`${primaryBtn} mt-2 sm:h-9`} pending={creating ? "Criando conta…" : "Entrando…"}>
+          {creating ? "Criar conta" : "Entrar"}
+        </SubmitButton>
+      </form>
+    </AuthShell>
   );
 }

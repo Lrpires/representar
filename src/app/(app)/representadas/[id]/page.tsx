@@ -6,29 +6,24 @@ import {
   type Option,
 } from "@/lib/commission";
 import { Icon, type IconName } from "@/components/icons";
+import { MaskedInput } from "@/components/masked-input";
+import { AddressFields } from "@/components/address-fields";
 import {
-  PageHeader, Field, ErrorNote, OkNote, Badge, Avatar, inputCls, primaryBtn, ghostBtn,
+  PageHeader, Field, FormSection, ErrorNote, OkNote, Badge, Avatar, inputCls, primaryBtn, ghostBtn,
+ SaveBar,
 } from "@/components/ui";
+import { SubmitButton } from "@/components/submit";
 import type { ReactNode } from "react";
 
 const PATH = "/representadas";
 
 function Section({
-  icon, title, hint, children,
-}: { icon: IconName; title: string; hint?: string; children: ReactNode }) {
+  title, hint, children,
+}: { icon?: IconName; title: string; hint?: string; children: ReactNode }) {
   return (
-    <section className="rounded-[1.75rem] border border-line bg-white p-5 sm:p-6">
-      <div className="mb-5 flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-subtle text-pen">
-          <Icon name={icon} size={18} />
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold leading-tight">{title}</h2>
-          {hint ? <p className="mt-0.5 text-[13px] leading-snug text-muted">{hint}</p> : null}
-        </div>
-      </div>
+    <FormSection title={title} hint={hint}>
       {children}
-    </section>
+    </FormSection>
   );
 }
 
@@ -43,7 +38,7 @@ function Select({ name, value, options }: { name: string; value: string; options
 }
 
 const grid = "grid gap-4 sm:grid-cols-2";
-const check = "h-5 w-5 shrink-0 rounded border-line-strong accent-[#0b0b0f]";
+const check = "h-5 w-5 shrink-0 rounded border-line-strong ";
 
 // "2026-12-25" -> "25/12" (o ano não aparece)
 const dayMonth = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "");
@@ -83,14 +78,14 @@ export default async function PrincipalPage({
         action={<Badge tone={p.active ? "ok" : "neutral"}>{p.active ? "Ativa" : "Inativa"}</Badge>}
       />
 
-      <div className="mb-4 max-w-3xl empty:hidden [&>*]:mb-3">
+      <div className="mb-4 max-w-5xl empty:hidden [&>*]:mb-3">
         <ErrorNote message={sp.erro} />
         <OkNote message={sp.ok} />
       </div>
 
-      <div className="grid max-w-3xl gap-4 lg:gap-5">
+      <div className="grid max-w-5xl gap-6 lg:gap-0">
         {/* ---------- Resumo da regra de comissão ---------- */}
-        <div className="flex gap-3 rounded-[1.75rem] border border-pen/15 bg-linear-to-b from-[#eef2ff] to-[#f5f7ff] p-5">
+        <div className="flex gap-3 rounded-xl border border-line bg-white p-5">
           <Avatar name={p.name} size={44} />
           <div className="min-w-0">
             <p className="text-[13px] font-medium text-pen-ink">Como esta fábrica paga a sua comissão</p>
@@ -98,8 +93,8 @@ export default async function PrincipalPage({
           </div>
         </div>
 
-        <form action={save} className="grid gap-4 lg:gap-5">
-          <fieldset disabled={!canManage} className="m-0 grid min-w-0 gap-4 border-0 p-0 lg:gap-5">
+        <form action={save} className="grid gap-6 lg:gap-0">
+          <fieldset disabled={!canManage} className="m-0 grid min-w-0 gap-6 border-0 p-0 lg:gap-0">
             <Section icon="factory" title="Dados da fábrica">
               <div className={grid}>
                 <div className="sm:col-span-2">
@@ -113,7 +108,7 @@ export default async function PrincipalPage({
                   </Field>
                 </div>
                 <Field label="CNPJ">
-                  <input name="cnpj" inputMode="numeric" defaultValue={v(p.cnpj)} className={inputCls} />
+                  <MaskedInput mask="cnpj" lookup="principal" name="cnpj" defaultValue={v(p.cnpj)} className={inputCls} />
                 </Field>
                 <Field label="Inscrição estadual">
                   <input name="state_reg" defaultValue={v(p.state_reg)} className={inputCls} />
@@ -138,44 +133,8 @@ export default async function PrincipalPage({
               </div>
             </Section>
 
-            <Section icon="pin" title="Endereço">
-              <div className="grid gap-4 sm:grid-cols-6">
-                <div className="sm:col-span-2">
-                  <Field label="CEP">
-                    <input name="zip" inputMode="numeric" defaultValue={v(p.zip)} className={inputCls} />
-                  </Field>
-                </div>
-                <div className="sm:col-span-3">
-                  <Field label="Rua">
-                    <input name="street" defaultValue={v(p.street)} className={inputCls} />
-                  </Field>
-                </div>
-                <div className="sm:col-span-1">
-                  <Field label="Número">
-                    <input name="street_number" defaultValue={v(p.street_number)} className={inputCls} />
-                  </Field>
-                </div>
-                <div className="sm:col-span-3">
-                  <Field label="Complemento">
-                    <input name="complement" defaultValue={v(p.complement)} className={inputCls} />
-                  </Field>
-                </div>
-                <div className="sm:col-span-3">
-                  <Field label="Bairro">
-                    <input name="district" defaultValue={v(p.district)} className={inputCls} />
-                  </Field>
-                </div>
-                <div className="sm:col-span-4">
-                  <Field label="Cidade">
-                    <input name="city" defaultValue={v(p.city)} className={inputCls} />
-                  </Field>
-                </div>
-                <div className="sm:col-span-2">
-                  <Field label="UF">
-                    <input name="state" maxLength={2} defaultValue={v(p.state)} className={`${inputCls} uppercase`} />
-                  </Field>
-                </div>
-              </div>
+            <Section icon="pin" title="Endereço" hint="Digite o CEP e clique em Buscar para preencher o resto.">
+              <AddressFields values={p} />
             </Section>
 
             <Section icon="file" title="Contrato e condições comerciais">
@@ -257,16 +216,18 @@ export default async function PrincipalPage({
           </fieldset>
 
           {canManage ? (
-            <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-10 flex justify-end lg:bottom-4">
-              <button className={`${primaryBtn} w-full shadow-float sm:w-auto sm:px-8`}>Salvar alterações</button>
-            </div>
+            <SaveBar note={<span className="hidden sm:inline">Ficha da representada: lembre de salvar depois de alterar.</span>}>
+              <SubmitButton className={`${primaryBtn} w-full sm:w-auto`} pending="Salvando…">
+                Salvar alterações
+              </SubmitButton>
+            </SaveBar>
           ) : null}
         </form>
 
         {/* ---------- Contatos ---------- */}
         <Section icon="users" title="Contatos na fábrica" hint="Comercial, financeiro, logística. Guarde o aniversário para não esquecer.">
           {contacts && contacts.length > 0 ? (
-            <ul className="mb-4 divide-y divide-line rounded-2xl border border-line">
+            <ul className="mb-4 divide-y divide-line rounded-lg border border-line">
               {contacts.map((c) => (
                 <li key={c.id} className="flex items-center gap-3 px-4 py-3">
                   <Avatar name={c.name} size={38} />

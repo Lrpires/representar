@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { inputCls, ghostBtn } from "@/components/ui";
+import { inputCls, ghostBtn, iconBtn } from "@/components/ui";
 
 const SUGGESTIONS = [
   "Cor", "Tamanho", "Material", "Voltagem", "Potência", "Capacidade", "Sabor", "Validade",
@@ -44,7 +44,7 @@ export default function SpecsEditor({ initial, disabled }: { initial: [string, s
             type="button"
             disabled={disabled}
             onClick={() => setRows((r) => (r.length > 1 ? r.filter((_, idx) => idx !== i) : [["", ""]]))}
-            className="h-12 rounded-xl px-3 text-sm text-muted hover:bg-subtle"
+            className={iconBtn}
             aria-label="Remover"
           >
             ✕

@@ -4,7 +4,7 @@ import { getSettings } from "@/lib/settings";
 import { UNIT_GROUPS } from "@/lib/units";
 import { saveSettings, removeLogo, deleteOrganization } from "./actions";
 import { ConfirmButton } from "@/components/confirm-button";
-import { ColorPicker, LogoUploader, OrderNumbering, UnitPicker } from "./controls";
+import { ColorPicker, DelaySettings, LogoUploader, OrderNumbering, UnitPicker } from "./controls";
 import { SubmitButton } from "@/components/submit";
 import {
   PageHeader, FormSection, Field, ErrorNote, OkNote, SaveBar, Notice, inputCls, primaryBtn, dangerBtn,
@@ -81,6 +81,13 @@ export default async function SettingsPage({
               lastNumber={last?.number ?? 0}
               disabled={locked}
             />
+          </FormSection>
+
+          <FormSection
+            title="Prazos dos pedidos"
+            hint="Quando um pedido enviado ainda não foi todo faturado, ele aparece em amarelo (atenção) e depois em vermelho (crítico) nos Pedidos, no Faturamento e no Painel."
+          >
+            <DelaySettings warn={settings.warnDays} critical={settings.criticalDays} disabled={locked} />
           </FormSection>
 
           <FormSection

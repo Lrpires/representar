@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { num, numText, priceText, round2 } from "@/lib/orders";
 import { brl } from "@/lib/format";
+import { digits } from "@/lib/br";
+import { parseNfe, matchItems, type Nfe } from "@/lib/nfe";
 import { Field, FormGroup, inputCls } from "@/components/ui";
 import { Icon } from "@/components/icons";
 
@@ -16,39 +18,127 @@ export type InvoiceItem = {
   invoiced: number; // quanto já saiu em notas anteriores
 };
 
-// Campos do faturamento: quantidades por item (padrão = o que falta) e valor calculado.
+// Campos do faturamento. Pode ser preenchido à mão ou pelo XML da NF-e,
+// que traz número, série, data, valor e as quantidades de cada item.
 export function InvoiceFields({
   items,
   discountPct,
   today,
+  expected,
 }: {
   items: InvoiceItem[];
   discountPct: number;
   today: string;
+  expected?: { principalCnpj?: string | null; customerCnpj?: string | null };
 }) {
+  const left = (i: InvoiceItem) => Math.max(i.qty - i.invoiced, 0);
   const [qty, setQty] = useState<Record<string, string>>(() =>
-    Object.fromEntries(items.map((i) => [i.id, numText(Math.max(i.qty - i.invoiced, 0), 3)])),
+    Object.fromEntries(items.map((i) => [i.id, numText(left(i), 3)])),
   );
+  const [number, setNumber] = useState("");
+  const [series, setSeries] = useState("");
+  const [date, setDate] = useState(today);
+  const [accessKey, setAccessKey] = useState("");
   const [valueEdited, setValueEdited] = useState(false);
-  const calc = round2(
-    items.reduce((s, i) => s + num(qty[i.id]) * i.unitPrice, 0) * (1 - discountPct / 100),
-  );
+  const calc = round2(items.reduce((s, i) => s + num(qty[i.id]) * i.unitPrice, 0) * (1 - discountPct / 100));
   const [value, setValue] = useState(priceText(calc));
   const shown = valueEdited ? value : priceText(calc);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [nfe, setNfe] = useState<Nfe | null>(null);
+  const [xmlMsg, setXmlMsg] = useState<{ tone: "ok" | "warn" | "alert"; text: string }[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function onFile(file: File | undefined) {
+    setFileName(file?.name ?? null);
+    setXmlMsg([]);
+    setNfe(null);
+    if (!file || !/xml/i.test(file.type + file.name)) return;
+    try {
+      const n = parseNfe(await file.text());
+      setNfe(n);
+      setNumber(n.number);
+      setSeries(n.series);
+      if (n.issuedAt) setDate(n.issuedAt);
+      if (n.accessKey) setAccessKey(n.accessKey);
+      setValue(priceText(n.total));
+      setValueEdited(true);
+      const m = matchItems(n.items, items);
+      setQty(Object.fromEntries(items.map((i) => [i.id, m.qty.has(i.id) ? numText(m.qty.get(i.id)!, 3) : ""])));
+
+      const msgs: { tone: "ok" | "warn" | "alert"; text: string }[] = [
+        { tone: "ok", text: `NF ${n.number} lida: ${n.items.length} ${n.items.length === 1 ? "item" : "itens"}, ${brl(n.total)}.` },
+      ];
+      if (expected?.principalCnpj && n.emitCnpj && digits(expected.principalCnpj) !== n.emitCnpj) {
+        msgs.push({ tone: "alert", text: `Atenção: a nota foi emitida por ${n.emitName || n.emitCnpj}, que não é a representada deste pedido.` });
+      }
+      if (expected?.customerCnpj && n.destDoc && digits(expected.customerCnpj) !== n.destDoc) {
+        msgs.push({ tone: "alert", text: `Atenção: o destinatário da nota (${n.destName || n.destDoc}) não é o cliente deste pedido.` });
+      }
+      if (m.unmatched.length) {
+        msgs.push({
+          tone: "warn",
+          text: `${m.unmatched.length} ${m.unmatched.length === 1 ? "item da nota não foi encontrado" : "itens da nota não foram encontrados"} no pedido: ${m.unmatched
+            .map((u) => u.description)
+            .slice(0, 3)
+            .join(", ")}. Confira as quantidades abaixo.`,
+        });
+      }
+      const over = items.filter((i) => num(m.qty.get(i.id) ?? 0) > left(i) + 1e-9);
+      if (over.length) {
+        msgs.push({ tone: "warn", text: `A nota tem mais quantidade do que falta faturar em: ${over.map((i) => i.description).join(", ")}.` });
+      }
+      setXmlMsg(msgs);
+    } catch (e) {
+      setXmlMsg([{ tone: "alert", text: e instanceof Error ? e.message : "Não foi possível ler o XML." }]);
+    }
+  }
+
+  const tone = { ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", alert: "bg-alert-soft text-alert" };
 
   return (
     <>
+      {/* XML (ou PDF) da nota: o XML preenche tudo sozinho */}
+      <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-line-strong px-4 py-4 transition hover:border-pen hover:bg-pen-soft/40 sm:col-span-2">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pen-soft text-pen">
+          <Icon name={fileName ? "file" : "upload"} size={18} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{fileName ?? "Soltar o XML da NF-e (preenche tudo) ou o PDF"}</span>
+          <span className="block text-xs text-muted">{fileName ? "Clique para trocar o arquivo." : "Opcional. Também dá para preencher à mão abaixo."}</span>
+        </span>
+        <input
+          ref={fileRef}
+          type="file"
+          name="file"
+          accept="application/pdf,.pdf,application/xml,text/xml,.xml,image/jpeg,image/png"
+          className="sr-only"
+          onChange={(e) => onFile(e.target.files?.[0])}
+        />
+      </label>
+      {xmlMsg.length ? (
+        <div className="grid gap-1.5 sm:col-span-2">
+          {xmlMsg.map((m, i) => (
+            <p key={i} className={`rounded-md px-3 py-2 text-[13px] ${tone[m.tone]}`}>
+              {m.text}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      <input type="hidden" name="access_key" value={accessKey} />
+
       <Field label="Número da NF">
-        <input name="number" inputMode="numeric" placeholder="Ex.: 12345" className={inputCls} />
+        <input name="number" inputMode="numeric" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="Ex.: 12345" className={inputCls} />
       </Field>
       <Field label="Série" hint="Opcional.">
-        <input name="series" className={inputCls} />
+        <input name="series" value={series} onChange={(e) => setSeries(e.target.value)} className={inputCls} />
       </Field>
       <Field label="Data do faturamento">
-        <input name="issued_at" type="date" required defaultValue={today} className={inputCls} />
+        <input name="issued_at" type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
       </Field>
-      <Field label="Valor faturado (R$)" hint={valueEdited ? "Valor digitado por você." : "Calculado pelas quantidades abaixo."}>
+      <Field
+        label="Valor faturado (R$)"
+        hint={nfe ? "Valor total da NF-e." : valueEdited ? "Valor digitado por você." : "Calculado pelas quantidades abaixo."}
+      >
         <input
           name="value"
           inputMode="decimal"
@@ -61,19 +151,27 @@ export function InvoiceFields({
           className={`${inputCls} text-right tabular-nums`}
         />
       </Field>
+      {accessKey ? (
+        <p className="truncate font-mono text-[11px] text-muted sm:col-span-2" title={accessKey}>
+          Chave de acesso: {accessKey}
+        </p>
+      ) : null}
 
       <FormGroup title="Quantidades desta nota" />
       <div className="overflow-hidden rounded-lg border border-line sm:col-span-2">
         <ul className="divide-y divide-line">
           {items.map((i) => {
-            const left = Math.max(i.qty - i.invoiced, 0);
+            const l = left(i);
             return (
               <li key={i.id} className="flex items-center gap-3 px-3 py-2.5">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{i.description}</p>
+                  <p className="truncate text-sm font-medium">
+                    {i.code ? <span className="mr-1.5 font-mono text-xs text-muted">{i.code}</span> : null}
+                    {i.description}
+                  </p>
                   <p className="text-xs text-muted">
                     Pedido {numText(i.qty, 3)} · já faturado {numText(i.invoiced, 3)} · falta{" "}
-                    <span className={left ? "font-medium text-ink-2" : ""}>{numText(left, 3)}</span>
+                    <span className={l ? "font-medium text-ink-2" : ""}>{numText(l, 3)}</span>
                   </p>
                 </div>
                 <input
@@ -81,7 +179,8 @@ export function InvoiceFields({
                   inputMode="decimal"
                   aria-label={`Quantidade faturada de ${i.description}`}
                   value={qty[i.id] ?? ""}
-                  disabled={left === 0}
+                  disabled={l === 0}
+                  placeholder="0"
                   onChange={(e) => setQty((q) => ({ ...q, [i.id]: e.target.value }))}
                   className="h-10 w-24 shrink-0 rounded-md border border-line-strong bg-white px-2 text-right text-sm tabular-nums outline-none focus:border-pen focus:ring-[3px] focus:ring-pen/15 disabled:bg-subtle disabled:text-faint sm:h-8"
                 />
@@ -94,24 +193,11 @@ export function InvoiceFields({
           <span className="font-medium tabular-nums">{brl(calc)}</span>
         </p>
       </div>
+      <p className="text-xs text-muted sm:col-span-2">
+        Faturou menos do que o pedido? O pedido fica como <span className="font-medium text-ink-2">Faturado parcial</span> e
+        recebe as próximas notas. Se o saldo não vier, use “Finalizar pedido”.
+      </p>
 
-      <FormGroup title="Arquivo da nota" />
-      <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-line-strong px-4 py-4 transition hover:border-pen hover:bg-pen-soft/40 sm:col-span-2">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pen-soft text-pen">
-          <Icon name={fileName ? "file" : "upload"} size={18} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{fileName ?? "Anexar PDF ou XML da NF"}</span>
-          <span className="block text-xs text-muted">{fileName ? "Clique para trocar o arquivo." : "Opcional. Até 10 MB."}</span>
-        </span>
-        <input
-          type="file"
-          name="file"
-          accept="application/pdf,.pdf,application/xml,text/xml,.xml,image/jpeg,image/png"
-          className="sr-only"
-          onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
-        />
-      </label>
       <Field label="Observações" className="sm:col-span-2">
         <input name="notes" placeholder="Ex.: faturamento parcial, restante em 15 dias" className={inputCls} />
       </Field>

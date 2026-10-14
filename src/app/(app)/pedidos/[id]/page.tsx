@@ -5,7 +5,8 @@ import { getSettings } from "@/lib/settings";
 import {
   sendOrder, reopenOrder, cancelOrder, deleteDraft, duplicateOrder,
 } from "./actions";
-import { registerInvoice, deleteInvoice } from "./invoices";
+import { registerInvoice, deleteInvoice, finalizeOrder, reopenFinalized } from "./invoices";
+import { orderAging } from "@/lib/aging";
 import { InvoiceFields } from "./invoice-fields";
 import { formatOrderNumber, numText, orderTotals, priceText, statusInfo } from "@/lib/orders";
 import { brl, formatDate, todayISO } from "@/lib/format";
@@ -28,7 +29,7 @@ export default async function OrderPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ erro?: string; ok?: string; faturar?: string }>;
+  searchParams: Promise<{ erro?: string; ok?: string; faturar?: string; finalizar?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -37,7 +38,7 @@ export default async function OrderPage({
 
   const { data: o } = await supabase
     .from("orders")
-    .select("*, customers(id, name), principals(name, commission_close_mode, commission_days_after)")
+    .select("*, customers(id, name, cnpj), principals(name, cnpj, commission_close_mode, commission_days_after)")
     .eq("id", id)
     .maybeSingle();
   if (!o) notFound();
@@ -52,9 +53,9 @@ export default async function OrderPage({
   const mine = o.seller_id === user.id;
   const canOwn = canManage || mine;
   const editable = o.status === "rascunho" && canOwn && role !== "finance";
-  const customer = o.customers as unknown as { id: string; name: string } | null;
+  const customer = o.customers as unknown as { id: string; name: string; cnpj: string | null } | null;
   const principal = o.principals as unknown as {
-    name: string; commission_close_mode: string; commission_days_after: number | null;
+    name: string; cnpj: string | null; commission_close_mode: string; commission_days_after: number | null;
   } | null;
   const sellerName = seller?.full_name || seller?.email || "";
   const label = formatOrderNumber(o.number, settings);
@@ -81,8 +82,9 @@ export default async function OrderPage({
   const doneQty = [...invoicedQty.values()].reduce((s, q) => s + q, 0);
   const invoicedTotal = invoices.reduce((s, i) => s + Number(i.value), 0);
   const fullyInvoiced = totalQty > 0 && doneQty >= totalQty - 1e-9;
-  const canInvoice =
-    (o.status === "enviado" || (o.status === "faturado" && !fullyInvoiced)) && (isBackOffice || mine);
+  const canInvoice = (o.status === "enviado" || (o.status === "parcial" && !fullyInvoiced)) && (isBackOffice || mine);
+  const aging = orderAging(o, settings.warnDays, settings.criticalDays, todayISO());
+  const leftQty = Math.max(totalQty - doneQty, 0);
 
   const editor = editable ? await loadEditorData() : null;
 
@@ -135,6 +137,26 @@ export default async function OrderPage({
         <OkNote message={sp.ok} />
       </div>
 
+      {/* ---------- Aviso de atraso ---------- */}
+      {aging && aging.level !== "ok" ? (
+        <div
+          className={`mb-4 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-sm ${
+            aging.level === "critico" ? "border-alert/30 bg-alert-soft text-alert" : "border-[#e09f3e]/40 bg-warn-soft text-warn"
+          }`}
+        >
+          <Icon name="alert" size={18} />
+          <span className="min-w-0 flex-1">
+            <span className="font-semibold">{aging.level === "critico" ? "Pedido em atraso crítico" : "Pedido pedindo atenção"}</span>
+            {": "}
+            {o.status === "parcial" ? "faturado só em parte" : "enviado e ainda sem nota"} há{" "}
+            <span className="font-semibold">{aging.days} dias</span>
+            {aging.level === "critico"
+              ? ` (crítico a partir de ${settings.criticalDays}). Cobre a representada.`
+              : ` (aviso a partir de ${settings.warnDays}).`}
+          </span>
+        </div>
+      ) : null}
+
       {/* ---------- Andamento ---------- */}
       <section className="mb-5 rounded-xl border border-line bg-white p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -143,7 +165,7 @@ export default async function OrderPage({
             steps={[
               { label: "Rascunho", date: String(o.created_at).slice(0, 10), icon: "edit" },
               { label: "Enviado", date: o.sent_at ? String(o.sent_at).slice(0, 10) : null, icon: "send" },
-              { label: "Faturado", date: o.invoiced_at, icon: "check" },
+              { label: o.status === "parcial" ? "Faturado parcial" : "Faturado", date: o.invoiced_at, icon: "check" },
             ]}
           />
 
@@ -164,15 +186,21 @@ export default async function OrderPage({
               </>
             ) : null}
 
-            {o.status === "enviado" ? (
+            {o.status === "enviado" || o.status === "parcial" ? (
               <>
                 {canInvoice ? (
                   <Link href={`${here}?faturar=1`} scroll={false} className={primaryBtn}>
                     <Icon name="receipt" size={15} />
-                    Marcar como faturado
+                    {o.status === "parcial" ? "Lançar nova nota" : "Marcar como faturado"}
                   </Link>
                 ) : null}
-                {canOwn ? (
+                {o.status === "parcial" && (isBackOffice || mine) ? (
+                  <Link href={`${here}?finalizar=1`} scroll={false} className={ghostBtn}>
+                    <Icon name="check" size={15} strokeWidth={2} />
+                    Finalizar pedido
+                  </Link>
+                ) : null}
+                {canOwn && o.status === "enviado" ? (
                   <form action={reopenOrder.bind(null, id)}>
                     <SubmitButton className={ghostBtn} pending="Voltando…">Voltar para rascunho</SubmitButton>
                   </form>
@@ -180,11 +208,11 @@ export default async function OrderPage({
               </>
             ) : null}
 
-            {(o.status === "enviado" || o.status === "faturado") && canOwn ? (
+            {(o.status === "enviado" || o.status === "parcial" || o.status === "faturado") && canOwn ? (
               <form action={cancelOrder.bind(null, id)}>
                 <ConfirmButton
                   message={
-                    o.status === "faturado"
+                    o.status !== "enviado"
                       ? "Cancelar este pedido também cancela a comissão. Continuar?"
                       : "Cancelar este pedido?"
                   }
@@ -196,6 +224,22 @@ export default async function OrderPage({
             ) : null}
           </div>
         </div>
+
+        {o.closed_at && o.status === "faturado" ? (
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-subtle px-3 py-2.5 text-[13px] text-ink-2">
+            <Icon name="info" size={15} className="text-muted" />
+            <span className="min-w-0 flex-1">
+              Finalizado manualmente em {formatDate(String(o.closed_at).slice(0, 10))}
+              {leftQty > 0 ? ` com saldo de ${numText(leftQty, 3)} un. não faturado` : ""}
+              {o.close_note ? ` · ${o.close_note}` : "."}
+            </span>
+            {isBackOffice || mine ? (
+              <form action={reopenFinalized.bind(null, id)}>
+                <SubmitButton className={ghostBtn} pending="Reabrindo…">Reabrir</SubmitButton>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
 
         {o.status === "cancelado" ? (
           <p className="mt-4 flex items-center gap-2 rounded-lg bg-alert-soft px-3 py-2.5 text-[13px] text-alert">
@@ -265,12 +309,13 @@ export default async function OrderPage({
       <Sheet
         open={sp.faturar === "1" && canInvoice}
         title={invoices.length ? "Registrar nova nota fiscal" : "Marcar como faturado"}
-        description="Informe a nota emitida pela representada. A comissão desta nota fica a receber."
+        description="Informe a nota emitida pela representada."
         closeHref={here}
       >
         <SheetForm action={registerInvoice.bind(null, id)} closeHref={here} submitLabel="Registrar faturamento">
           <ErrorNote message={sp.erro} />
           <InvoiceFields
+            expected={{ principalCnpj: principal?.cnpj ?? null, customerCnpj: customer?.cnpj ?? null }}
             today={todayISO()}
             discountPct={Number(o.discount_pct)}
             items={(items ?? []).map((i) => ({
@@ -283,8 +328,21 @@ export default async function OrderPage({
               invoiced: invoicedQty.get(i.id) ?? 0,
             }))}
           />
-          <p className="rounded-lg bg-ok-soft px-3 py-2.5 text-[13px] text-ok sm:col-span-2">
-            Comissão de {numText(commissionPct, 2)}% sobre o valor faturado.
+        </SheetForm>
+      </Sheet>
+
+      <Sheet
+        open={sp.finalizar === "1" && o.status === "parcial"}
+        title="Finalizar pedido"
+        description={`O saldo de ${numText(leftQty, 3)} un. não será mais faturado e o pedido passa a "Faturado".`}
+        closeHref={here}
+      >
+        <SheetForm action={finalizeOrder.bind(null, id)} closeHref={here} submitLabel="Finalizar pedido">
+          <Field label="Motivo (opcional)" className="sm:col-span-2" hint="Ex.: fábrica sem estoque do restante, cliente desistiu do saldo.">
+            <input name="close_note" className={inputCls} />
+          </Field>
+          <p className="rounded-lg bg-subtle px-3 py-2.5 text-[13px] text-ink-2 sm:col-span-2">
+            As comissões das notas já lançadas continuam valendo. Se mudar de ideia, dá para reabrir depois.
           </p>
         </SheetForm>
       </Sheet>
@@ -336,12 +394,6 @@ function Stepper({
   );
 }
 
-const commissionStatus: Record<string, { label: string; tone: "warn" | "ok" | "alert" }> = {
-  a_receber: { label: "A receber", tone: "warn" },
-  recebida: { label: "Recebida", tone: "ok" },
-  cancelada: { label: "Cancelada", tone: "alert" },
-};
-
 // Faturamento do pedido: notas fiscais, quantidades, arquivo e comissão de cada uma.
 function Billing({
   invoices,
@@ -372,7 +424,6 @@ function Billing({
   deleteAction: (invoiceId: string) => () => Promise<void>;
 }) {
   const desc = new Map(items.map((i) => [i.id, i]));
-  const today = todayISO();
   return (
     <section className="mb-5 overflow-hidden rounded-xl border border-line bg-white">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
@@ -405,8 +456,6 @@ function Billing({
         <ul className="divide-y divide-line">
           {invoices.map((inv) => {
             const c = inv.commissions[0];
-            const cs = c ? commissionStatus[c.status] : null;
-            const late = c?.status === "a_receber" && c.due_date < today;
             const qty = inv.order_invoice_items.reduce((s, l) => s + Number(l.qty), 0);
             return (
               <li key={inv.id} className="px-4 py-3.5 sm:px-5">
@@ -426,20 +475,6 @@ function Billing({
                     </p>
                   </div>
                   <p className="text-sm font-semibold tabular-nums">{brl(Number(inv.value))}</p>
-                  {c && cs ? (
-                    <span className="flex flex-col items-end">
-                      <Badge tone={late ? "alert" : cs.tone} dot>
-                        Comissão {brl(Number(c.value))}
-                      </Badge>
-                      <span className={`mt-0.5 text-[11px] ${late ? "text-alert" : "text-muted"}`}>
-                        {c.status === "recebida" && c.received_at
-                          ? `Recebida em ${formatDate(c.received_at)}`
-                          : c.status === "cancelada"
-                            ? "Cancelada"
-                            : `${late ? "Atrasada · venceu" : "Vence"} em ${formatDate(c.due_date)}`}
-                      </span>
-                    </span>
-                  ) : null}
                   <div className="flex items-center">
                     {inv.file_path ? (
                       <>
@@ -650,10 +685,6 @@ function OrderView({
               <dd className="text-xl font-semibold tabular-nums tracking-[-0.02em]">{brl(t.total)}</dd>
             </div>
           </dl>
-          <div className="mt-4 flex items-baseline justify-between rounded-lg bg-ok-soft p-3">
-            <span className="text-[13px] text-ok">Comissão prevista ({numText(Number(o.commission_pct ?? 0), 2)}%)</span>
-            <span className="text-lg font-semibold tabular-nums text-ok">{brl(t.commission)}</span>
-          </div>
         </section>
       </div>
     </div>

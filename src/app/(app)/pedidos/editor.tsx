@@ -518,10 +518,11 @@ export function OrderEditor({
               </div>
             </dl>
 
-            <div className="mt-4 rounded-lg bg-ok-soft p-3">
+            <div className="mt-4 border-t border-line pt-3">
               <div className="flex items-center justify-between gap-3">
-                <label htmlFor="commission" className="text-[13px] font-medium text-ok">
+                <label htmlFor="commission" className="text-[13px] text-muted">
                   % Comissão
+                  <span className="block text-[11px] text-faint">Usada quando o pedido for faturado</span>
                 </label>
                 <span className="relative">
                   <input
@@ -530,14 +531,10 @@ export function OrderEditor({
                     value={f.commission_pct}
                     onChange={(e) => set("commission_pct", e.target.value)}
                     placeholder="0"
-                    className="h-8 w-20 rounded-md border border-ok/25 bg-white pl-2 pr-5 text-right text-sm tabular-nums outline-none focus:border-ok focus:ring-[3px] focus:ring-ok/15"
+                    className="h-8 w-20 rounded-md border border-line-strong bg-white pl-2 pr-5 text-right text-sm tabular-nums outline-none focus:border-pen focus:ring-[3px] focus:ring-pen/15"
                   />
                   <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted">%</span>
                 </span>
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-[13px] text-ok/80">Comissão prevista</span>
-                <span className="text-lg font-semibold tabular-nums text-ok">{brl(t.commission)}</span>
               </div>
             </div>
           </section>
@@ -549,7 +546,6 @@ export function OrderEditor({
           <span className="flex items-baseline gap-2">
             <span className="hidden sm:inline">Total</span>
             <span className="text-base font-semibold tabular-nums text-ink">{brl(t.total)}</span>
-            <span className="hidden text-xs text-ok sm:inline">comissão {brl(t.commission)}</span>
             {dirty ? <span className="hidden text-xs text-warn md:inline">· alterações não salvas</span> : null}
           </span>
         }

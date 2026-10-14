@@ -33,17 +33,29 @@ export async function saveSettings(formData: FormData) {
   const suffix = text(formData, "order_suffix");
   if (prefix.length > 12 || suffix.length > 12) fail(PATH, "Prefixo e sufixo podem ter até 12 caracteres.");
 
-  const { error } = await supabase
-    .from("organizations")
-    .update({
+  const warn = Number(text(formData, "order_warn_days") || "7");
+  const critical = Number(text(formData, "order_critical_days") || "15");
+  if (!Number.isInteger(warn) || warn < 1 || warn > 365) fail(PATH, "O prazo de aviso deve ser de 1 a 365 dias.");
+  if (!Number.isInteger(critical) || critical <= warn || critical > 730) {
+    fail(PATH, "O prazo crítico precisa ser maior que o prazo de aviso.");
+  }
+
+  const base = {
       name,
       brand_color: color,
       enabled_units: enabled,
       order_number_start: start,
       order_prefix: prefix || null,
       order_suffix: suffix || null,
-    })
+  };
+  // Os prazos dependem da migração 017; sem ela, salva o resto normalmente.
+  let { error } = await supabase
+    .from("organizations")
+    .update({ ...base, order_warn_days: warn, order_critical_days: critical })
     .eq("id", orgId);
+  if (error?.message.includes("order_warn_days") || error?.message.includes("order_critical_days")) {
+    ({ error } = await supabase.from("organizations").update(base).eq("id", orgId));
+  }
   if (error) {
     if (error.message.includes("column")) {
       fail(PATH, "Falta rodar a migração 008 no Supabase para salvar as configurações.");

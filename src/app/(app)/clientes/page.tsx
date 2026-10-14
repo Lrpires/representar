@@ -1,3 +1,4 @@
+import { SOLD_STATUSES } from "@/lib/orders";
 import Link from "next/link";
 import { getContext } from "@/lib/session";
 import { createCustomer } from "./actions";
@@ -45,7 +46,7 @@ export default async function CustomersPage({
     supabase
       .from("orders")
       .select("customer_id, order_date, principals(name)")
-      .in("status", ["enviado", "faturado", "entregue"])
+      .in("status", SOLD_STATUSES)
       .order("order_date", { ascending: false })
       .limit(20000),
   ]);

@@ -1,12 +1,18 @@
-export type OrderStatus = "rascunho" | "enviado" | "faturado" | "entregue" | "cancelado";
+export type OrderStatus = "rascunho" | "enviado" | "parcial" | "faturado" | "entregue" | "cancelado";
 
-export const STATUS_LIST: { value: OrderStatus; label: string; tone: "neutral" | "info" | "warn" | "ok" | "alert" }[] = [
+export const STATUS_LIST: { value: OrderStatus; label: string; tone: "neutral" | "info" | "pen" | "warn" | "ok" | "alert" }[] = [
   { value: "rascunho", label: "Rascunho", tone: "neutral" },
   { value: "enviado", label: "Enviado", tone: "info" },
+  { value: "parcial", label: "Faturado parcial", tone: "pen" },
   { value: "faturado", label: "Faturado", tone: "ok" },
   { value: "entregue", label: "Entregue", tone: "ok" },
   { value: "cancelado", label: "Cancelado", tone: "alert" },
 ];
+
+// Pedidos que contam como venda (enviados, parcial ou totalmente faturados).
+export const SOLD_STATUSES = ["enviado", "parcial", "faturado", "entregue"];
+// Pedidos ainda esperando faturamento (é sobre eles que vale o aviso de atraso).
+export const OPEN_STATUSES = ["enviado", "parcial"];
 
 // Status do playbook (o "Entregue" antigo continua aparecendo nos pedidos que já o tinham).
 export const MAIN_STATUSES = STATUS_LIST.filter((s) => s.value !== "entregue");

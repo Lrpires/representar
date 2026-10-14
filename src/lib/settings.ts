@@ -17,6 +17,8 @@ export type OrgSettings = {
   orderStart: number;
   orderPrefix: string;
   orderSuffix: string;
+  warnDays: number; // pedido sem faturar: amarelo a partir de N dias
+  criticalDays: number; // vermelho a partir de N dias
 };
 
 // Configurações do escritório (uma consulta por página). Se a migração 008 ainda
@@ -25,7 +27,7 @@ export const getSettings = cache(async (): Promise<OrgSettings> => {
   const { supabase, orgId, orgName } = await getContext();
   const { data, error } = await supabase
     .from("organizations")
-    .select("name, logo_path, brand_color, enabled_units, order_number_start, order_prefix, order_suffix")
+    .select("*")
     .eq("id", orgId)
     .maybeSingle();
   const d = error ? null : data;
@@ -40,5 +42,7 @@ export const getSettings = cache(async (): Promise<OrgSettings> => {
     orderStart: d?.order_number_start ?? 1,
     orderPrefix: d?.order_prefix ?? "",
     orderSuffix: d?.order_suffix ?? "",
+    warnDays: Number(d?.order_warn_days ?? 7),
+    criticalDays: Number(d?.order_critical_days ?? 15),
   };
 });

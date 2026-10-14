@@ -1,3 +1,4 @@
+import { SOLD_STATUSES } from "@/lib/orders";
 import { getContext } from "@/lib/session";
 import type { GoalRow, InvoiceRow, SaleRow } from "@/lib/goals";
 
@@ -8,7 +9,7 @@ export async function fetchActivity(from: string, to: string) {
     supabase
       .from("orders")
       .select("order_date, total, principal_id, seller_id, customer_id")
-      .in("status", ["enviado", "faturado", "entregue"])
+      .in("status", SOLD_STATUSES)
       .gte("order_date", from)
       .lte("order_date", to)
       .limit(20000),

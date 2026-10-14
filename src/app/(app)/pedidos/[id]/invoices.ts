@@ -18,30 +18,46 @@ const EXT: Record<string, string> = {
   "image/png": "png",
 };
 
-// Recalcula o resumo do pedido a partir das notas (data da 1ª, soma dos valores, nº da última).
-async function syncOrder(supabase: Awaited<ReturnType<typeof getContext>>["supabase"], orderId: string) {
-  const { data: invoices } = await supabase
-    .from("order_invoices")
-    .select("number, issued_at, value")
-    .eq("order_id", orderId)
-    .order("issued_at");
+// Recalcula o pedido a partir das notas: data da 1ª, soma dos valores, números e o status
+// (parcial enquanto a quantidade faturada for menor que a do pedido; faturado quando completar
+// ou quando o pedido foi finalizado à mão).
+export async function syncOrder(supabase: Awaited<ReturnType<typeof getContext>>["supabase"], orderId: string) {
+  const [{ data: invoices }, { data: o }, { data: items }, { data: done }] = await Promise.all([
+    supabase.from("order_invoices").select("number, issued_at, value").eq("order_id", orderId).order("issued_at"),
+    supabase.from("orders").select("*").eq("id", orderId).single(),
+    supabase.from("order_items").select("qty").eq("order_id", orderId),
+    supabase.from("order_invoice_items").select("qty, order_invoices!inner(order_id)").eq("order_invoices.order_id", orderId),
+  ]);
   const list = invoices ?? [];
-  const { data: o } = await supabase.from("orders").select("status").eq("id", orderId).single();
+  const ordered = (items ?? []).reduce((s, i) => s + Number(i.qty), 0);
+  const invoicedQty = (done ?? []).reduce((s, i) => s + Number(i.qty), 0);
+  const closed = !!(o as { closed_at?: string | null } | null)?.closed_at;
+  // Nota sem quantidades (só valor) conta como faturamento completo.
+  const complete = closed || (list.length > 0 && ((done ?? []).length === 0 || invoicedQty >= ordered - 0.0005));
+
   const patch: Record<string, unknown> = {
     invoiced_at: list[0]?.issued_at ?? null,
     invoiced_value: list.length ? round2(list.reduce((s, i) => s + Number(i.value), 0)) : null,
     invoice_number: list.map((i) => i.number).filter(Boolean).join(", ") || null,
     updated_at: new Date().toISOString(),
   };
-  if (o?.status === "enviado" && list.length) patch.status = "faturado";
-  if (o?.status === "faturado" && !list.length) patch.status = "enviado";
+  if (o && ["enviado", "parcial", "faturado"].includes(o.status)) {
+    patch.status = list.length === 0 ? "enviado" : complete ? "faturado" : "parcial";
+  }
   await supabase.from("orders").update(patch).eq("id", orderId);
+}
+
+// Lançamento feito pela área de Faturamento (XML): o pedido escolhido vem no formulário.
+export async function registerInvoiceFromBilling(formData: FormData) {
+  const orderId = text(formData, "order_id");
+  if (!orderId) fail("/faturamento?xml=1", "Escolha o pedido desta nota.");
+  return registerInvoice(orderId, formData);
 }
 
 export async function registerInvoice(orderId: string, formData: FormData) {
   const ctx = await getContext();
   const { supabase, orgId, user, isBackOffice } = ctx;
-  const back = `${here(orderId)}?faturar=1`;
+  const back = text(formData, "back") === "faturamento" ? "/faturamento?xml=1" : `${here(orderId)}?faturar=1`;
 
   const { data: o } = await supabase
     .from("orders")
@@ -50,9 +66,13 @@ export async function registerInvoice(orderId: string, formData: FormData) {
     .maybeSingle();
   if (!o) fail("/pedidos", "Pedido não encontrado.");
   if (!isBackOffice && o.seller_id !== user.id) fail(here(orderId), "Você não pode faturar este pedido.");
-  if (o.status !== "enviado" && o.status !== "faturado") {
+  if (o.status !== "enviado" && o.status !== "parcial" && o.status !== "faturado") {
     fail(here(orderId), "Só pedidos enviados ou já faturados recebem notas fiscais.");
   }
+  // De onde veio o lançamento (ficha do pedido ou área de Faturamento): para onde voltar.
+  const fromBilling = back.startsWith("/faturamento");
+  const accessKey = text(formData, "access_key").replace(/\D/g, "");
+  if (accessKey && accessKey.length !== 44) fail(back, "A chave de acesso da NF-e precisa ter 44 números.");
 
   // RN3: data e valor faturado são obrigatórios.
   const issuedAt = text(formData, "issued_at");
@@ -94,21 +114,31 @@ export async function registerInvoice(orderId: string, formData: FormData) {
     if (error) fail(back, `Não foi possível enviar o arquivo: ${error.message}`);
   }
 
-  const { data: invoice, error } = await supabase
+  const row = {
+    org_id: orgId,
+    order_id: orderId,
+    number: optional(formData, "number"),
+    series: optional(formData, "series"),
+    issued_at: issuedAt,
+    value: round2(value),
+    file_path: filePath,
+    file_name: fileName,
+    notes: optional(formData, "notes"),
+  };
+  const payload: Record<string, unknown> = accessKey ? { ...row, access_key: accessKey } : row;
+  let { data: invoice, error } = await supabase
     .from("order_invoices")
-    .insert({
-      org_id: orgId,
-      order_id: orderId,
-      number: optional(formData, "number"),
-      series: optional(formData, "series"),
-      issued_at: issuedAt,
-      value: round2(value),
-      file_path: filePath,
-      file_name: fileName,
-      notes: optional(formData, "notes"),
-    })
+    .insert(payload)
     .select("id")
     .single();
+  // Sem a migração 017 ainda não há onde guardar a chave: lança a nota sem ela.
+  if (error?.message.includes("access_key")) {
+    ({ data: invoice, error } = await supabase.from("order_invoices").insert(row).select("id").single());
+  }
+  if (error?.code === "23505") {
+    if (filePath) await supabase.storage.from("invoices").remove([filePath]);
+    fail(back, "Esta nota fiscal já foi lançada (mesma chave de acesso).");
+  }
   if (error || !invoice) {
     if (filePath) await supabase.storage.from("invoices").remove([filePath]);
     if (error?.message.includes("order_invoices")) fail(back, "Falta rodar a migração 009 no Supabase.");
@@ -138,7 +168,9 @@ export async function registerInvoice(orderId: string, formData: FormData) {
   revalidatePath(here(orderId));
   revalidatePath("/pedidos");
   revalidatePath("/comissoes");
-  redirect(`${here(orderId)}?ok=${encodeURIComponent("Faturamento registrado. A comissão ficou a receber.")}`);
+  revalidatePath("/faturamento");
+  const msg = "Faturamento registrado. A comissão ficou a receber.";
+  redirect(fromBilling ? `/faturamento?ok=${encodeURIComponent(msg)}` : `${here(orderId)}?ok=${encodeURIComponent(msg)}`);
 }
 
 export async function deleteInvoice(orderId: string, invoiceId: string) {
@@ -164,4 +196,40 @@ export async function deleteInvoice(orderId: string, invoiceId: string) {
   revalidatePath(here(orderId));
   revalidatePath("/comissoes");
   redirect(`${here(orderId)}?ok=${encodeURIComponent("Nota excluída.")}`);
+}
+
+// Encerra o pedido com saldo não faturado (ex.: a fábrica não vai mandar o restante).
+export async function finalizeOrder(orderId: string, formData: FormData) {
+  const { supabase, isBackOffice, user } = await getContext();
+  const { data: o } = await supabase.from("orders").select("status, seller_id").eq("id", orderId).maybeSingle();
+  if (!o) fail("/pedidos", "Pedido não encontrado.");
+  if (!isBackOffice && o.seller_id !== user.id) fail(here(orderId), "Você não pode finalizar este pedido.");
+  if (o.status !== "parcial") fail(here(orderId), "Só um pedido faturado parcialmente pode ser finalizado.");
+  const { error } = await supabase
+    .from("orders")
+    .update({ status: "faturado", closed_at: new Date().toISOString(), close_note: optional(formData, "close_note"), updated_at: new Date().toISOString() })
+    .eq("id", orderId);
+  if (error) {
+    if (error.message.includes("closed_at")) fail(here(orderId), "Falta rodar a migração 017 no Supabase.");
+    fail(here(orderId), `Não foi possível finalizar: ${error.message}`);
+  }
+  revalidatePath(here(orderId));
+  revalidatePath("/pedidos");
+  revalidatePath("/faturamento");
+  redirect(`${here(orderId)}?ok=${encodeURIComponent("Pedido finalizado. O saldo não faturado foi encerrado.")}`);
+}
+
+// Desfaz a finalização: o pedido volta a "Faturado parcial" e pode receber novas notas.
+export async function reopenFinalized(orderId: string) {
+  const { supabase, isBackOffice, user } = await getContext();
+  const { data: o } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
+  if (!o) fail("/pedidos", "Pedido não encontrado.");
+  if (!isBackOffice && o.seller_id !== user.id) fail(here(orderId), "Você não pode reabrir este pedido.");
+  if (!o.closed_at) fail(here(orderId), "Este pedido não foi finalizado à mão.");
+  await supabase.from("orders").update({ closed_at: null, close_note: null }).eq("id", orderId);
+  await syncOrder(supabase, orderId);
+  revalidatePath(here(orderId));
+  revalidatePath("/pedidos");
+  revalidatePath("/faturamento");
+  redirect(`${here(orderId)}?ok=${encodeURIComponent("Pedido reaberto para novas notas.")}`);
 }

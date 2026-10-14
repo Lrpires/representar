@@ -1,3 +1,4 @@
+import { SOLD_STATUSES } from "@/lib/orders";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getContext, roleLabel, roleHint, ROLES, type Role } from "@/lib/session";
@@ -64,7 +65,7 @@ export default async function TeamPage({
       .from("orders")
       .select("seller_id, total, status")
       .gte("order_date", monthStart)
-      .in("status", ["enviado", "faturado", "entregue"]),
+      .in("status", SOLD_STATUSES),
   ]);
 
   // Vendas do mês por pessoa.

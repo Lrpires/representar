@@ -3,7 +3,8 @@ import { getContext } from "@/lib/session";
 import { getCounts } from "@/lib/counts";
 import { getSettings } from "@/lib/settings";
 import { getProfile } from "@/lib/profile";
-import { formatOrderNumber, statusInfo } from "@/lib/orders";
+import { formatOrderNumber, statusInfo, SOLD_STATUSES, OPEN_STATUSES } from "@/lib/orders";
+import { orderAging, AGING_STYLE } from "@/lib/aging";
 import { stageLabel } from "@/lib/leads";
 import { brl, formatDate, todayISO } from "@/lib/format";
 import { resolvePeriod, buildSeries, delta, rank, addDays } from "@/lib/cockpit";
@@ -17,7 +18,7 @@ import { WhatsAppButton } from "@/components/whatsapp";
 import { Badge, EmptyState, NewButton, PageHeader, primaryBtn } from "@/components/ui";
 import { GoalCard } from "./metas/card";
 
-const SOLD = ["enviado", "faturado", "entregue"];
+const SOLD = SOLD_STATUSES;
 
 function greeting(): string {
   const hour = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }));
@@ -83,6 +84,7 @@ export default async function HomePage({
     { data: leadsDue },
     { data: customersDue },
     goalData,
+    { data: openData },
   ] = await Promise.all([
     scoped(
       supabase
@@ -124,6 +126,13 @@ export default async function HomePage({
     supabase.from("leads").select("id, name, company, phone, stage, next_contact").lte("next_contact", today).not("stage", "in", "(ganho,perdido)").order("next_contact").limit(20),
     supabase.from("customers").select("id, name, contact_name, phone, next_contact").lte("next_contact", today).order("next_contact").limit(20),
     loadGoals(P.start, P.end),
+    // Pedidos esperando faturamento (qualquer data): base dos avisos de atraso.
+    scoped(
+      supabase
+        .from("orders")
+        .select("id, number, status, order_date, sent_at, total, customers(name), principals(name)")
+        .in("status", OPEN_STATUSES),
+    ).limit(5000),
   ]);
 
   const orders = (curData ?? []) as unknown as Order[];
@@ -171,6 +180,7 @@ export default async function HomePage({
   const funnel = [
     { key: "rascunho", label: "Rascunho", hint: "ainda não enviados" },
     { key: "enviado", label: "Enviado", hint: "aguardando faturamento" },
+    { key: "parcial", label: "Faturado parcial", hint: "falta parte" },
     { key: "faturado", label: "Faturado", hint: "com nota fiscal" },
     { key: "cancelado", label: "Cancelado", hint: "" },
   ].map((f) => {
@@ -223,6 +233,14 @@ export default async function HomePage({
     .filter((g) => g.metric === "vendido" && goalScope(g) === wantScope && (!rep || g.principal_id === rep) && (!vend || g.seller_id === vend))
     .sort((a, b) => covers(a) - covers(b))[0];
   const goalP = goal ? goalProgress(goal, goalData.sales, goalData.invoices, today) : null;
+
+  /* ---------- Atrasos ---------- */
+  const late = (openData ?? [])
+    .map((o) => ({ o, a: orderAging(o, settings.warnDays, settings.criticalDays, today) }))
+    .filter((x) => x.a && x.a.level !== "ok")
+    .sort((a, b) => (b.a!.level === "critico" ? 1 : 0) - (a.a!.level === "critico" ? 1 : 0) || b.a!.days - a.a!.days);
+  const lateCritical = late.filter((x) => x.a!.level === "critico");
+  const lateValue = late.reduce((s, x) => s + Number(x.o.total), 0);
 
   /* ---------- Agenda ---------- */
   const followUps = [
@@ -289,6 +307,51 @@ export default async function HomePage({
           />
           </div>
         </dl>
+
+        {/* Pedidos em atraso (não dependem do período: todo pedido ainda sem faturar) */}
+        {late.length ? (
+          <section
+            className={`mb-5 overflow-hidden rounded-xl border ${lateCritical.length ? "border-alert/30" : "border-[#e09f3e]/40"} bg-white`}
+          >
+            <header className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 ${lateCritical.length ? "bg-alert-soft" : "bg-warn-soft"}`}>
+              <Icon name="alert" size={18} className={lateCritical.length ? "text-alert" : "text-warn"} />
+              <h2 className={`text-sm font-semibold ${lateCritical.length ? "text-alert" : "text-warn"}`}>
+                {late.length} {late.length === 1 ? "pedido em atraso" : "pedidos em atraso"}
+              </h2>
+              <span className="text-[13px] text-ink-2">
+                {lateCritical.length ? <span className="font-medium text-alert">{lateCritical.length} crítico{lateCritical.length === 1 ? "" : "s"}</span> : null}
+                {lateCritical.length && late.length - lateCritical.length ? " · " : ""}
+                {late.length - lateCritical.length ? `${late.length - lateCritical.length} em atenção` : ""}
+                {" · "}
+                {brl(lateValue)} esperando nota
+              </span>
+              <Link href="/pedidos?status=atraso" className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-ink-2 hover:text-ink">
+                Ver todos <Icon name="arrow-right" size={12} />
+              </Link>
+            </header>
+            <ul className="divide-y divide-line">
+              {late.slice(0, 5).map(({ o, a }) => (
+                <li key={o.id}>
+                  <Link href={`/pedidos/${o.id}`} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-subtle">
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${AGING_STYLE[a!.level].dot}`} />
+                    <span className="w-20 shrink-0 truncate font-mono text-xs text-muted">{formatOrderNumber(o.number, settings)}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium">{(o.customers as unknown as { name: string } | null)?.name}</span>
+                      <span className="block truncate text-[11px] text-muted">
+                        {(o.principals as unknown as { name: string } | null)?.name} · {o.status === "parcial" ? "faturado em parte" : "sem nota"}
+                      </span>
+                    </span>
+                    <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium ${AGING_STYLE[a!.level].badge}`}>
+                      <Icon name="clock" size={12} />
+                      {a!.days} dias
+                    </span>
+                    <span className="hidden w-24 shrink-0 text-right text-[13px] tabular-nums sm:block">{brl(Number(o.total))}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {/* Gráfico + meta + situação */}
         <div className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">

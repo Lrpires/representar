@@ -15,6 +15,7 @@ const leads: Item = { href: "/leads", label: "Leads", short: "Leads", icon: "spa
 const customers: Item = { href: "/clientes", label: "Clientes", short: "Clientes", icon: "users" };
 const principals: Item = { href: "/representadas", label: "Representadas", short: "Fábricas", icon: "factory" };
 const products: Item = { href: "/produtos", label: "Produtos", short: "Produtos", icon: "box" };
+const billing: Item = { href: "/faturamento", label: "Faturamento", short: "Faturamento", icon: "file" };
 const goals: Item = { href: "/metas", label: "Metas", short: "Metas", icon: "target" };
 const commissions: Item = { href: "/comissoes", label: "Comissões", short: "Comissões", icon: "percent" };
 const payables: Item = { href: "/contas-a-pagar", label: "Contas a pagar", short: "Contas", icon: "wallet" };
@@ -26,7 +27,7 @@ type Access = { showTeam?: boolean; showFinance?: boolean };
 // Grupos do menu conforme o perfil (financeiro e escritório só para quem pode ver).
 function groupsFor({ showTeam, showFinance }: Access): { title?: string; items: Item[] }[] {
   return [
-    { items: [home, orders, goals] },
+    { items: [home, orders, billing, goals] },
     { title: "Carteira", items: [customers, leads] },
     { title: "Financeiro", items: showFinance ? [commissions, payables] : [commissions] },
     { title: "Catálogo", items: [principals, products] },
@@ -108,6 +109,7 @@ export function MobileTabs({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const moreItems = [
+    billing,
     goals,
     commissions,
     ...(showFinance ? [payables] : []),

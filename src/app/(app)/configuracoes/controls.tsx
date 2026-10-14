@@ -310,3 +310,59 @@ export function UnitPicker({
     </div>
   );
 }
+
+/* ---------- Prazos de atraso ---------- */
+
+export function DelaySettings({ warn, critical, disabled }: { warn: number; critical: number; disabled?: boolean }) {
+  const [w, setW] = useState(String(warn));
+  const [c, setC] = useState(String(critical));
+  const wn = Number(w) || 0;
+  const cn = Number(c) || 0;
+  const invalid = !wn || !cn || cn <= wn;
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Aviso (amarelo) a partir de" hint="Dias desde o envio sem faturar tudo.">
+          <span className="relative block">
+            <input
+              name="order_warn_days"
+              inputMode="numeric"
+              value={w}
+              disabled={disabled}
+              onChange={(e) => setW(e.target.value.replace(/\D/g, "").slice(0, 3))}
+              className={`${inputCls} pr-12 tabular-nums`}
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">dias</span>
+          </span>
+        </Field>
+        <Field label="Crítico (vermelho) a partir de" hint="Precisa ser maior que o aviso.">
+          <span className="relative block">
+            <input
+              name="order_critical_days"
+              inputMode="numeric"
+              value={c}
+              disabled={disabled}
+              onChange={(e) => setC(e.target.value.replace(/\D/g, "").slice(0, 3))}
+              className={`${inputCls} pr-12 tabular-nums ${invalid ? "!border-alert" : ""}`}
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">dias</span>
+          </span>
+        </Field>
+      </div>
+      {/* Linha do tempo de exemplo */}
+      <div className="rounded-lg bg-subtle p-3">
+        <div className="flex h-2 overflow-hidden rounded-full">
+          <span className="bg-line-strong" style={{ flex: Math.max(wn, 1) }} />
+          <span className="bg-[#e09f3e]" style={{ flex: Math.max(cn - wn, 1) }} />
+          <span className="bg-alert" style={{ flex: Math.max(Math.round(cn * 0.4), 2) }} />
+        </div>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-muted">
+          <span>0 a {Math.max(wn - 1, 0)} dias: no prazo</span>
+          <span className="text-warn">{wn} a {Math.max(cn - 1, wn)} dias: atenção</span>
+          <span className="text-right text-alert">{cn}+ dias: crítico</span>
+        </div>
+      </div>
+      {invalid ? <p className="text-xs text-alert">O prazo crítico precisa ser maior que o de aviso.</p> : null}
+    </div>
+  );
+}

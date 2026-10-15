@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getContext } from "@/lib/session";
 import { getSettings } from "@/lib/settings";
 import { CommissionRow, expected, nfValue, type Row } from "./row";
@@ -19,7 +20,8 @@ export default async function CommissionsPage({
   searchParams: Promise<{ mes?: string; rep?: string; status?: string; ok?: string; erro?: string }>;
 }) {
   const sp = await searchParams;
-  const { supabase } = await getContext();
+  const { supabase, canSeeCommissions } = await getContext();
+  if (!canSeeCommissions) redirect("/");
   const settings = await getSettings();
   const month = monthInfo(sp.mes);
   const today = todayISO();
@@ -85,7 +87,7 @@ export default async function CommissionsPage({
         title="Comissões"
         hint="Cada nota fiscal faturada gera uma comissão: valor da NF × % de comissão do pedido."
         action={
-          <div className="flex items-center gap-1 rounded-lg border border-line-strong bg-white p-0.5 shadow-field">
+          <div className="flex items-center gap-1 rounded-lg border border-line-strong bg-surface p-0.5 shadow-field">
             <Link href={`${PATH}${qs({ mes: month.prev })}`} className={`${iconBtn} h-9 w-9 sm:h-7 sm:w-7`} aria-label="Mês anterior">
               <Icon name="chevron-left" size={16} />
             </Link>
@@ -108,7 +110,7 @@ export default async function CommissionsPage({
         </EmptyState>
       ) : (
         <>
-          <dl className="mb-4 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>div]:bg-white" style={{ gap: 1 }}>
+          <dl className="mb-4 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>div]:bg-surface" style={{ gap: 1 }}>
             <div className="p-4 sm:p-5">
               <dt className="text-[13px] text-muted">Notas faturadas</dt>
               <dd className="mt-1.5 truncate text-lg font-semibold tabular-nums tracking-[-0.02em] sm:text-2xl">{brl(faturado)}</dd>
@@ -120,7 +122,7 @@ export default async function CommissionsPage({
             </div>
             <div className="p-4 sm:p-5">
               <dt className="flex items-center gap-1.5 text-[13px] text-muted">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#e09f3e]" />A receber
+                <span className="h-1.5 w-1.5 rounded-full bg-warn-dot" />A receber
               </dt>
               <dd className="mt-1.5 truncate text-lg font-semibold tabular-nums tracking-[-0.02em] text-warn sm:text-2xl">{brl(aReceber)}</dd>
             </div>
@@ -162,7 +164,7 @@ export default async function CommissionsPage({
           {byPrincipal.size > 1 ? (
             <section className="mb-6">
               <h2 className="mb-3 text-sm font-semibold">Por representada</h2>
-              <div className="overflow-x-auto rounded-xl border border-line bg-white">
+              <div className="overflow-x-auto rounded-xl border border-line bg-surface">
                 <table className="w-full min-w-[36rem] text-sm">
                   <thead className="border-b border-line bg-subtle text-xs text-muted">
                     <tr>
@@ -226,7 +228,7 @@ export default async function CommissionsPage({
               Cada nota fiscal registrada num pedido gera uma comissão aqui. O mês é o do vencimento da comissão.
             </EmptyState>
           ) : (
-            <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-white">
+            <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
               {/* Cabeçalho (computador) */}
               <li className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.4fr)_7rem_6rem_minmax(15rem,1.2fr)] items-center gap-4 bg-subtle px-5 py-2 text-xs font-medium text-muted lg:grid">
                 <span>Nota fiscal</span>

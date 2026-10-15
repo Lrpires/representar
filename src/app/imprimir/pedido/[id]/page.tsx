@@ -57,7 +57,7 @@ export default async function PrintOrderPage({ params }: { params: Promise<{ id:
 
       <article className="mx-auto my-6 max-w-[52rem] bg-white p-8 text-[13px] leading-relaxed text-ink shadow-panel sm:p-10 print:my-0 print:max-w-none print:p-0 print:shadow-none">
         {/* Cabeçalho */}
-        <header className="flex items-start justify-between gap-6 border-b-2 border-pen pb-5">
+        <header className="flex items-start justify-between gap-6 border-b-2 border-accent pb-5">
           <div className="flex items-center gap-3">
             {settings.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -72,7 +72,7 @@ export default async function PrintOrderPage({ params }: { params: Promise<{ id:
           </div>
           <div className="text-right">
             <p className="text-xs uppercase tracking-wide text-muted">Pedido de venda</p>
-            <p className="text-2xl font-semibold tracking-[-0.02em] text-pen">{label}</p>
+            <p className="text-2xl font-semibold tracking-[-0.02em] text-accent-ink">{label}</p>
             <p className="text-xs text-muted">
               {formatDate(o.order_date)} · {st.label}
             </p>

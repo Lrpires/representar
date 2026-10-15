@@ -33,8 +33,8 @@ const isApprox = (q: string | null) => q === "bairro" || q === "cidade" || q ===
 
 function pinHtml(color: string, approx: boolean) {
   return `<svg width="28" height="36" viewBox="0 0 28 36" style="display:block;filter:drop-shadow(0 2px 2px rgb(0 0 0/.25))">
-    <path d="M14 35s11-11.2 11-20A11 11 0 0 0 3 15c0 8.8 11 20 11 20z" fill="${approx ? "#fff" : color}" stroke="${color}" stroke-width="${approx ? 3 : 2}"/>
-    <circle cx="14" cy="15" r="4.2" fill="${approx ? color : "#fff"}"/>
+    <path d="M14 35s11-11.2 11-20A11 11 0 0 0 3 15c0 8.8 11 20 11 20z" fill="${approx ? "#f3f0e8" : color}" stroke="${color}" stroke-width="${approx ? 3 : 2}"/>
+    <circle cx="14" cy="15" r="4.2" fill="${approx ? color : "#f3f0e8"}"/>
   </svg>`;
 }
 
@@ -44,24 +44,24 @@ function popupNode(p: PinPoint, distance: number | undefined, onFix: () => void)
   el.style.minWidth = "200px";
   el.style.font = "13px/1.4 var(--font-sans, system-ui)";
   const h = document.createElement("p");
-  h.style.cssText = "font-weight:600;margin:0 0 2px;color:#14212a";
+  h.style.cssText = "font-weight:600;margin:0 0 2px;color:#15171c";
   h.textContent = p.name;
   const sub = document.createElement("p");
-  sub.style.cssText = "margin:0;color:#6a7780;font-size:12px";
+  sub.style.cssText = "margin:0;color:#6e6b64;font-size:12px";
   sub.textContent = [p.place, distance != null ? `${distance.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} km de você` : ""]
     .filter(Boolean)
     .join(" · ");
   el.append(h, sub);
   for (const line of p.lines) {
     const l = document.createElement("p");
-    l.style.cssText = `margin:4px 0 0;font-size:12px;color:${line.alert ? "#c8423a" : "#3a4750"};${line.alert ? "font-weight:600" : ""}`;
+    l.style.cssText = `margin:4px 0 0;font-size:12px;color:${line.alert ? "#c8352b" : "#4a4840"};${line.alert ? "font-weight:600" : ""}`;
     l.textContent = line.text;
     el.append(l);
   }
   if (p.quality && GEO_LABEL[p.quality]) {
     const ap = document.createElement("p");
     const exact = p.quality === "endereco" || p.quality === "manual";
-    ap.style.cssText = `margin:4px 0 0;font-size:11px;color:${exact ? "#23855a" : "#9a6412"}`;
+    ap.style.cssText = `margin:4px 0 0;font-size:11px;color:${exact ? "#1e8e5a" : "#a8440f"}`;
     ap.textContent = GEO_LABEL[p.quality];
     el.append(ap);
   }
@@ -86,7 +86,7 @@ function popupNode(p: PinPoint, distance: number | undefined, onFix: () => void)
   const fix = document.createElement("button");
   fix.type = "button";
   fix.textContent = "Posição errada? Corrigir";
-  fix.style.cssText = "margin-top:8px;padding:0;border:0;background:none;font-size:11px;color:#6a7780;text-decoration:underline;cursor:pointer";
+  fix.style.cssText = "margin-top:8px;padding:0;border:0;background:none;font-size:11px;color:#6e6b64;text-decoration:underline;cursor:pointer";
   fix.onclick = onFix;
   el.append(fix);
   return el;
@@ -206,8 +206,8 @@ export function PinMap({
         setGeoMsg(null);
         const L = (await import("leaflet")).default;
         meLayer.current?.clearLayers();
-        L.circleMarker([here.lat, here.lng], { radius: 8, color: "#fff", weight: 3, fillColor: "#2b6f9e", fillOpacity: 1 }).addTo(meLayer.current!);
-        L.circle([here.lat, here.lng], { radius: 5000, color: "#2b6f9e", weight: 1, fillOpacity: 0.05 }).addTo(meLayer.current!);
+        L.circleMarker([here.lat, here.lng], { radius: 8, color: "#f3f0e8", weight: 3, fillColor: "#0f3d3e", fillOpacity: 1 }).addTo(meLayer.current!);
+        L.circle([here.lat, here.lng], { radius: 5000, color: "#0f3d3e", weight: 1, fillOpacity: 0.05 }).addTo(meLayer.current!);
         map.current?.setView([here.lat, here.lng], 12);
       },
       () => setGeoMsg("Não foi possível pegar sua localização. Libere o acesso à localização no navegador."),
@@ -302,7 +302,7 @@ export function PinMap({
           role="region"
           aria-label="Mapa"
         />
-        <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex flex-col gap-1 rounded-lg bg-white/95 px-3 py-2 text-[11px] text-ink-2 shadow-menu">
+        <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex flex-col gap-1 rounded-lg bg-surface/95 px-3 py-2 text-[11px] text-ink-2 shadow-menu">
           {legend.map((l) => (
             <span key={l.label} className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: l.color }} />
@@ -310,14 +310,14 @@ export function PinMap({
             </span>
           ))}
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full border-2 border-faint bg-white" />
+            <span className="h-2.5 w-2.5 rounded-full border-2 border-faint bg-surface" />
             Posição aproximada
           </span>
         </div>
         <button
           type="button"
           onClick={locateMe}
-          className="absolute right-3 top-3 z-[500] inline-flex h-10 items-center gap-1.5 rounded-lg bg-white px-3 text-[13px] font-medium text-ink shadow-menu transition hover:bg-subtle sm:h-9"
+          className="absolute right-3 top-3 z-[500] inline-flex h-10 items-center gap-1.5 rounded-lg bg-surface px-3 text-[13px] font-medium text-ink shadow-menu transition hover:bg-subtle sm:h-9"
         >
           <Icon name="target" size={16} className="text-info" />
           Perto de mim
@@ -327,7 +327,7 @@ export function PinMap({
       {geoMsg ? <p className="text-[13px] text-muted">{geoMsg}</p> : null}
 
       {nearest.length ? (
-        <section className="rounded-xl border border-line bg-white">
+        <section className="rounded-xl border border-line bg-surface">
           <h2 className="border-b border-line px-4 py-3 text-sm font-semibold">Mais perto de você</h2>
           <ul className="divide-y divide-line">
             {nearest.map(({ p, d }) => (
@@ -342,7 +342,7 @@ export function PinMap({
                   href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="shrink-0 text-xs font-medium text-pen hover:underline"
+                  className="shrink-0 text-xs font-medium text-accent-ink hover:underline"
                 >
                   Rota
                 </a>

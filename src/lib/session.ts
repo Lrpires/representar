@@ -13,8 +13,8 @@ export const roleLabel: Record<Role, string> = {
 
 export const roleHint: Record<Role, string> = {
   owner: "Acesso total, inclusive equipe e configurações.",
-  manager: "Cadastra e altera representadas, produtos e preços. Vê a equipe.",
-  seller: "Consulta o catálogo e trabalha a própria carteira e pedidos.",
+  manager: "Cadastra e altera representadas, produtos e preços. Vê a equipe. Não vê comissões.",
+  seller: "Consulta o catálogo e trabalha a própria carteira e pedidos. Não vê comissões.",
   finance: "Consulta o catálogo e acompanha comissões e recebimentos.",
 };
 
@@ -62,5 +62,7 @@ export const getContext = cache(async () => {
     canManage: role === "owner" || role === "manager",
     isOwner: role === "owner",
     isBackOffice: role === "owner" || role === "manager" || role === "finance",
+    // Valores de comissão: só o administrador e o financeiro (vendedor e gerente não veem).
+    canSeeCommissions: role === "owner" || role === "finance",
   };
 });

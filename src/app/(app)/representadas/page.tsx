@@ -20,7 +20,7 @@ export default async function PrincipalsPage({
 }) {
   const sp = await searchParams;
   const q = safeQ(sp.q);
-  const { supabase, canManage } = await getContext();
+  const { supabase, canManage, canSeeCommissions: seeComm } = await getContext();
 
   let query = supabase
     .from("principals")
@@ -106,8 +106,8 @@ export default async function PrincipalsPage({
                     <th className={th}>Representada</th>
                     <th className={th}>Cidade</th>
                     <th className={th}>Contato</th>
-                    <th className={`${th} text-right`}>Comissão</th>
-                    <th className={`${th} text-right`}>Pagamento</th>
+                    {seeComm ? <th className={`${th} text-right`}>Comissão</th> : null}
+                    {seeComm ? <th className={`${th} text-right`}>Pagamento</th> : null}
                     <th className={`${th} w-24 text-right`}>Ativa</th>
                   </tr>
                 </thead>
@@ -133,6 +133,8 @@ export default async function PrincipalsPage({
                         <td className={`${td} max-w-[14rem] truncate text-ink-2`}>
                           {p.contact || <span className="text-faint">—</span>}
                         </td>
+{seeComm ? (
+<>
                         <td className={`${td} text-right tabular-nums`}>
                           {p.default_commission_pct != null ? (
                             <span className="font-medium text-ink">{pct(p.default_commission_pct)}</span>
@@ -147,6 +149,8 @@ export default async function PrincipalsPage({
                             <span className="text-faint">—</span>
                           )}
                         </td>
+</>
+) : null}
                         <td className={`${td} text-right`}>
                           {canManage ? (
                             <form action={toggle} className="relative z-10 inline-flex">
@@ -177,7 +181,7 @@ export default async function PrincipalsPage({
                     <div className="min-w-0 flex-1">
                       <p className={`truncate text-[15px] font-medium ${p.active ? "" : "text-muted"}`}>{p.name}</p>
                       <p className="mt-0.5 truncate text-[13px] text-muted">
-                        {[place(p), p.default_commission_pct != null ? `Comissão ${pct(p.default_commission_pct)}` : ""]
+                        {[place(p), seeComm && p.default_commission_pct != null ? `Comissão ${pct(p.default_commission_pct)}` : ""]
                           .filter(Boolean)
                           .join(" · ") || "Sem dados de cidade"}
                       </p>
@@ -208,6 +212,8 @@ export default async function PrincipalsPage({
           <Field label="Razão social" className="sm:col-span-2">
             <input name="legal_name" className={inputCls} />
           </Field>
+          {seeComm ? (
+          <>
           <Field label="% Comissão padrão" hint="Sugerida em cada pedido.">
             <input
               name="commission"
@@ -221,6 +227,8 @@ export default async function PrincipalsPage({
           <Field label="Dias para pagamento da comissão" hint="Contados a partir do faturamento.">
             <input name="days" inputMode="numeric" placeholder="30" pattern="^\d{1,3}$" className={inputCls} />
           </Field>
+          </>
+          ) : null}
           <FormGroup title="Endereço" />
           <AddressFields />
         </SheetForm>

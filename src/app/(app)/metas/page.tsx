@@ -158,7 +158,7 @@ export default async function GoalsPage({
         }
         action={
           <>
-            <div className="hidden items-center gap-1 rounded-lg border border-line-strong bg-white p-0.5 shadow-field sm:flex">
+            <div className="hidden items-center gap-1 rounded-lg border border-line-strong bg-surface p-0.5 shadow-field sm:flex">
               <Link href={qs({ mes: month.prev })} className={`${iconBtn} h-7 w-7`} aria-label="Mês anterior">
                 <Icon name="chevron-left" size={16} />
               </Link>
@@ -172,7 +172,7 @@ export default async function GoalsPage({
         }
       />
 
-      <div className="-mt-3 mb-4 flex items-center justify-between rounded-lg border border-line-strong bg-white p-0.5 sm:hidden">
+      <div className="-mt-3 mb-4 flex items-center justify-between rounded-lg border border-line-strong bg-surface p-0.5 sm:hidden">
         <Link href={qs({ mes: month.prev })} className={iconBtn} aria-label="Mês anterior">
           <Icon name="chevron-left" size={18} />
         </Link>
@@ -203,7 +203,7 @@ export default async function GoalsPage({
         </EmptyState>
       ) : (
         <>
-          <dl className="mb-6 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4 [&>div]:bg-white" style={{ gap: 1 }}>
+          <dl className="mb-6 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4 [&>div]:bg-surface" style={{ gap: 1 }}>
             <div className="p-4">
               <dt className="text-[13px] text-muted">Metas no período</dt>
               <dd className="mt-1 text-xl font-semibold tabular-nums">{goals.length}</dd>
@@ -217,7 +217,7 @@ export default async function GoalsPage({
               <dd className="mt-1 text-xl font-semibold tabular-nums">{onTrack}</dd>
             </div>
             <div className="p-4">
-              <dt className="flex items-center gap-1.5 text-[13px] text-muted"><span className="h-1.5 w-1.5 rounded-full bg-[#e09f3e]" />Abaixo do ritmo</dt>
+              <dt className="flex items-center gap-1.5 text-[13px] text-muted"><span className="h-1.5 w-1.5 rounded-full bg-warn-dot" />Abaixo do ritmo</dt>
               <dd className={`mt-1 text-xl font-semibold tabular-nums ${behind ? "text-warn" : ""}`}>{behind}</dd>
             </div>
           </dl>
@@ -327,7 +327,7 @@ function PlanBlock({
           editHref={canManage ? qs({ total: plan.office.id }) : undefined}
         />
       ) : (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-[#e09f3e]/60 bg-warn-soft px-4 py-3 text-sm text-warn">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-warn-dot/60 bg-warn-soft px-4 py-3 text-sm text-warn">
           <Icon name="alert" size={16} />
           <span className="flex-1">Este plano não tem meta do escritório. Abra uma divisão e salve: o total passa a ser a soma dela.</span>
         </div>

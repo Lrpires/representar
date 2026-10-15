@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { COLOR_PRESETS, themeVars } from "@/lib/theme";
+import { COLOR_PRESETS, themeVars, themeVarsNight } from "@/lib/theme";
 import { formatOrderNumber } from "@/lib/orders";
 import { Icon } from "@/components/icons";
 import { Field, ghostBtn, inputCls } from "@/components/ui";
@@ -109,7 +109,8 @@ export function ColorPicker({ value, disabled }: { value: string; disabled?: boo
   // Prévia ao vivo: o sistema inteiro já muda de cor enquanto você escolhe.
   useEffect(() => {
     const root = document.documentElement;
-    for (const decl of themeVars(color).split(";")) {
+    const night = root.dataset.theme === "noite";
+    for (const decl of (night ? themeVarsNight(color) : themeVars(color)).split(";")) {
       const [k, v] = decl.split(":");
       root.style.setProperty(k, v);
     }
@@ -117,7 +118,7 @@ export function ColorPicker({ value, disabled }: { value: string; disabled?: boo
   // Ao sair da página sem salvar, volta para a cor salva (definida no <style> do layout).
   useEffect(
     () => () => {
-      for (const k of ["--color-pen", "--color-pen-dark", "--color-pen-soft", "--color-pen-ink"]) {
+      for (const k of ["--color-accent", "--color-accent-dark", "--color-accent-soft", "--color-accent-ink", "--color-on-accent"]) {
         document.documentElement.style.removeProperty(k);
       }
     },
@@ -162,7 +163,7 @@ export function ColorPicker({ value, disabled }: { value: string; disabled?: boo
           value={color}
           disabled={disabled}
           onChange={(e) => setColor(e.target.value.toLowerCase())}
-          className="h-9 w-12 cursor-pointer rounded-md border border-line-strong bg-white p-1"
+          className="h-9 w-12 cursor-pointer rounded-md border border-line-strong bg-surface p-1"
         />
         <span>
           Outra cor{custom ? <span className="ml-1 font-mono text-xs text-muted">{color}</span> : null}
@@ -171,15 +172,15 @@ export function ColorPicker({ value, disabled }: { value: string; disabled?: boo
 
       {/* Amostra de como os elementos ficam */}
       <div className="mt-5 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-subtle p-4">
-        <span className="inline-flex h-8 items-center rounded-lg bg-pen px-3 text-[13px] font-medium text-white shadow-btn">
-          Botão principal
+        <span className="inline-flex h-8 items-center rounded-lg bg-accent px-3 text-[13px] font-semibold text-on-accent shadow-btn">
+          Novo pedido
         </span>
-        <span className="inline-flex h-[1.375rem] items-center rounded-md bg-pen-soft px-2 text-xs font-medium text-pen-ink">
+        <span className="inline-flex h-[1.375rem] items-center rounded-md bg-accent-soft px-2 text-xs font-medium text-accent-ink">
           Destaque
         </span>
-        <span className="text-[13px] font-medium text-pen">Link</span>
+        <span className="text-[13px] font-medium text-accent-ink">Link</span>
         <span className="h-1.5 w-24 overflow-hidden rounded-full bg-active">
-          <span className="block h-full w-2/3 rounded-full bg-pen" />
+          <span className="block h-full w-2/3 rounded-full bg-accent" />
         </span>
       </div>
     </div>
@@ -286,7 +287,7 @@ export function UnitPicker({
                   <label
                     key={value}
                     className={`inline-flex h-9 cursor-pointer select-none items-center gap-2 rounded-lg border px-3 text-[13px] transition sm:h-8 ${
-                      checked ? "border-pen bg-pen-soft font-medium text-pen-ink" : "border-line-strong bg-white text-ink-2 hover:bg-hover"
+                      checked ? "border-pen bg-pen-soft font-medium text-pen-ink" : "border-line-strong bg-surface text-ink-2 hover:bg-hover"
                     }`}
                   >
                     <input
@@ -353,7 +354,7 @@ export function DelaySettings({ warn, critical, disabled }: { warn: number; crit
       <div className="rounded-lg bg-subtle p-3">
         <div className="flex h-2 overflow-hidden rounded-full">
           <span className="bg-line-strong" style={{ flex: Math.max(wn, 1) }} />
-          <span className="bg-[#e09f3e]" style={{ flex: Math.max(cn - wn, 1) }} />
+          <span className="bg-warn-dot" style={{ flex: Math.max(cn - wn, 1) }} />
           <span className="bg-alert" style={{ flex: Math.max(Math.round(cn * 0.4), 2) }} />
         </div>
         <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-muted">

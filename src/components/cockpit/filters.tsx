@@ -42,11 +42,11 @@ export function CockpitShell({
 
   const active = (params.get("rep") ? 1 : 0) + (params.get("vend") ? 1 : 0);
   const select =
-    "h-10 min-w-0 rounded-lg border bg-white pl-3 text-sm shadow-field outline-none transition focus:border-pen focus:ring-[3px] focus:ring-pen/15 sm:h-8 sm:text-[13px]";
+    "h-10 min-w-0 rounded-lg border bg-surface pl-3 text-sm shadow-field outline-none transition focus:border-accent focus:ring-[3px] focus:ring-accent/25 sm:h-8 sm:text-[13px]";
 
   return (
     <>
-      <div className="sticky top-14 z-20 -mx-4 mb-5 border-b border-line bg-white/92 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-10 lg:px-10">
+      <div className="sticky top-14 z-20 -mx-4 mb-5 border-b border-line bg-surface/92 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-10 lg:px-10">
         <div className="flex flex-wrap items-center gap-2">
           <div className="-mx-1 flex max-w-full gap-0.5 overflow-x-auto rounded-[0.6rem] bg-hover p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {PERIOD_OPTIONS.map((o) => (
@@ -56,7 +56,7 @@ export function CockpitShell({
                 onClick={() => apply({ periodo: o.value === "mes" ? null : o.value, ...(o.value !== "datas" ? { de: null, ate: null } : {}) })}
                 aria-pressed={period === o.value}
                 className={`h-9 shrink-0 rounded-lg px-2.5 text-[13px] font-medium transition sm:h-7 ${
-                  period === o.value ? "bg-white text-ink shadow-panel" : "text-muted hover:text-ink-2"
+                  period === o.value ? "bg-surface text-ink shadow-panel" : "text-muted hover:text-ink-2"
                 }`}
               >
                 {o.label}
@@ -73,7 +73,7 @@ export function CockpitShell({
                 type="button"
                 disabled={!de || !ate || de > ate}
                 onClick={() => apply({ periodo: "datas", de, ate })}
-                className="h-10 rounded-lg bg-pen px-3 text-[13px] font-medium text-white disabled:opacity-40 sm:h-8"
+                className="h-10 rounded-lg bg-pen px-3 text-[13px] font-medium text-on-pen disabled:opacity-40 sm:h-8"
               >
                 Aplicar
               </button>

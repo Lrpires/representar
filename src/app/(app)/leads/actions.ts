@@ -14,7 +14,7 @@ const isStage = (s: string): s is LeadStage => LEAD_STAGES.some((x) => x.value =
 
 function readLead(formData: FormData, back: string) {
   const name = text(formData, "name");
-  if (!name) fail(back, "Informe o nome do lead.");
+  if (!name) fail(back, "Informe o nome do prospecto.");
   const phone = text(formData, "phone");
   if (phone && !isValidPhone(phone)) fail(back, "Telefone incompleto. Inclua o DDD.");
   const next = text(formData, "next_contact");
@@ -59,7 +59,7 @@ export async function createLead(formData: FormData) {
     fail(back, `Não foi possível salvar: ${error.message}`);
   }
   revalidatePath(PATH);
-  redirect(`${PATH}?ok=${encodeURIComponent("Lead cadastrado.")}`);
+  redirect(`${PATH}?ok=${encodeURIComponent("Prospecto cadastrado.")}`);
 }
 
 export async function updateLead(id: string, formData: FormData) {
@@ -80,7 +80,7 @@ export async function updateLead(id: string, formData: FormData) {
   if (error) fail(back, `Não foi possível salvar: ${error.message}`);
   revalidatePath(PATH);
   revalidatePath("/");
-  redirect(`${PATH}?lead=${id}&ok=${encodeURIComponent("Lead atualizado.")}`);
+  redirect(`${PATH}?lead=${id}&ok=${encodeURIComponent("Prospecto atualizado.")}`);
 }
 
 // Muda a etapa (arrastar no quadro ou escolher na ficha). Não redireciona: o quadro já mudou na tela.
@@ -141,7 +141,7 @@ export async function convertLead(id: string) {
     .select("*")
     .eq("id", id)
     .maybeSingle();
-  if (!lead) fail(PATH, "Lead não encontrado.");
+  if (!lead) fail(PATH, "Prospecto não encontrado.");
   if (lead.customer_id) redirect(`/clientes/${lead.customer_id}`);
 
   const { data: customer, error } = await supabase
@@ -178,7 +178,7 @@ export async function convertLead(id: string) {
 
   revalidatePath(PATH);
   revalidatePath("/clientes");
-  redirect(`/clientes/${customer.id}?editar=1&ok=${encodeURIComponent("Lead convertido em cliente. Complete o cadastro.")}`);
+  redirect(`/clientes/${customer.id}?editar=1&ok=${encodeURIComponent("Prospecto convertido em cliente. Complete o cadastro.")}`);
 }
 
 export async function deleteLead(id: string) {
@@ -186,7 +186,7 @@ export async function deleteLead(id: string) {
   const { error } = await supabase.from("leads").delete().eq("id", id);
   if (error) fail(`${PATH}?lead=${id}`, `Não foi possível excluir: ${error.message}`);
   revalidatePath(PATH);
-  redirect(`${PATH}?ok=${encodeURIComponent("Lead excluído.")}`);
+  redirect(`${PATH}?ok=${encodeURIComponent("Prospecto excluído.")}`);
 }
 
 /* ---------- Mapa ---------- */

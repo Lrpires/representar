@@ -16,7 +16,7 @@ const toneCls: Record<Tone, string> = {
 };
 const dotCls: Record<Tone, string> = {
   ok: "bg-ok",
-  warn: "bg-[#d99a2b]",
+  warn: "bg-warn-dot",
   alert: "bg-alert",
   info: "bg-info",
   pen: "bg-pen",
@@ -52,12 +52,12 @@ function Initials({ name, color }: { name: string; color: string }) {
 // Moldura de janela do navegador.
 export function Window({ children, title = "Representar", className = "" }: { children: ReactNode; title?: string; className?: string }) {
   return (
-    <div className={`overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgba(20,33,42,0.08),0_30px_80px_-20px_rgba(10,43,52,0.35)] ${className}`}>
-      <div className="flex h-9 items-center gap-2 border-b border-line bg-[#f6f8f9] px-3.5">
-        <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-        <span className="mx-auto flex h-6 w-72 items-center justify-center gap-1.5 rounded-md bg-white text-[11px] text-muted shadow-[0_0_0_1px_rgba(20,33,42,0.06)]">
+    <div className={`overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgba(21,23,28,0.08),0_30px_80px_-24px_rgba(21,23,28,0.4)] ${className}`}>
+      <div className="flex h-9 items-center gap-2 border-b border-line bg-subtle px-3.5">
+        <span className="h-2.5 w-2.5 rounded-full bg-line-strong" />
+        <span className="h-2.5 w-2.5 rounded-full bg-line-strong" />
+        <span className="h-2.5 w-2.5 rounded-full bg-line-strong" />
+        <span className="mx-auto flex h-6 w-72 items-center justify-center gap-1.5 rounded-md bg-white text-[11px] text-muted shadow-[0_0_0_1px_rgba(21,23,28,0.06)]">
           <Icon name="shield" size={11} />
           {title}
         </span>
@@ -84,41 +84,41 @@ const NAV: { id: string; label: string; icon: IconName; group?: string }[] = [
 // O "esqueleto" do sistema: barra lateral + área de conteúdo.
 export function AppShell({ active, title, meta, actions, children }: { active: string; title: string; meta?: ReactNode; actions?: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex h-[640px] bg-canvas text-ink">
-      <aside className="flex w-[200px] shrink-0 flex-col px-2.5 py-3">
+    <div className="flex h-[640px] bg-side text-ink">
+      <aside className="flex w-[200px] shrink-0 flex-col bg-side px-2.5 py-3 text-[#f3f0e8]">
         <div className="mb-4 flex items-center gap-2 px-2">
-          <Logo size={22} />
+          <Logo size={20} tone="dark" />
           <span className="text-[13px] font-semibold">Aurora Representações</span>
         </div>
-        <div className="mb-3 flex h-7 items-center gap-2 rounded-md border border-line bg-white px-2 text-[12px] text-faint">
+        <div className="mb-3 flex h-7 items-center gap-2 rounded-md bg-[#f3f0e8]/[0.07] px-2 text-[12px] text-[#a8a49b]">
           <Icon name="search" size={13} />
           Buscar
-          <span className="ml-auto rounded border border-line px-1 text-[10px]">⌘K</span>
+          <span className="ml-auto rounded border border-[#f3f0e8]/15 px-1 font-mono text-[10px]">⌘K</span>
         </div>
         <nav className="grid gap-px">
           {NAV.map((n) => (
             <div key={n.id}>
-              {n.group ? <p className="mb-1 mt-3 px-2 text-[10.5px] font-medium text-faint">{n.group}</p> : null}
+              {n.group ? <p className="mb-1 mt-3 px-2 font-mono text-[9.5px] uppercase tracking-[0.08em] text-[#8a867d]">{n.group}</p> : null}
               <div
-                className={`flex h-7 items-center gap-2 rounded-md px-2 text-[12.5px] ${
-                  n.id === active ? "bg-white font-medium text-ink shadow-[0_0_0_1px_rgba(20,33,42,0.06),0_1px_2px_rgba(20,33,42,0.05)]" : "text-ink-2"
+                className={`relative flex h-7 items-center gap-2 rounded-md px-2 text-[12.5px] ${
+                  n.id === active ? "bg-[#f3f0e8]/10 font-medium text-[#f3f0e8] before:absolute before:-left-2.5 before:top-1 before:bottom-1 before:w-[3px] before:bg-accent" : "text-[#c9c5bb]"
                 }`}
               >
-                <Icon name={n.icon} size={14} className={n.id === active ? "text-pen" : "text-muted"} />
+                <Icon name={n.icon} size={14} className={n.id === active ? "text-accent" : "text-[#8a867d]"} />
                 {n.label}
               </div>
             </div>
           ))}
         </nav>
         <div className="mt-auto flex items-center gap-2 rounded-md px-2 py-1.5">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#c98a5a] text-[10px] font-semibold text-white">MC</span>
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-on-accent">MC</span>
           <span className="min-w-0">
             <span className="block truncate text-[12px] font-medium">Marina Costa</span>
-            <span className="block text-[10.5px] text-muted">Dona</span>
+            <span className="block text-[10.5px] text-[#a8a49b]">Dona</span>
           </span>
         </div>
       </aside>
-      <main className="my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-[0_0_0_1px_rgba(20,33,42,0.05),0_1px_3px_rgba(20,33,42,0.04)]">
+      <main className="my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-[0_0_0_1px_rgba(21,23,28,0.05),0_1px_3px_rgba(21,23,28,0.04)]">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-6">
           <h4 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h4>
           {meta ? <span className="text-[12px] text-muted">{meta}</span> : null}
@@ -134,7 +134,7 @@ function Btn({ children, primary, icon }: { children: ReactNode; primary?: boole
   return (
     <span
       className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium ${
-        primary ? "bg-pen text-white shadow-btn" : "border border-line-strong bg-white text-ink-2"
+        primary ? "bg-accent font-semibold text-on-accent" : "border border-line-strong bg-white text-ink-2"
       }`}
     >
       {icon ? <Icon name={icon} size={13} /> : null}
@@ -147,7 +147,7 @@ function Kpi({ label, value, delta, tone = "ok", sub }: { label: string; value: 
   return (
     <div className="rounded-lg border border-line px-4 py-3">
       <p className="text-[11.5px] text-muted">{label}</p>
-      <p className="mt-1 text-[19px] font-semibold tracking-[-0.02em] tabular-nums">{value}</p>
+      <p className="mt-1 font-mono text-[19px] font-medium tracking-[-0.03em] tabular-nums">{value}</p>
       <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
         {delta ? <span className={`font-medium ${tone === "ok" ? "text-ok" : tone === "alert" ? "text-alert" : "text-warn"}`}>{delta}</span> : null}
         {sub}
@@ -180,16 +180,16 @@ export function SalesChart({ w = 560, h = 170 }: { w?: number; h?: number }) {
         </linearGradient>
       </defs>
       {[0, 1, 2, 3].map((i) => (
-        <line key={i} x1="0" x2={w} y1={(h / 4) * i + 0.5} y2={(h / 4) * i + 0.5} stroke="#eef1f2" />
+        <line key={i} x1="0" x2={w} y1={(h / 4) * i + 0.5} y2={(h / 4) * i + 0.5} stroke="var(--color-line)" strokeOpacity="0.6" />
       ))}
-      <line x1="0" x2={w} y1={h} y2={h} stroke="#d7dde0" />
-      <path d={path(PREV, w, h, max, days)} fill="none" stroke="#b6c2c8" strokeWidth="2" strokeDasharray="4 4" strokeLinecap="round" />
+      <line x1="0" x2={w} y1={h} y2={h} stroke="var(--color-line-strong)" />
+      <path d={path(PREV, w, h, max, days)} fill="none" stroke="var(--color-faint)" strokeWidth="2" strokeDasharray="4 4" strokeLinecap="round" />
       <path d={`${cur} L${lastX},${h} L0,${h} Z`} fill="url(#lp-area)" />
       <path d={cur} fill="none" stroke="var(--color-pen)" strokeWidth="2.25" strokeLinejoin="round" strokeLinecap="round" />
       <line x1={lastX} x2={lastX} y1={lastY} y2={h} stroke="var(--color-pen)" strokeOpacity="0.25" strokeDasharray="2 3" />
-      <circle cx={lastX} cy={lastY} r="4.5" fill="white" stroke="var(--color-pen)" strokeWidth="2.25" />
+      <circle cx={lastX} cy={lastY} r="4.5" fill="var(--color-white)" stroke="var(--color-pen)" strokeWidth="2.25" />
       {["1", "8", "15", "22", "29"].map((d) => (
-        <text key={d} x={((Number(d) - 1) / (days - 1)) * w} y={h + 14} fontSize="10" fill="#9eaab1" textAnchor={d === "1" ? "start" : d === "29" ? "end" : "middle"}>
+        <text key={d} x={((Number(d) - 1) / (days - 1)) * w} y={h + 14} fontSize="10" fill="var(--color-faint)" textAnchor={d === "1" ? "start" : d === "29" ? "end" : "middle"}>
           {d}/out
         </text>
       ))}
@@ -239,7 +239,7 @@ export function PainelScreen() {
                   Outubro
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-0.5 w-3 rounded bg-[#b6c2c8]" />
+                  <span className="h-0.5 w-3 rounded bg-faint" />
                   Setembro
                 </span>
               </span>
@@ -247,7 +247,7 @@ export function PainelScreen() {
             <SalesChart />
           </div>
           <div className="flex flex-col gap-3">
-            <div className="rounded-lg border border-[#f2d2cf] bg-alert-soft/60 p-3.5">
+            <div className="rounded-lg border border-alert/25 bg-alert-soft/70 p-3.5">
               <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-alert">
                 <Icon name="alert" size={14} />3 pedidos em atraso
               </p>
@@ -270,7 +270,7 @@ export function PainelScreen() {
                 </p>
               </div>
               <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-active">
-                <div className="h-full w-[78%] rounded-full bg-pen" />
+                <div className="h-full w-[78%] rounded-full bg-accent" />
               </div>
               <p className="mt-2 text-[11px] text-muted">Faltam R$ 137.610 em 13 dias úteis · R$ 10.585 por dia</p>
             </div>
@@ -316,7 +316,7 @@ export function PainelScreen() {
             <p className="mb-2 px-1 text-[12.5px] font-semibold">Funil de pedidos</p>
             {[
               { l: "Enviado", n: 18, s: 1, c: "bg-info" },
-              { l: "Faturado parcial", n: 7, s: 0.39, c: "bg-[#d99a2b]" },
+              { l: "Faturado parcial", n: 7, s: 0.39, c: "bg-warn-dot" },
               { l: "Faturado", n: 31, s: 1.72, c: "bg-ok" },
               { l: "Entregue", n: 8, s: 0.44, c: "bg-pen" },
             ].map((f) => (
@@ -419,7 +419,7 @@ export function PedidosScreen() {
                       ) : null}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-right font-medium tabular-nums">{o.v}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">{o.v}</td>
                 </tr>
               ))}
             </tbody>
@@ -467,7 +467,7 @@ export function FaturamentoScreen() {
           </div>
         </div>
         {/* Gaveta do XML */}
-        <div className="absolute inset-y-0 right-0 flex w-[420px] flex-col border-l border-line bg-white shadow-[-24px_0_48px_-24px_rgba(20,33,42,0.25)]">
+        <div className="absolute inset-y-0 right-0 flex w-[420px] flex-col border-l border-line bg-white shadow-[-24px_0_48px_-24px_rgba(21,23,28,0.25)]">
           <div className="flex h-12 items-center justify-between border-b border-line px-5">
             <p className="text-[13.5px] font-semibold">Lançar nota pelo XML</p>
             <Icon name="x" size={15} className="text-muted" />
@@ -613,25 +613,25 @@ const PINS: { x: number; y: number; t: Tone; n?: string }[] = [
 
 function MapCanvas() {
   return (
-    <div className="relative h-full overflow-hidden bg-[#eef2ef]">
+    <div className="relative h-full overflow-hidden bg-active">
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M0 70 C 20 62, 30 80, 55 74 S 85 60, 100 68 L100 100 L0 100 Z" fill="#dce9ee" />
-        <path d="M62 0 C 60 20, 72 26, 70 45 S 80 70, 78 100" fill="none" stroke="#cfe0e6" strokeWidth="2.4" />
+        <path d="M0 70 C 20 62, 30 80, 55 74 S 85 60, 100 68 L100 100 L0 100 Z" fill="var(--color-info-soft)" />
+        <path d="M62 0 C 60 20, 72 26, 70 45 S 80 70, 78 100" fill="none" stroke="var(--color-info-soft)" strokeWidth="2.4" />
         {[12, 26, 40, 54, 68, 82].map((x) => (
-          <line key={`v${x}`} x1={x} x2={x + 6} y1="0" y2="100" stroke="#ffffff" strokeWidth="0.9" />
+          <line key={`v${x}`} x1={x} x2={x + 6} y1="0" y2="100" stroke="var(--color-white)" strokeWidth="0.9" />
         ))}
         {[14, 30, 46, 62, 78].map((y) => (
-          <line key={`h${y}`} x1="0" x2="100" y1={y} y2={y - 4} stroke="#ffffff" strokeWidth="0.9" />
+          <line key={`h${y}`} x1="0" x2="100" y1={y} y2={y - 4} stroke="var(--color-white)" strokeWidth="0.9" />
         ))}
-        <path d="M0 20 L 100 48" stroke="#f6e7c4" strokeWidth="1.6" />
-        <path d="M18 100 L 46 0" stroke="#f6e7c4" strokeWidth="1.4" />
-        <rect x="40" y="16" width="9" height="7" rx="1" fill="#d9ebd8" />
-        <rect x="70" y="72" width="11" height="8" rx="1" fill="#d9ebd8" />
+        <path d="M0 20 L 100 48" stroke="var(--color-accent-soft)" strokeWidth="1.6" />
+        <path d="M18 100 L 46 0" stroke="var(--color-accent-soft)" strokeWidth="1.4" />
+        <rect x="40" y="16" width="9" height="7" rx="1" fill="var(--color-ok-soft)" />
+        <rect x="70" y="72" width="11" height="8" rx="1" fill="var(--color-ok-soft)" />
       </svg>
       {PINS.map((p, i) => (
         <span key={i} className="absolute -translate-x-1/2 -translate-y-full" style={{ left: `${p.x}%`, top: `${p.y}%` }}>
           {p.n ? (
-            <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-white px-3 py-2 text-[11px] shadow-[0_8px_24px_-6px_rgba(20,33,42,0.25),0_0_0_1px_rgba(20,33,42,0.06)]">
+            <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-white px-3 py-2 text-[11px] shadow-[0_8px_24px_-6px_rgba(21,23,28,0.25),0_0_0_1px_rgba(21,23,28,0.06)]">
               <span className="block text-[12px] font-semibold text-ink">{p.n}</span>
               <span className="block text-muted">Último pedido há 12 dias · R$ 68.420 no ano</span>
             </span>
@@ -639,11 +639,11 @@ function MapCanvas() {
           <svg width={p.n ? 30 : 22} height={p.n ? 38 : 28} viewBox="0 0 22 28">
             <path
               d="M11 27s9-8.4 9-15.5A9 9 0 0 0 2 11.5C2 18.6 11 27 11 27z"
-              fill={p.t === "alert" ? "var(--color-alert)" : p.t === "warn" ? "#d99a2b" : "var(--color-pen)"}
-              stroke="white"
+              fill={p.t === "alert" ? "var(--color-alert)" : p.t === "warn" ? "var(--color-warn-dot)" : "var(--color-pen)"}
+              stroke="var(--color-white)"
               strokeWidth="1.6"
             />
-            <circle cx="11" cy="11.5" r="3.4" fill="white" />
+            <circle cx="11" cy="11.5" r="3.4" fill="var(--color-white)" />
           </svg>
         </span>
       ))}
@@ -694,7 +694,7 @@ export function MapaScreen() {
               Comprou nos últimos 60 dias
             </span>
             <span className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-[#d99a2b]" />
+              <span className="h-2 w-2 rounded-full bg-warn-dot" />
               Sem comprar há 60 dias
             </span>
             <span className="flex items-center gap-2">
@@ -724,8 +724,8 @@ export function MetasScreen() {
         <div className="flex items-center gap-6 rounded-lg border border-line p-5">
           <div className="relative h-28 w-28 shrink-0">
             <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
-              <circle cx="18" cy="18" r="15.5" fill="none" stroke="#e7ecee" strokeWidth="3.2" />
-              <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--color-pen)" strokeWidth="3.2" strokeLinecap="round" strokeDasharray={`${0.78 * 97.4} 97.4`} />
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--color-active)" strokeWidth="3.2" />
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--color-accent)" strokeWidth="3.2" strokeLinecap="round" strokeDasharray={`${0.78 * 97.4} 97.4`} />
             </svg>
             <span className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-[22px] font-semibold tabular-nums">78%</span>
@@ -758,7 +758,7 @@ export function MetasScreen() {
                     <span className="w-9 text-right font-semibold tabular-nums">{s.pct}%</span>
                   </div>
                   <div className="ml-8 mt-1.5 h-1.5 rounded-full bg-active">
-                    <div className={`h-full rounded-full ${s.pct >= 80 ? "bg-ok" : s.pct >= 60 ? "bg-pen" : "bg-[#d99a2b]"}`} style={{ width: `${s.pct}%` }} />
+                    <div className={`h-full rounded-full ${s.pct >= 80 ? "bg-ok" : s.pct >= 60 ? "bg-pen" : "bg-warn-dot"}`} style={{ width: `${s.pct}%` }} />
                   </div>
                 </div>
               ))}
@@ -799,9 +799,9 @@ export function MetasScreen() {
 
 export function Phone({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`relative w-[290px] rounded-[44px] bg-[#0b1a20] p-[10px] shadow-[0_40px_80px_-24px_rgba(10,43,52,0.55),inset_0_0_0_1.5px_rgba(255,255,255,0.08)] ${className}`}>
+    <div className={`relative w-[290px] rounded-[44px] bg-[#0b0c0f] p-[10px] shadow-[0_40px_80px_-24px_rgba(21,23,28,0.55),inset_0_0_0_1.5px_rgba(243,240,232,0.08)] ${className}`}>
       <div className="relative h-[590px] overflow-hidden rounded-[34px] bg-white">
-        <div className="absolute left-1/2 top-2.5 z-10 h-[26px] w-[92px] -translate-x-1/2 rounded-full bg-[#0b1a20]" />
+        <div className="absolute left-1/2 top-2.5 z-10 h-[26px] w-[92px] -translate-x-1/2 rounded-full bg-[#0b0c0f]" />
         {children}
       </div>
     </div>
@@ -823,7 +823,7 @@ export function PhoneOrder() {
         <Chip tone="neutral">Rascunho</Chip>
       </div>
       <div className="grid gap-2.5 px-3">
-        <div className="rounded-xl bg-white p-3 shadow-[0_0_0_1px_rgba(20,33,42,0.05)]">
+        <div className="rounded-xl bg-white p-3 shadow-[0_0_0_1px_rgba(21,23,28,0.05)]">
           <p className="text-[10.5px] text-muted">Cliente</p>
           <p className="text-[13px] font-semibold">Malharia Vale Verde</p>
           <p className="mt-2 text-[10.5px] text-muted">Representada</p>
@@ -831,7 +831,7 @@ export function PhoneOrder() {
             Tecelagem Aurora <Chip tone="pen">última compra</Chip>
           </p>
         </div>
-        <div className="rounded-xl bg-white shadow-[0_0_0_1px_rgba(20,33,42,0.05)]">
+        <div className="rounded-xl bg-white shadow-[0_0_0_1px_rgba(21,23,28,0.05)]">
           {[
             ["TA-11", "Malha penteada 30.1", "48 kg", "R$ 1.584,00"],
             ["TA-27", "Moletom flanelado", "30 kg", "R$ 1.230,00"],
@@ -844,7 +844,7 @@ export function PhoneOrder() {
                   {c} · {q}
                 </span>
               </span>
-              <span className="text-[12px] font-medium tabular-nums">{v}</span>
+              <span className="font-mono text-[12px] tabular-nums">{v}</span>
             </div>
           ))}
           <div className="flex items-center gap-1.5 px-3 py-2.5 text-[12px] font-medium text-pen">
@@ -852,7 +852,7 @@ export function PhoneOrder() {
             Adicionar item
           </div>
         </div>
-        <div className="rounded-xl bg-white p-3 shadow-[0_0_0_1px_rgba(20,33,42,0.05)]">
+        <div className="rounded-xl bg-white p-3 shadow-[0_0_0_1px_rgba(21,23,28,0.05)]">
           <p className="flex justify-between text-[11.5px] text-muted">
             <span>Prazo</span>
             <span className="text-ink">30/60/90 dias</span>
@@ -863,15 +863,15 @@ export function PhoneOrder() {
           </p>
           <p className="mt-2 flex justify-between border-t border-line pt-2 text-[14px] font-semibold">
             <span>Total</span>
-            <span className="tabular-nums">R$ 3.102,94</span>
+            <span className="font-mono tabular-nums">R$ 3.102,94</span>
           </p>
         </div>
       </div>
       <div className="mt-auto grid grid-cols-[auto_1fr] gap-2 border-t border-line bg-white px-3 pb-6 pt-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e7f6ec] text-[#1f9d55]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-ok-soft text-ok">
           <Icon name="whatsapp" size={18} />
         </span>
-        <span className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-pen text-[13px] font-semibold text-white">
+        <span className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent text-[13px] font-semibold text-on-accent">
           <Icon name="send" size={15} />
           Enviar pedido
         </span>

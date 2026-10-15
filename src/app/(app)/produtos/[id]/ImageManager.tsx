@@ -72,12 +72,12 @@ export default function ImageManager({
       {images.length > 0 ? (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {images.map((img) => (
-            <li key={img.id} className="overflow-hidden rounded-lg border border-line bg-white">
+            <li key={img.id} className="overflow-hidden rounded-lg border border-line bg-surface">
               <div className="relative aspect-square bg-subtle">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={productImageUrl(img.path)} alt="" className="h-full w-full object-cover" />
                 {img.is_cover ? (
-                  <span className="absolute left-2 top-2 rounded-full bg-ink px-2.5 py-1 text-[11px] font-medium text-white">
+                  <span className="absolute left-2 top-2 rounded-full bg-ink px-2.5 py-1 text-[11px] font-medium text-on-ink">
                     Capa
                   </span>
                 ) : null}

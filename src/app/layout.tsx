@@ -1,16 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Geist_Mono } from "next/font/google";
+import { Schibsted_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+// Fontes da marca: Schibsted Grotesk (textos) e JetBrains Mono (números, códigos e etiquetas).
+const sans = Schibsted_Grotesk({
   subsets: ["latin"],
-  variable: "--font-inter",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-schibsted",
   display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const mono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-geist-mono",
+  weight: ["400", "500", "600"],
+  variable: "--font-jetbrains",
   display: "swap",
 });
 
@@ -18,11 +21,11 @@ export const metadata: Metadata = {
   title: { default: "Representar", template: "%s · Representar" },
   icons: { icon: "/icon.svg", apple: "/icon-180.png" },
   appleWebApp: { capable: true, title: "Representar", statusBarStyle: "default" },
-  description: "Catálogo, pedidos, comissões e clientes do representante comercial.",
+  description: "Mais pedidos, menos planilha. Pedidos, faturamento, comissões e clientes do representante comercial.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: "#f3f0e8",
   viewportFit: "cover",
   width: "device-width",
   initialScale: 1,
@@ -30,7 +33,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${geistMono.variable}`}>
+    <html lang="pt-BR" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="min-h-dvh" suppressHydrationWarning>
         {children}
       </body>

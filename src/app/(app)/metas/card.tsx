@@ -46,10 +46,10 @@ export function GoalCard({
   const st = STATUS_INFO[p.status];
   const pct = Math.round(p.share * 100);
   const bar =
-    p.status === "atingida" ? "bg-ok" : p.status === "abaixo" || p.status === "encerrada" ? "bg-[#e09f3e]" : "bg-pen";
+    p.status === "atingida" ? "bg-ok" : p.status === "abaixo" || p.status === "encerrada" ? "bg-warn-dot" : "bg-pen";
 
   return (
-    <article className="flex flex-col rounded-xl border border-line bg-white p-4 sm:p-5">
+    <article className="flex flex-col rounded-xl border border-line bg-surface p-4 sm:p-5">
       <header className="flex items-start gap-3">
         {avatar ? <Avatar name={avatar.name} size={36} round={avatar.round} src={avatar.src} /> : null}
         <div className="min-w-0 flex-1">

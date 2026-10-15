@@ -160,7 +160,7 @@ export default async function ProductsPage({
                   aria-current={view === v ? "true" : undefined}
                   title={v === "grade" ? "Grade com fotos" : "Lista"}
                   className={`inline-flex h-9 w-10 items-center justify-center rounded-lg transition sm:h-8 sm:w-9 ${
-                    view === v ? "bg-white text-ink shadow-panel" : "text-muted hover:text-ink-2"
+                    view === v ? "bg-surface text-ink shadow-panel" : "text-muted hover:text-ink-2"
                   }`}
                 >
                   <Icon name={v === "grade" ? "grid" : "menu"} size={16} />
@@ -202,7 +202,7 @@ export default async function ProductsPage({
                   <li key={p.id}>
                     <Link
                       href={`${PATH}/${p.id}`}
-                      className="group block overflow-hidden rounded-xl border border-line bg-white transition hover:border-line-strong hover:shadow-panel"
+                      className="group block overflow-hidden rounded-xl border border-line bg-surface transition hover:border-line-strong hover:shadow-panel"
                     >
                       <span className="relative block aspect-square overflow-hidden bg-subtle">
                         {img ? (

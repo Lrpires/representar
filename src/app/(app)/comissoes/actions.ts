@@ -15,7 +15,8 @@ function back(formData: FormData) {
 }
 
 export async function markReceived(id: string, formData: FormData) {
-  const { supabase } = await getContext();
+  const { supabase, canSeeCommissions } = await getContext();
+  if (!canSeeCommissions) throw new Error("Seu perfil não acessa comissões.");
   const path = back(formData);
   // Sem data informada, vale o dia de hoje.
   const date = text(formData, "received_at") || todayISO();
@@ -37,7 +38,8 @@ export async function markReceived(id: string, formData: FormData) {
 }
 
 export async function undoReceived(id: string, formData: FormData) {
-  const { supabase } = await getContext();
+  const { supabase, canSeeCommissions } = await getContext();
+  if (!canSeeCommissions) throw new Error("Seu perfil não acessa comissões.");
   const path = back(formData);
   const { error } = await supabase
     .from("commissions")

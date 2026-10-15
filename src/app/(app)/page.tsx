@@ -37,12 +37,14 @@ export default async function HomePage({
   searchParams: Promise<{ periodo?: string; de?: string; ate?: string; rep?: string; vend?: string }>;
 }) {
   const sp = await searchParams;
-  const { supabase, canManage, role, isBackOffice } = await getContext();
+  const { supabase, canManage, role, isBackOffice, canSeeCommissions, user } = await getContext();
   const [counts, settings, profile] = await Promise.all([getCounts(), getSettings(), getProfile()]);
   const today = todayISO();
   const P = resolvePeriod(sp.periodo, sp.de, sp.ate, today);
   const rep = sp.rep || null;
-  const vend = isBackOffice ? sp.vend || null : null;
+  // Vendedor só enxerga o que é dele: pedidos, clientes, comissões e a própria meta.
+  const isSeller = role === "seller";
+  const vend = isBackOffice ? sp.vend || null : isSeller ? user.id : null;
   const canOrder = role !== "finance";
 
   if (counts.representadas === 0) {
@@ -102,7 +104,14 @@ export default async function HomePage({
       supabase.from("order_invoices").select("value, orders!inner(principal_id, seller_id, status)").neq("orders.status", "cancelado").gte("issued_at", P.prevStart).lte("issued_at", P.prevEnd),
       "orders.",
     ).limit(20000),
-    scoped(supabase.from("commissions").select("value, status, due_date, received_value, received_at, order_invoices(issued_at)").neq("status", "cancelada")).limit(20000),
+    !canSeeCommissions
+      ? Promise.resolve({ data: [] as never[] })
+      : scoped(
+      supabase
+        .from("commissions")
+        .select("id, value, status, due_date, received_value, received_at, principal_id, order_invoices(issued_at, number)")
+        .neq("status", "cancelada"),
+    ).limit(20000),
     scoped(
       supabase
         .from("order_items")
@@ -159,11 +168,22 @@ export default async function HomePage({
     (s, o) => s + (Number(o.subtotal) * (1 - Number(o.discount_pct) / 100) * Number(o.commission_pct ?? 0)) / 100,
     0,
   );
-  const toReceive = commissions.filter((c) => c.status === "a_receber").reduce((s, c) => s + Number(c.value), 0);
-  const lateComm = commissions.filter((c) => c.status === "a_receber" && c.due_date < today).reduce((s, c) => s + Number(c.value), 0);
-  const receivedPeriod = commissions
-    .filter((c) => c.status === "recebida" && inPeriod(c.received_at))
-    .reduce((s, c) => s + Number(c.received_value ?? c.value), 0);
+  const inPrev = (d: string | null | undefined) => !!d && d >= P.prevStart && d <= P.prevEnd;
+  const issuedAt = (c: (typeof commissions)[number]) => (c.order_invoices as unknown as { issued_at: string } | null)?.issued_at;
+  const commGeneratedPrev = commissions.filter((c) => inPrev(issuedAt(c))).reduce((s, c) => s + Number(c.value), 0);
+  const openComm = commissions.filter((c) => c.status === "a_receber");
+  const lateList = openComm.filter((c) => c.due_date < today);
+  const toReceive = openComm.reduce((s, c) => s + Number(c.value), 0);
+  const lateComm = lateList.reduce((s, c) => s + Number(c.value), 0);
+  const received = commissions.filter((c) => c.status === "recebida");
+  const receivedPeriod = received.filter((c) => inPeriod(c.received_at)).reduce((s, c) => s + Number(c.received_value ?? c.value), 0);
+  const receivedPrev = received.filter((c) => inPrev(c.received_at)).reduce((s, c) => s + Number(c.received_value ?? c.value), 0);
+  // A receber por representada e os próximos vencimentos (atrasadas primeiro).
+  const commByPrincipal = [...openComm.reduce((m, c) => m.set(c.principal_id, (m.get(c.principal_id) ?? 0) + Number(c.value)), new Map<string, number>())]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
+  const nextDues = [...openComm].sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 4);
+  const openOrdersValue = (openData ?? []).reduce((s, o) => s + Number(o.total), 0);
 
   // Clientes novos: compraram no período e não tinham comprado nos 12 meses anteriores ao início.
   const before = new Set((history ?? []).filter((h) => h.order_date < P.start).map((h) => h.customer_id));
@@ -260,17 +280,26 @@ export default async function HomePage({
     ? (members ?? []).filter((m) => m.role !== "finance").map((m) => ({ value: m.user_id, label: m.full_name || m.email || "Vendedor" }))
     : null;
   const recent = orders.slice(0, 6);
-  const goalTitle =
-    wantScope === "geral" ? "Meta do escritório" : wantScope === "representada" ? `Meta · ${pName.get(rep!)}` : `Meta · ${sName.get(vend!) ?? "vendedor"}`;
+  const goalTitle = isSeller
+    ? rep
+      ? `Sua meta · ${pName.get(rep)}`
+      : "Sua meta"
+    : wantScope === "geral"
+      ? "Meta do escritório"
+      : wantScope === "representada"
+        ? `Meta · ${pName.get(rep!)}`
+        : `Meta · ${sName.get(vend!) ?? "vendedor"}`;
 
   return (
     <>
       <PageHeader
         title={`${greeting()}, ${profile.firstName}`}
         hint={
-          rep || vend
-            ? `Vendo ${[rep ? pName.get(rep) : null, vend ? sName.get(vend) : null].filter(Boolean).join(" · ")}`
-            : "O resumo do escritório. Use os filtros para olhar um período, uma representada ou um vendedor."
+          isSeller
+            ? `Seus números: só os seus pedidos e clientes${rep ? ` · ${pName.get(rep)}` : ""}.`
+            : rep || vend
+              ? `Vendo ${[rep ? pName.get(rep) : null, vend ? sName.get(vend) : null].filter(Boolean).join(" · ")}`
+              : "O resumo do escritório. Use os filtros para olhar um período, uma representada ou um vendedor."
         }
         action={canOrder ? <NewButton label="Novo pedido" href="/pedidos/novo" fab /> : null}
       />
@@ -290,11 +319,11 @@ export default async function HomePage({
           <Kpi label="Ticket médio" icon="tag" value={brl(ticket)} delta={delta(ticket, prevTicket)} />
           <Kpi label="Faturado (NF)" icon="receipt" value={brl(invoiced)} delta={delta(invoiced, prevInvoiced)} href="/comissoes" />
           <Kpi
-            label="Comissão gerada"
-            icon="percent"
-            value={brl(commGenerated)}
-            sub={commExpected ? `prevista nos pedidos ${brl(commExpected)}` : undefined}
-            href="/comissoes"
+            label="Aguardando nota"
+            icon="clock"
+            value={brl(openOrdersValue)}
+            sub={`${(openData ?? []).length} ${(openData ?? []).length === 1 ? "pedido" : "pedidos"} em aberto`}
+            href="/faturamento?aba=a-faturar"
           />
           <div className="col-span-2 md:col-span-1">
           <Kpi
@@ -308,10 +337,83 @@ export default async function HomePage({
           </div>
         </dl>
 
+        {/* Comissões (só administrador e financeiro) */}
+        {canSeeCommissions ? (
+        <section className="mb-5 overflow-hidden rounded-xl border border-line bg-surface">
+          <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line px-4 py-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <Icon name="percent" size={16} className="text-accent-ink" />
+              Comissões
+              <span className="font-normal text-muted">das notas faturadas</span>
+            </h2>
+            <Link href="/comissoes" className="inline-flex items-center gap-1 text-xs font-medium text-ink-2 hover:text-ink">
+              Ver comissões <Icon name="arrow-right" size={12} />
+            </Link>
+          </header>
+          <dl className="grid grid-cols-2 bg-line md:grid-cols-4" style={{ gap: 1 }}>
+            <CommStat
+              label="Gerada no período"
+              value={brl(commGenerated)}
+              delta={delta(commGenerated, commGeneratedPrev)}
+              sub={commExpected ? `prevista nos pedidos ${brl(commExpected)}` : "pelas notas emitidas"}
+            />
+            <CommStat label="Recebida no período" value={brl(receivedPeriod)} delta={delta(receivedPeriod, receivedPrev)} sub={`antes ${brl(receivedPrev)}`} tone="ok" />
+            <CommStat label="A receber" value={brl(toReceive)} sub={`${openComm.length} ${openComm.length === 1 ? "nota" : "notas"}`} href="/comissoes?status=a_receber" />
+            <CommStat
+              label="Atrasada"
+              value={brl(lateComm)}
+              sub={lateList.length ? `${lateList.length} ${lateList.length === 1 ? "nota vencida" : "notas vencidas"}` : "nada vencido"}
+              tone={lateComm > 0 ? "alert" : undefined}
+              href="/comissoes?status=atrasadas"
+            />
+          </dl>
+          {openComm.length ? (
+            <div className="grid gap-px bg-line md:grid-cols-2">
+              <div className="bg-surface p-4">
+                <p className="mb-3 text-xs font-medium text-muted">A receber por representada</p>
+                <ul className="grid gap-2.5">
+                  {commByPrincipal.map(([id, v]) => (
+                    <li key={id}>
+                      <span className="flex items-baseline justify-between gap-3 text-[13px]">
+                        <span className="truncate font-medium">{pName.get(id) ?? "Representada"}</span>
+                        <span className="shrink-0 font-mono tabular-nums">{brl(v)}</span>
+                      </span>
+                      <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-active">
+                        <span className="block h-full rounded-full bg-accent" style={{ width: `${toReceive ? (v / toReceive) * 100 : 0}%` }} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="bg-surface p-4">
+                <p className="mb-2 text-xs font-medium text-muted">Próximos vencimentos</p>
+                <ul className="divide-y divide-line">
+                  {nextDues.map((c) => {
+                    const overdue = c.due_date < today;
+                    const nf = (c.order_invoices as unknown as { number: string | null } | null)?.number;
+                    return (
+                      <li key={c.id} className="flex items-center gap-3 py-2 text-[13px]">
+                        <span className={`w-14 shrink-0 font-mono text-xs ${overdue ? "font-medium text-alert" : "text-muted"}`}>{formatDate(c.due_date).slice(0, 5)}</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {pName.get(c.principal_id) ?? "Representada"}
+                          {nf ? <span className="text-muted"> · NF {nf}</span> : null}
+                        </span>
+                        {overdue ? <Badge tone="alert">Atrasada</Badge> : null}
+                        <span className="shrink-0 font-mono tabular-nums">{brl(Number(c.value))}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          ) : null}
+        </section>
+        ) : null}
+
         {/* Pedidos em atraso (não dependem do período: todo pedido ainda sem faturar) */}
         {late.length ? (
           <section
-            className={`mb-5 overflow-hidden rounded-xl border ${lateCritical.length ? "border-alert/30" : "border-[#e09f3e]/40"} bg-white`}
+            className={`mb-5 overflow-hidden rounded-xl border ${lateCritical.length ? "border-alert/30" : "border-warn-dot/40"} bg-surface`}
           >
             <header className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 ${lateCritical.length ? "bg-alert-soft" : "bg-warn-soft"}`}>
               <Icon name="alert" size={18} className={lateCritical.length ? "text-alert" : "text-warn"} />
@@ -355,7 +457,7 @@ export default async function HomePage({
 
         {/* Gráfico + meta + situação */}
         <div className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-          <section className="min-w-0 rounded-xl border border-line bg-white p-4 sm:p-5">
+          <section className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5">
             <h2 className="text-sm font-semibold">Vendas por {series.unit}</h2>
             <p className="mb-3 text-xs text-muted">Pedidos enviados e faturados, pela data do pedido.</p>
             {sold.length || prevSold.length ? (
@@ -375,11 +477,11 @@ export default async function HomePage({
               >
                 <Icon name="target" size={18} className="text-faint" />
                 <span className="flex-1">Sem meta de vendas para este recorte.</span>
-                <span className="font-medium text-pen">{canManage ? "Lançar" : "Ver metas"}</span>
+                <span className="font-medium text-accent-ink">{canManage ? "Lançar" : "Ver metas"}</span>
               </Link>
             )}
 
-            <section className="rounded-xl border border-line bg-white p-4">
+            <section className="rounded-xl border border-line bg-surface p-4">
               <h2 className="mb-3 text-sm font-semibold">Situação dos pedidos do período</h2>
               <ul className="grid gap-2.5">
                 {funnel.map((f) => (
@@ -434,12 +536,19 @@ export default async function HomePage({
               }))}
             />
           ) : (
-            <section className="rounded-xl border border-line bg-white p-4">
-              <h2 className="mb-2 text-sm font-semibold">Comissões</h2>
-              <MiniStat label="A receber" value={brl(toReceive)} href="/comissoes?status=a_receber" />
-              <MiniStat label="Atrasadas" value={brl(lateComm)} alert={lateComm > 0} href="/comissoes?status=atrasadas" />
-              <MiniStat label="Recebidas no período" value={brl(receivedPeriod)} ok />
-            </section>
+            <RankList
+              title={isSeller ? "Seus pedidos recentes" : "Pedidos recentes"}
+              empty="Nenhum pedido no período."
+              more={{ href: "/pedidos", label: "Pedidos" }}
+              rows={recent.map((o) => ({
+                key: o.id,
+                name: (o.customers as unknown as { name: string } | null)?.name ?? "Cliente",
+                value: brl(Number(o.total)),
+                share: soldTotal ? Math.min(Number(o.total) / Math.max(...recent.map((r) => Number(r.total)), 1), 1) : 0,
+                sub: `${formatOrderNumber(o.number, settings)} · ${formatDate(o.order_date)}`,
+                href: `/pedidos/${o.id}`,
+              }))}
+            />
           )}
           <RankList
             title="Clientes"
@@ -463,25 +572,21 @@ export default async function HomePage({
         {/* Financeiro, agenda e reativação */}
         <div className="mb-5 grid gap-4 lg:grid-cols-3">
           {isBackOffice ? (
-            <section className="rounded-xl border border-line bg-white p-4">
-              <h2 className="mb-2 text-sm font-semibold">Financeiro</h2>
-              <MiniStat label="Comissão a receber" value={brl(toReceive)} href="/comissoes?status=a_receber" />
-              <MiniStat label="Comissões atrasadas" value={brl(lateComm)} alert={lateComm > 0} href="/comissoes?status=atrasadas" />
-              <MiniStat label="Recebido no período" value={brl(receivedPeriod)} ok />
-              <div className="my-2 h-px bg-line" />
+            <section className="rounded-xl border border-line bg-surface p-4">
+              <h2 className="mb-2 text-sm font-semibold">Contas a pagar</h2>
               <MiniStat label="Contas nos próximos 7 dias" value={brl(pay7)} href="/contas-a-pagar?status=pendentes" />
               <MiniStat label="Contas vencidas" value={String(payLate.length)} alert={payLate.length > 0} href="/contas-a-pagar?status=vencidas" />
               <p className="mt-2 text-[11px] text-muted">As contas a pagar são do escritório e não mudam com os filtros.</p>
             </section>
           ) : null}
 
-          <section className="flex flex-col rounded-xl border border-line bg-white">
+          <section className="flex flex-col rounded-xl border border-line bg-surface">
             <header className="flex items-center justify-between border-b border-line px-4 py-3">
               <h2 className="text-sm font-semibold">
-                Follow-ups de hoje <span className="ml-1 font-normal text-muted">{followUps.length}</span>
+                Contatos de hoje <span className="ml-1 font-normal text-muted">{followUps.length}</span>
               </h2>
               <Link href="/leads?filtro=hoje" className="text-xs text-muted hover:text-ink">
-                Leads
+                Prospecção
               </Link>
             </header>
             {followUps.length === 0 ? (
@@ -493,7 +598,7 @@ export default async function HomePage({
                   return (
                     <li key={`${f.kind}-${f.id}`} className="relative flex items-center gap-3 px-4 py-2.5 hover:bg-subtle">
                       <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${late ? "bg-alert-soft text-alert" : "bg-warn-soft text-warn"}`}>
-                        <Icon name={f.kind === "lead" ? "sparkle" : "users"} size={14} />
+                        <Icon name={f.kind === "lead" ? "kanban" : "users"} size={14} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <Link href={f.href} className="block truncate text-[13px] font-medium after:absolute after:inset-0">
@@ -512,7 +617,7 @@ export default async function HomePage({
             )}
           </section>
 
-          <section className="flex flex-col rounded-xl border border-line bg-white">
+          <section className="flex flex-col rounded-xl border border-line bg-surface">
             <header className="border-b border-line px-4 py-3">
               <h2 className="text-sm font-semibold">Clientes para reativar</h2>
               <p className="text-[11px] text-muted">Compraram no último ano, mas não há mais de 60 dias.</p>
@@ -540,7 +645,7 @@ export default async function HomePage({
         </div>
 
         {/* Pedidos do período */}
-        <section className="rounded-xl border border-line bg-white">
+        <section className="rounded-xl border border-line bg-surface">
           <header className="flex items-center justify-between border-b border-line px-4 py-3 sm:px-5">
             <h2 className="text-sm font-semibold">Pedidos do período</h2>
             <Link href="/pedidos" className="inline-flex items-center gap-1 text-xs text-muted hover:text-ink">
@@ -594,5 +699,43 @@ function MiniStat({ label, value, alert, ok, href }: { label: string; value: str
     </Link>
   ) : (
     <div className="flex items-center justify-between py-1.5">{inner}</div>
+  );
+}
+
+function CommStat({
+  label,
+  value,
+  sub,
+  delta: d,
+  tone,
+  href,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  delta?: number | null;
+  tone?: "ok" | "alert";
+  href?: string;
+}) {
+  const body = (
+    <>
+      <dt className="text-[12.5px] text-muted">{label}</dt>
+      <dd className={`mt-1 font-mono text-xl font-medium tracking-[-0.03em] tabular-nums ${tone === "alert" ? "text-alert" : "text-ink"}`}>{value}</dd>
+      <dd className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+        {d != null && d !== 0 ? (
+          <span className={`font-medium ${d > 0 ? "text-ok" : "text-alert"}`}>
+            {d > 0 ? "▲" : "▼"} {Math.abs(Math.round(d * 100))}%
+          </span>
+        ) : null}
+        {sub}
+      </dd>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="block bg-surface px-4 py-3.5 transition-colors hover:bg-subtle">
+      {body}
+    </Link>
+  ) : (
+    <div className="bg-surface px-4 py-3.5">{body}</div>
   );
 }

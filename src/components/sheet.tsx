@@ -52,7 +52,7 @@ export function Sheet({
         scroll={false}
         aria-label="Fechar"
         tabIndex={-1}
-        className="absolute inset-0 animate-fade-in bg-[rgb(20_33_42/0.32)] md:bg-[rgb(20_33_42/0.18)]"
+        className="absolute inset-0 animate-fade-in bg-[rgb(21_23_28/0.32)] md:bg-[rgb(21_23_28/0.18)]"
       />
       <div
         ref={ref}

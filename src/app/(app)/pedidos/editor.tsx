@@ -30,7 +30,7 @@ const newRow = (unit: string, key: string = crypto.randomUUID()): Row => ({
 
 // Campos compactos da grade de itens.
 const cell =
-  "h-11 w-full rounded-md border border-transparent bg-transparent px-2 text-base text-ink outline-none transition-[border-color,box-shadow,background-color] placeholder:text-faint hover:border-line-strong focus:border-pen focus:bg-white focus:ring-[3px] focus:ring-pen/15 sm:h-9 sm:text-sm";
+  "h-11 w-full rounded-md border border-transparent bg-transparent px-2 text-base text-ink outline-none transition-[border-color,box-shadow,background-color] placeholder:text-faint hover:border-line-strong focus:border-accent focus:bg-surface focus:ring-[3px] focus:ring-accent/25 sm:h-9 sm:text-sm";
 
 export function OrderEditor({
   initial,
@@ -39,6 +39,7 @@ export function OrderEditor({
   products,
   units,
   defaultUnit,
+  showCommission = true,
 }: {
   initial: OrderInput;
   customers: EditorCustomer[];
@@ -46,6 +47,7 @@ export function OrderEditor({
   products: EditorProduct[];
   units: EditorUnit[];
   defaultUnit: string;
+  showCommission?: boolean; // vendedor e gerente não veem a comissão (o % segue o padrão da representada)
 }) {
   const [f, setF] = useState(initial);
   const [rows, setRows] = useState<Row[]>(() =>
@@ -217,10 +219,10 @@ export function OrderEditor({
 
       <div className="grid gap-5">
         {/* ---------- Dados do pedido ---------- */}
-        <section className="rounded-xl border border-line bg-white">
+        <section className="rounded-xl border border-line bg-surface">
           <header className="flex items-center justify-between border-b border-line px-4 py-3 sm:px-5">
             <h2 className="text-sm font-semibold">Dados do pedido</h2>
-            {principal?.commission != null ? (
+            {showCommission && principal?.commission != null ? (
               <span className="text-xs text-muted">Comissão padrão de {principal.name}: {numText(principal.commission, 2)}%</span>
             ) : null}
           </header>
@@ -320,7 +322,7 @@ export function OrderEditor({
         </section>
 
         {/* ---------- Itens ---------- */}
-        <section className="rounded-xl border border-line bg-white">
+        <section className="rounded-xl border border-line bg-surface">
           <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
             <div>
               <h2 className="text-sm font-semibold">
@@ -476,13 +478,13 @@ export function OrderEditor({
 
         {/* ---------- Observações e resumo ---------- */}
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <section className="rounded-xl border border-line bg-white p-4 sm:p-5">
+          <section className="rounded-xl border border-line bg-surface p-4 sm:p-5">
             <Field label="Observações" hint="Aparecem no pedido impresso. Ex.: entregar pela manhã, embalar separado.">
               <textarea rows={5} value={f.notes} onChange={(e) => set("notes", e.target.value)} className={textareaCls} />
             </Field>
           </section>
 
-          <section className="rounded-xl border border-line bg-white p-4 sm:p-5">
+          <section className="rounded-xl border border-line bg-surface p-4 sm:p-5">
             <h2 className="mb-3 text-sm font-semibold">Resumo</h2>
             <dl className="grid gap-2.5 text-sm">
               <div className="flex justify-between">
@@ -501,7 +503,7 @@ export function OrderEditor({
                       onChange={(e) => set("discount_pct", e.target.value)}
                       aria-label="Desconto geral em %"
                       placeholder="0"
-                      className="h-8 w-16 rounded-md border border-line-strong bg-white pl-2 pr-5 text-right text-sm tabular-nums outline-none focus:border-pen focus:ring-[3px] focus:ring-pen/15"
+                      className="h-8 w-16 rounded-md border border-line-strong bg-surface pl-2 pr-5 text-right text-sm tabular-nums outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/25"
                     />
                     <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted">%</span>
                   </span>
@@ -518,6 +520,7 @@ export function OrderEditor({
               </div>
             </dl>
 
+            {showCommission ? (
             <div className="mt-4 border-t border-line pt-3">
               <div className="flex items-center justify-between gap-3">
                 <label htmlFor="commission" className="text-[13px] text-muted">
@@ -531,12 +534,13 @@ export function OrderEditor({
                     value={f.commission_pct}
                     onChange={(e) => set("commission_pct", e.target.value)}
                     placeholder="0"
-                    className="h-8 w-20 rounded-md border border-line-strong bg-white pl-2 pr-5 text-right text-sm tabular-nums outline-none focus:border-pen focus:ring-[3px] focus:ring-pen/15"
+                    className="h-8 w-20 rounded-md border border-line-strong bg-surface pl-2 pr-5 text-right text-sm tabular-nums outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/25"
                   />
                   <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted">%</span>
                 </span>
               </div>
             </div>
+            ) : null}
           </section>
         </div>
       </div>

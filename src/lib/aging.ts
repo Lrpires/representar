@@ -21,6 +21,6 @@ export function orderAging(
 
 export const AGING_STYLE: Record<AgingLevel, { badge: string; dot: string; label: string }> = {
   ok: { badge: "bg-hover text-ink-2", dot: "bg-faint", label: "No prazo" },
-  aviso: { badge: "bg-warn-soft text-warn", dot: "bg-[#e09f3e]", label: "Atenção" },
+  aviso: { badge: "bg-warn-soft text-warn", dot: "bg-warn-dot", label: "Atenção" },
   critico: { badge: "bg-alert-soft text-alert", dot: "bg-alert", label: "Crítico" },
 };

@@ -129,7 +129,7 @@ export default async function PriceTablesPage({
                   href={`${PATH}/${t.id}`}
                   className={`group flex h-full flex-col overflow-hidden rounded-xl border transition hover:-translate-y-0.5 hover:shadow-float ${
                     state === "vigentes"
-                      ? "border-line bg-white"
+                      ? "border-line bg-surface"
                       : "border-line bg-subtle"
                   }`}
                 >

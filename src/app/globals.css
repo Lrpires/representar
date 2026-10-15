@@ -7,43 +7,57 @@
    branco sobre o fundo cinza da barra lateral.
    ------------------------------------------------------------------ */
 @theme {
-  --color-canvas: #f4f6f7;
-  --color-paper: #ffffff;
-  --color-surface: #ffffff;
-  --color-subtle: #f9fafb;
-  --color-hover: #f1f4f5;
-  --color-active: #e7ecee;
-  --color-sheet: #ffffff;
+  /* Marca Representar (design system): neutros quentes, grafite e laranja como sinal. Sem branco puro. */
+  --color-white: #f3f0e8; /* "papel": todo bg-white/text-white do sistema usa o papel da marca */
+  --color-canvas: #e3ded2; /* areia */
+  --color-paper: #f3f0e8; /* papel */
+  --color-surface: #f3f0e8;
+  --color-subtle: #ebe7dd; /* linho */
+  --color-hover: #ebe7dd;
+  --color-active: #e3ded2;
+  --color-sheet: #f3f0e8;
+  --color-side: #15171c; /* barra lateral grafite */
 
-  --color-ink: #14212a;
-  --color-ink-2: #3a4750;
-  --color-muted: #6a7780;
-  --color-faint: #9eaab1;
+  --color-ink: #15171c; /* grafite */
+  --color-ink-2: #4a4840;
+  --color-muted: #6e6b64; /* pedra */
+  --color-faint: #a8a49b;
 
-  --color-line: #e6eaec;
-  --color-line-strong: #d7dde0;
+  --color-line: #d6d1c5; /* borda */
+  --color-line-strong: #c9c5bb; /* névoa */
 
-  --color-pen: #0f4c5c;
-  --color-pen-dark: #0a3946;
-  --color-pen-soft: #e8f1f3;
-  --color-pen-ink: #0f4c5c;
+  /* Ações neutras (botão salvar, abas, selos): sempre grafite */
+  --color-pen: #15171c;
+  --color-pen-dark: #2b2f38;
+  --color-pen-soft: #e6e1d6;
+  --color-pen-ink: #15171c;
+  --color-on-pen: #f3f0e8; /* texto sobre a cor principal */
+  --color-on-ink: #f3f0e8; /* texto sobre fundo grafite */
 
-  --color-alert: #c8423a;
-  --color-alert-soft: #fbeeed;
-  --color-ok: #23855a;
-  --color-ok-soft: #e7f5ee;
-  --color-warn: #9a6412;
-  --color-warn-soft: #fcf2e1;
-  --color-info: #2b6f9e;
-  --color-info-soft: #e9f2f8;
+  /* Cor da empresa (padrão: laranja da marca). Configurações troca estes valores por escritório. */
+  --color-accent: #ff5b22;
+  --color-accent-dark: #e8470f;
+  --color-accent-soft: #ffe1d3;
+  --color-accent-ink: #b8400f;
+  --color-on-accent: #15171c;
 
-  --shadow-soft: 0 1px 2px rgb(20 33 42 / 0.04);
-  --shadow-panel: 0 0 0 1px rgb(20 33 42 / 0.05), 0 1px 3px rgb(20 33 42 / 0.04);
-  --shadow-float: 0 1px 2px rgb(20 33 42 / 0.06);
-  --shadow-field: 0 1px 1px rgb(20 33 42 / 0.03);
-  --shadow-btn: 0 1px 2px rgb(20 33 42 / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.14);
-  --shadow-menu: 0 0 0 1px rgb(20 33 42 / 0.06), 0 8px 24px -6px rgb(20 33 42 / 0.16);
-  --shadow-sheet: 0 0 0 1px rgb(20 33 42 / 0.06), 0 24px 48px -12px rgb(20 33 42 / 0.22);
+  --color-alert: #c8352b;
+  --color-alert-soft: #f6deda;
+  --color-ok: #1e8e5a;
+  --color-ok-soft: #dcefe3;
+  --color-warn: #a8440f;
+  --color-warn-soft: #fde4d4;
+  --color-warn-dot: #ff5b22;
+  --color-info: #0f3d3e; /* petróleo */
+  --color-info-soft: #dbe5e1;
+
+  --shadow-soft: 0 1px 2px rgb(21 23 28 / 0.05);
+  --shadow-panel: 0 0 0 1px rgb(21 23 28 / 0.06), 0 1px 3px rgb(21 23 28 / 0.05);
+  --shadow-float: 0 1px 2px rgb(21 23 28 / 0.07);
+  --shadow-field: 0 1px 1px rgb(21 23 28 / 0.03);
+  --shadow-btn: 0 1px 2px rgb(21 23 28 / 0.2);
+  --shadow-menu: 0 0 0 1px rgb(21 23 28 / 0.08), 0 8px 24px -6px rgb(21 23 28 / 0.2);
+  --shadow-sheet: 0 0 0 1px rgb(21 23 28 / 0.08), 0 24px 48px -12px rgb(21 23 28 / 0.28);
 
   --animate-sheet-in: sheet-in 220ms cubic-bezier(0.32, 0.72, 0, 1);
   --animate-sheet-up: sheet-up 280ms cubic-bezier(0.32, 0.72, 0, 1);
@@ -68,9 +82,56 @@
   }
 }
 
+/* ------------------------------------------------------------------
+   Tema noite do sistema (escolhido no menu do usuário: Claro, Escuro ou Automático)
+   ------------------------------------------------------------------ */
+:root[data-theme="noite"] {
+  color-scheme: dark;
+  --color-canvas: #111317;
+  --color-paper: #15171c;
+  --color-surface: #1e2128;
+  --color-subtle: #191b21;
+  --color-hover: #23262e;
+  --color-active: #2a2e37;
+  --color-sheet: #1e2128;
+  --color-side: #0c0d10;
+  --color-ink: #f3f0e8;
+  --color-ink-2: #c9c5bb;
+  --color-muted: #a8a49b;
+  --color-faint: #6e6b64;
+  --color-line: rgb(243 240 232 / 0.11);
+  --color-line-strong: rgb(243 240 232 / 0.22);
+  --color-on-ink: #15171c;
+  --color-pen: #f3f0e8;
+  --color-pen-dark: #e3ded2;
+  --color-pen-soft: #2a2e37;
+  --color-pen-ink: #f3f0e8;
+  --color-on-pen: #15171c;
+  --color-accent-soft: rgb(255 91 34 / 0.16);
+  --color-accent-ink: #ff8a5c;
+  --color-ok: #4cc58b;
+  --color-ok-soft: rgb(30 142 90 / 0.2);
+  --color-alert: #ff7a6e;
+  --color-alert-soft: rgb(200 53 43 / 0.22);
+  --color-warn: #ff8a5c;
+  --color-warn-soft: rgb(255 91 34 / 0.16);
+  --color-info: #8fc3bd;
+  --color-info-soft: rgb(15 61 62 / 0.6);
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-panel: 0 0 0 1px rgb(243 240 232 / 0.06), 0 1px 3px rgb(0 0 0 / 0.3);
+  --shadow-float: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-field: 0 1px 1px rgb(0 0 0 / 0.2);
+  --shadow-btn: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-menu: 0 0 0 1px rgb(243 240 232 / 0.08), 0 8px 24px -6px rgb(0 0 0 / 0.6);
+  --shadow-sheet: 0 0 0 1px rgb(243 240 232 / 0.08), 0 24px 48px -12px rgb(0 0 0 / 0.7);
+}
+:root[data-theme="noite"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23a8a49b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5.5 6.5 2.5 2.5 2.5-2.5'/%3E%3C/svg%3E");
+}
+
 @theme inline {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-sans: var(--font-schibsted), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 }
 
 html {
@@ -83,7 +144,6 @@ body {
   color: var(--color-ink);
   background-color: var(--color-paper);
   font-family: var(--font-sans);
-  font-feature-settings: "cv11", "ss01", "ss03";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -92,16 +152,17 @@ body {
 @media (min-width: 1024px) {
   html,
   body {
-    background-color: var(--color-canvas);
+    background-color: var(--color-side);
   }
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--color-pen) 18%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 28%, transparent);
 }
 
+/* Foco com anel laranja (marca) */
 :focus-visible {
-  outline: 2px solid var(--color-pen);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
@@ -122,7 +183,7 @@ input[type="search"]::-webkit-search-cancel-button {
 
 select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2371717a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5.5 6.5 2.5 2.5 2.5-2.5'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%236e6b64' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5.5 6.5 2.5 2.5 2.5-2.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.6rem center;
   padding-right: 2rem !important;
@@ -154,7 +215,44 @@ summary::-webkit-details-marker {
    ------------------------------------------------------------------ */
 html:has(.lp) {
   scroll-behavior: smooth;
-  background-color: #ffffff;
+  background-color: var(--color-paper);
+}
+
+/* Tema noite do site (o botão de sol/lua grava a escolha; sem escolha, segue o aparelho) */
+html[data-lp="noite"]:has(.lp) {
+  background-color: #15171c;
+}
+html[data-lp="noite"] .lp {
+  color-scheme: dark;
+  --color-white: #1e2128;
+  --color-paper: #15171c;
+  --color-canvas: #111317;
+  --color-surface: #1e2128;
+  --color-subtle: #191b21;
+  --color-hover: #23262e;
+  --color-active: #262a32;
+  --color-sheet: #1e2128;
+  --color-side: #0c0d10;
+  --color-ink: #f3f0e8;
+  --color-ink-2: #c9c5bb;
+  --color-muted: #a8a49b;
+  --color-faint: #6e6b64;
+  --color-line: rgb(243 240 232 / 0.12);
+  --color-line-strong: rgb(243 240 232 / 0.28);
+  --color-pen: #f3f0e8;
+  --color-pen-dark: #e3ded2;
+  --color-pen-soft: #262a32;
+  --color-pen-ink: #f3f0e8;
+  --color-accent-soft: rgb(255 91 34 / 0.16);
+  --color-accent-ink: #ff8a5c;
+  --color-ok: #4cc58b;
+  --color-ok-soft: rgb(30 142 90 / 0.2);
+  --color-alert: #ff7a6e;
+  --color-alert-soft: rgb(200 53 43 / 0.22);
+  --color-warn: #ff8a5c;
+  --color-warn-soft: rgb(255 91 34 / 0.16);
+  --color-info: #8fc3bd;
+  --color-info-soft: rgb(15 61 62 / 0.6);
 }
 
 @keyframes lp-progress {

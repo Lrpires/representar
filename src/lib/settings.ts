@@ -2,9 +2,9 @@ import { cache } from "react";
 import { getContext } from "@/lib/session";
 import { productImageUrl } from "@/lib/storage";
 import { UNITS } from "@/lib/units";
-import { DEFAULT_COLOR } from "@/lib/theme";
+import { orgColor } from "@/lib/theme";
 
-export { COLOR_PRESETS, DEFAULT_COLOR, themeVars } from "@/lib/theme";
+export { COLOR_PRESETS, DEFAULT_COLOR, themeVars, themeCss } from "@/lib/theme";
 export { formatOrderNumber } from "@/lib/orders";
 
 export type OrgSettings = {
@@ -36,7 +36,7 @@ export const getSettings = cache(async (): Promise<OrgSettings> => {
     name: d?.name ?? orgName,
     logoPath: d?.logo_path ?? null,
     logoUrl: d?.logo_path ? productImageUrl(d.logo_path) : null,
-    color: d?.brand_color ?? DEFAULT_COLOR,
+    color: orgColor(d?.brand_color),
     units: enabled.length ? enabled : UNITS.map((u) => u.value),
     allUnits: enabled.length === 0,
     orderStart: d?.order_number_start ?? 1,

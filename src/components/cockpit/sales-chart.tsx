@@ -20,7 +20,7 @@ function niceMax(v: number) {
   return nice * exp;
 }
 
-const PREV = "#b6c2c8"; // período anterior: cinza de apoio (validado contra a cor principal)
+const PREV = "var(--color-faint)"; // período anterior: cinza de apoio (validado contra a cor principal)
 
 export function SalesChart({ points, unit, compareLabel }: { points: Point[]; unit: string; compareLabel: string }) {
   const box = useRef<HTMLDivElement>(null);
@@ -54,7 +54,7 @@ export function SalesChart({ points, unit, compareLabel }: { points: Point[]; un
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-2">
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-[3px] bg-pen" />
+          <span className="h-2.5 w-2.5 rounded-[3px] bg-accent" />
           Período atual
         </span>
         {hasPrev ? (
@@ -110,7 +110,7 @@ export function SalesChart({ points, unit, compareLabel }: { points: Point[]; un
                   {p.current > 0 ? (
                     <path
                       d={`M${x0},${pad.t + ih} V${top + r} Q${x0},${top} ${x0 + r},${top} H${x0 + barW - r} Q${x0 + barW},${top} ${x0 + barW},${top + r} V${pad.t + ih} Z`}
-                      fill="var(--color-pen)"
+                      fill="var(--color-accent)"
                       opacity={hover == null || hover === i ? 1 : 0.45}
                     />
                   ) : null}
@@ -124,7 +124,7 @@ export function SalesChart({ points, unit, compareLabel }: { points: Point[]; un
             })}
             {hasPrev ? <path d={prevPath} fill="none" stroke={PREV} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" /> : null}
             {hover != null && hasPrev ? (
-              <circle cx={x(hover)} cy={y(points[hover].previous)} r={4} fill={PREV} stroke="#fff" strokeWidth={2} />
+              <circle cx={x(hover)} cy={y(points[hover].previous)} r={4} fill={PREV} stroke="var(--color-surface)" strokeWidth={2} />
             ) : null}
             {/* Área de toque de cada coluna (maior que a barra) */}
             {points.map((p, i) => (
@@ -146,7 +146,7 @@ export function SalesChart({ points, unit, compareLabel }: { points: Point[]; un
           </svg>
           {h && hover != null ? (
             <div
-              className="pointer-events-none absolute z-10 min-w-[10rem] rounded-lg bg-white px-3 py-2 text-xs shadow-menu"
+              className="pointer-events-none absolute z-10 min-w-[10rem] rounded-lg bg-surface px-3 py-2 text-xs shadow-menu"
               style={{
                 left: Math.min(Math.max(x(hover) - 80, 0), w - 170),
                 top: Math.max(y(Math.max(h.current, h.previous)) - 74, 0),
@@ -155,7 +155,7 @@ export function SalesChart({ points, unit, compareLabel }: { points: Point[]; un
               <p className="mb-1 text-muted">{h.tip}</p>
               <p className="flex items-center justify-between gap-3">
                 <span className="inline-flex items-center gap-1.5 text-ink-2">
-                  <span className="h-0.5 w-3 rounded-full bg-pen" />
+                  <span className="h-0.5 w-3 rounded-full bg-accent" />
                   Atual
                 </span>
                 <span className="font-semibold tabular-nums text-ink">{brl(h.current)}</span>

@@ -7,16 +7,18 @@ import { Icon, type IconName } from "./icons";
    mais compacto. Texto de campo em 16px no celular evita o zoom do iPhone. */
 
 export const inputCls =
-  "h-11 w-full rounded-lg border border-line-strong bg-white px-3 text-base text-ink shadow-field outline-none transition-[border-color,box-shadow] placeholder:text-faint hover:border-[#c5cdd1] focus:border-pen focus:ring-[3px] focus:ring-pen/15 disabled:cursor-not-allowed disabled:bg-subtle disabled:text-ink-2 disabled:shadow-none sm:h-9 sm:text-sm";
+  "h-11 w-full rounded-lg border border-line-strong bg-surface px-3 text-base text-ink shadow-field outline-none transition-[border-color,box-shadow] placeholder:text-faint hover:border-[#bdb8ab] focus:border-accent focus:ring-[3px] focus:ring-accent/25 disabled:cursor-not-allowed disabled:bg-subtle disabled:text-ink-2 disabled:shadow-none sm:h-9 sm:text-sm";
 
 export const textareaCls = `${inputCls} h-auto py-2 leading-relaxed sm:h-auto`;
 
 const btnBase =
   "inline-flex h-11 shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-[background-color,color,box-shadow,transform] active:translate-y-px disabled:pointer-events-none disabled:opacity-50 sm:h-8 sm:px-3 sm:text-[13px]";
 
-export const primaryBtn = `${btnBase} bg-pen text-white shadow-btn hover:bg-pen-dark`;
+export const primaryBtn = `${btnBase} bg-pen text-on-pen shadow-btn hover:bg-pen-dark`;
+// Botão laranja (sinal da marca): só para a ação principal da tela. Texto sempre grafite.
+export const accentBtn = `${btnBase} bg-accent font-semibold text-on-accent shadow-btn hover:bg-accent-dark`;
 
-export const ghostBtn = `${btnBase} border border-line-strong bg-white text-ink shadow-field hover:bg-hover`;
+export const ghostBtn = `${btnBase} border border-line-strong bg-surface text-ink shadow-field hover:bg-hover`;
 
 export const quietBtn = `${btnBase} text-ink-2 hover:bg-hover hover:text-ink`;
 
@@ -33,7 +35,7 @@ export const tr = "group relative transition-colors hover:bg-subtle";
 
 export function TableShell({ children }: { children: ReactNode }) {
   return (
-    <div className="hidden overflow-hidden rounded-xl border border-line bg-white md:block">
+    <div className="hidden overflow-hidden rounded-xl border border-line bg-surface md:block">
       <table className="w-full border-collapse [&_thead]:border-b [&_thead]:border-line [&_thead]:bg-subtle [&_tbody>tr+tr]:border-t [&_tbody>tr+tr]:border-line">
         {children}
       </table>
@@ -52,7 +54,7 @@ export function RowLink({ href, children, className = "" }: { href: string; chil
 
 export function CardList({ children }: { children: ReactNode }) {
   return (
-    <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-white md:hidden">
+    <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface md:hidden">
       {children}
     </ul>
   );
@@ -164,7 +166,7 @@ export function FilterPill({
       aria-current={active ? "true" : undefined}
       className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition sm:h-8 sm:px-2.5 ${
         active
-          ? "bg-white text-ink shadow-panel"
+          ? "bg-surface text-ink shadow-panel"
           : "text-muted hover:bg-hover hover:text-ink-2"
       }`}
     >
@@ -268,7 +270,7 @@ export function FormSection({
         <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
         {hint ? <p className="mt-1 text-[13px] leading-relaxed text-muted">{hint}</p> : null}
       </div>
-      <div className="min-w-0 rounded-xl border border-line bg-white p-4 sm:p-5">{children}</div>
+      <div className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5">{children}</div>
     </section>
   );
 }
@@ -289,7 +291,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={`min-w-0 overflow-hidden rounded-xl border border-line bg-white ${className}`}>
+    <section className={`min-w-0 overflow-hidden rounded-xl border border-line bg-surface ${className}`}>
       {title ? (
         <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div className="min-w-0">
@@ -410,24 +412,24 @@ export function Notice({
 
 type Tone = "neutral" | "ok" | "warn" | "pen" | "alert" | "info" | "solid" | "ink";
 const tones: Record<Tone, string> = {
-  neutral: "bg-[#eef1f2] text-ink-2",
+  neutral: "bg-active text-ink-2",
   ok: "bg-ok-soft text-ok",
   warn: "bg-warn-soft text-warn",
   pen: "bg-pen-soft text-pen-ink",
   alert: "bg-alert-soft text-alert",
   info: "bg-info-soft text-info",
-  solid: "bg-pen text-white",
-  ink: "bg-ink text-white",
+  solid: "bg-pen text-on-pen",
+  ink: "bg-ink text-on-ink",
 };
 const dots: Record<Tone, string> = {
   neutral: "bg-faint",
   ok: "bg-ok",
-  warn: "bg-[#e09f3e]",
+  warn: "bg-warn-dot",
   pen: "bg-pen",
   alert: "bg-alert",
   info: "bg-info",
-  solid: "bg-white",
-  ink: "bg-white",
+  solid: "bg-surface",
+  ink: "bg-surface",
 };
 
 export function Badge({
@@ -509,29 +511,14 @@ export function Avatar({
   );
 }
 
-// Monograma "R" em quadrado azul-petróleo; a perna do R termina numa seta que sobe.
-export function Logo({ size = 28 }: { size?: number }) {
+// Símbolo da marca (D · Parceria): a divisa de trás é a representada; a da frente, sempre laranja,
+// é o representante abrindo caminho. Em fundo escuro, a de trás vira papel.
+export function Logo({ size = 28, tone = "light" }: { size?: number; tone?: "light" | "dark" }) {
   return (
-    <span
-      className="inline-flex shrink-0 items-center justify-center bg-pen bg-linear-to-b from-white/15 to-transparent text-white shadow-btn"
-      style={{ width: size, height: size, borderRadius: Math.round(size * 0.28) }}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        width={Math.round(size * 0.68)}
-        height={Math.round(size * 0.68)}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2.3}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M7 19V5h5.25a3.75 3.75 0 0 1 0 7.5H7" />
-        <path d="m11 12.5 3 4 5.75-6.75" />
-        <path d="M16 9.5h3.75v3.75" />
-      </svg>
-    </span>
+    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" className="shrink-0">
+      <path fill={tone === "dark" ? "#F3F0E8" : "var(--color-ink, #15171C)"} d="M6 18H30L62 50L30 82H6L38 50Z" />
+      <path fill="#FF5B22" d="M38 18H62L94 50L62 82H38L70 50Z" />
+    </svg>
   );
 }
 
@@ -544,7 +531,7 @@ export function Switch({ on, disabled }: { on: boolean; disabled?: boolean }) {
       } ${disabled ? "opacity-60" : ""}`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow-sm transition-all ${
           on ? "left-[1.125rem]" : "left-0.5"
         }`}
       />
@@ -557,7 +544,7 @@ export function Progress({ value, max }: { value: number; max: number }) {
   const share = max > 0 ? Math.min(value / max, 1) : 0;
   return (
     <span className="block h-1.5 w-full overflow-hidden rounded-full bg-active">
-      <span className="block h-full rounded-full bg-pen transition-all" style={{ width: `${share * 100}%` }} />
+      <span className="block h-full rounded-full bg-accent transition-all" style={{ width: `${share * 100}%` }} />
     </span>
   );
 }
@@ -588,7 +575,7 @@ export function Ring({
           cy={size / 2}
           r={r}
           fill="none"
-          stroke="var(--color-pen)"
+          stroke="var(--color-accent)"
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={c}
@@ -622,7 +609,7 @@ export function EmptyState({
       <div className="relative mb-5 h-12 w-12">
         <span className="absolute inset-0 -translate-x-3 translate-y-1 -rotate-12 rounded-xl border border-line bg-subtle" />
         <span className="absolute inset-0 translate-x-3 translate-y-1 rotate-12 rounded-xl border border-line bg-subtle" />
-        <span className="absolute inset-0 flex items-center justify-center rounded-xl border border-line bg-white text-ink-2 shadow-panel">
+        <span className="absolute inset-0 flex items-center justify-center rounded-xl border border-line bg-surface text-ink-2 shadow-panel">
           <Icon name={icon} size={20} />
         </span>
       </div>
@@ -661,7 +648,7 @@ export function NewButton({
         href={href}
         scroll={false}
         aria-label={label}
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex h-14 items-center gap-2 rounded-2xl bg-pen pl-4 pr-5 text-[15px] font-medium text-white shadow-[0_8px_24px_-6px_rgb(15_76_92/0.45),0_2px_4px_rgb(20_33_42/0.12)] transition active:scale-95 sm:hidden"
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex h-14 items-center gap-2 rounded-2xl bg-accent pl-4 pr-5 text-[15px] font-semibold text-on-accent shadow-[0_8px_24px_-6px_rgb(255_91_34/0.45),0_2px_4px_rgb(21_23_28/0.14)] transition active:scale-95 sm:hidden"
       >
         <Icon name="plus" size={20} strokeWidth={2} />
         {label}
@@ -697,7 +684,7 @@ export function Tab({
       scroll={false}
       aria-current={active ? "page" : undefined}
       className={`relative -mb-px inline-flex h-11 shrink-0 items-center gap-1.5 border-b-2 text-sm font-medium transition-colors sm:h-10 ${
-        active ? "border-pen text-ink" : "border-transparent text-muted hover:text-ink-2"
+        active ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink-2"
       }`}
     >
       {children}
@@ -727,7 +714,7 @@ export function SaveBar({ children, note }: { children: ReactNode; note?: ReactN
   return (
     <>
       <div aria-hidden="true" className="h-16" />
-      <div className="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 border-t border-line bg-white/95 shadow-[0_-4px_16px_-8px_rgb(20_33_42/0.12)] backdrop-blur-xl lg:bottom-2 lg:left-60 lg:right-2 lg:rounded-b-xl">
+      <div className="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 border-t border-line bg-surface/95 shadow-[0_-4px_16px_-8px_rgb(21_23_28/0.12)] backdrop-blur-xl lg:bottom-2 lg:left-60 lg:right-2 lg:rounded-b-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-end gap-2 px-4 py-2.5 sm:px-6 lg:px-10">
           {note ? <div className="mr-auto min-w-0 text-[13px] text-muted">{note}</div> : null}
           {children}

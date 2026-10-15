@@ -4,7 +4,7 @@ export type LeadStage = "novo" | "contato_feito" | "proposta" | "ganho" | "perdi
 export const LEAD_STAGES: { value: LeadStage; label: string; dot: string }[] = [
   { value: "novo", label: "Novo", dot: "bg-faint" },
   { value: "contato_feito", label: "Contato feito", dot: "bg-info" },
-  { value: "proposta", label: "Proposta", dot: "bg-[#e09f3e]" },
+  { value: "proposta", label: "Proposta", dot: "bg-warn-dot" },
   { value: "ganho", label: "Ganho", dot: "bg-ok" },
   { value: "perdido", label: "Perdido", dot: "bg-alert" },
 ];

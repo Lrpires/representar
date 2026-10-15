@@ -28,7 +28,7 @@ function check(path: string, label: string, n: number | null, min: number, max: 
 }
 
 export async function updateProduct(id: string, formData: FormData) {
-  const { supabase, canManage } = await getContext();
+  const { supabase, canManage, canSeeCommissions } = await getContext();
   const path = here(id);
   if (!canManage) fail(path, "Só administrador e gerente podem alterar produtos.");
 
@@ -97,7 +97,7 @@ export async function updateProduct(id: string, formData: FormData) {
       order_multiple: multiple,
       lead_time_days: lead,
       ipi_pct: ipi,
-      commission_pct: commission,
+      ...(canSeeCommissions ? { commission_pct: commission } : {}),
       weight_kg: weight,
       length_cm: length,
       width_cm: width,

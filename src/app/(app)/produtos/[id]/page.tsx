@@ -44,7 +44,7 @@ export default async function ProductPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { supabase, orgId, canManage } = await getContext();
+  const { supabase, orgId, canManage, canSeeCommissions } = await getContext();
   const settings = await getSettings();
 
   const [{ data: p }, { data: variants }, { data: images }] = await Promise.all([
@@ -125,7 +125,7 @@ export default async function ProductPage({
         }
       />
 
-      <dl className="mb-6 grid max-w-5xl grid-cols-2 overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4 [&>div]:bg-white" style={{ gap: 1 }}>
+      <dl className="mb-6 grid max-w-5xl grid-cols-2 overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4 [&>div]:bg-surface" style={{ gap: 1 }}>
         <div className="p-4">
           <dt className="text-[13px] text-muted">Último preço</dt>
           <dd className="mt-1 text-lg font-semibold tabular-nums">{sales[0] ? brl(Number(sales[0].list_price)) : "—"}</dd>
@@ -228,9 +228,11 @@ export default async function ProductPage({
                 <Field label="IPI (%)">
                   <input name="ipi_pct" inputMode="decimal" defaultValue={v(p.ipi_pct)} className={inputCls} />
                 </Field>
-                <Field label="Comissão deste produto (%)" hint="Vazio = usa a regra da representada.">
-                  <input name="commission_pct" inputMode="decimal" defaultValue={v(p.commission_pct)} className={inputCls} />
-                </Field>
+                {canSeeCommissions ? (
+                  <Field label="Comissão deste produto (%)" hint="Vazio = usa a regra da representada.">
+                    <input name="commission_pct" inputMode="decimal" defaultValue={v(p.commission_pct)} className={inputCls} />
+                  </Field>
+                ) : null}
               </div>
             </Section>
 

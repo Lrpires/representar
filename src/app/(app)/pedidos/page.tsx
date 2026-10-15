@@ -163,7 +163,7 @@ export default async function OrdersPage({
       ) : (
         <>
           {/* Indicadores */}
-          <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>div]:bg-white" style={{ gap: 1 }}>
+          <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>div]:bg-surface" style={{ gap: 1 }}>
             <Kpi label="Vendido" value={brl(soldTotal)} sub={`${sold.length} ${sold.length === 1 ? "pedido" : "pedidos"}`} />
             <Kpi label="Aguardando faturamento" value={brl(toInvoiceTotal)} sub="Pedidos enviados sem nota" />
             <Kpi label="Ticket médio" value={brl(sold.length ? soldTotal / sold.length : 0)} sub="Por pedido vendido" />
@@ -183,7 +183,7 @@ export default async function OrdersPage({
             <Segmented>
               {lateList.length ? (
                 <FilterPill href={qs({ status: "atraso" })} active={sp.status === "atraso"} count={lateList.length}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${criticalCount ? "bg-alert" : "bg-[#e09f3e]"}`} />
+                  <span className={`h-1.5 w-1.5 rounded-full ${criticalCount ? "bg-alert" : "bg-warn-dot"}`} />
                   Em atraso
                 </FilterPill>
               ) : null}
@@ -315,7 +315,7 @@ function Kpi({ label, value, sub, tone }: { label: string; value: string; sub: s
   return (
     <div className="min-w-0 p-4 sm:p-5">
       <dt className="flex items-center gap-1.5 truncate text-[13px] text-muted">
-        {tone ? <span className={`h-1.5 w-1.5 rounded-full ${tone === "ok" ? "bg-ok" : tone === "alert" ? "bg-alert" : "bg-[#e09f3e]"}`} /> : null}
+        {tone ? <span className={`h-1.5 w-1.5 rounded-full ${tone === "ok" ? "bg-ok" : tone === "alert" ? "bg-alert" : "bg-warn-dot"}`} /> : null}
         {label}
       </dt>
       <dd className={`mt-1.5 truncate text-lg font-semibold tabular-nums tracking-[-0.02em] sm:text-xl ${tone === "ok" ? "text-ok" : tone === "alert" ? "text-alert" : "text-ink"}`}>

@@ -23,16 +23,34 @@ function done(formData: FormData, message: string): never {
   redirect(`${b}${b.includes("?") ? "&" : "?"}ok=${encodeURIComponent(message)}`);
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const idOrNull = (formData: FormData, key: string) => {
+  const v = text(formData, key);
+  return UUID.test(v) ? v : null;
+};
+
 function readPayable(formData: FormData, errPath: string) {
   const description = text(formData, "description");
   if (!description) fail(errPath, "Informe a descrição da conta.");
-  const category = text(formData, "category");
+  // Com a migração 018: tipo de despesa, centro de custo, forma de pagamento e fornecedor.
+  // Sem ela: a categoria antiga.
+  const typeId = idOrNull(formData, "type_id");
+  const extra = formData.has("type_id")
+    ? {
+        type_id: typeId,
+        cost_center_id: idOrNull(formData, "cost_center_id"),
+        payment_method_id: idOrNull(formData, "payment_method_id"),
+        supplier: optional(formData, "supplier"),
+      }
+    : {};
+  if (formData.has("type_id") && !typeId) fail(errPath, "Escolha o tipo de despesa.");
+  const category = formData.has("type_id") ? "outros" : text(formData, "category");
   if (!PAYABLE_CATEGORIES.some((c) => c.value === category)) fail(errPath, "Escolha a categoria.");
   const amount = parseNumber(text(formData, "amount"));
   if (!Number.isFinite(amount) || amount <= 0) fail(errPath, "Informe o valor da conta.");
   const due = text(formData, "due_date");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) fail(errPath, "Informe o vencimento.");
-  return { description, category, amount: round2(amount), due_date: due, notes: optional(formData, "notes") };
+  return { description, category, amount: round2(amount), due_date: due, notes: optional(formData, "notes"), ...extra };
 }
 
 // Soma meses mantendo o dia (31/01 + 1 mês = 28 ou 29/02).
@@ -60,6 +78,7 @@ export async function createPayable(formData: FormData) {
   }));
   const { error } = await supabase.from("payables").insert(rows);
   if (error) {
+    if (/type_id|cost_center_id|payment_method_id|supplier/.test(error.message)) fail(errPath, "Falta rodar a migração 018 no Supabase.");
     if (error.message.includes("payables")) fail(errPath, "Falta rodar a migração 009 no Supabase.");
     fail(errPath, `Não foi possível salvar: ${error.message}`);
   }

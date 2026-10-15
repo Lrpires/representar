@@ -13,7 +13,7 @@ export default async function NewOrderPage({
   searchParams: Promise<{ cliente?: string }>;
 }) {
   const sp = await searchParams;
-  const { role } = await getContext();
+  const { role, canSeeCommissions } = await getContext();
   if (role === "finance") redirect("/pedidos");
 
   const data = await loadEditorData();
@@ -40,6 +40,7 @@ export default async function NewOrderPage({
         </EmptyState>
       ) : (
         <OrderEditor
+          showCommission={canSeeCommissions}
           initial={{
             customer_id: customer?.id ?? "",
             principal_id: principalId,

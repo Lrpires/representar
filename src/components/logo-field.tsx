@@ -77,7 +77,7 @@ export function LogoField({
 
   const box = (
     <span
-      className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-white"
+      className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-surface"
       style={{ width: size, height: size }}
     >
       {url ? (
@@ -87,7 +87,7 @@ export function LogoField({
         <Avatar name={name} size={size - 2} />
       )}
       {busy ? (
-        <span className="absolute inset-0 flex items-center justify-center bg-white/70">
+        <span className="absolute inset-0 flex items-center justify-center bg-surface/70">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-pen border-r-transparent" />
         </span>
       ) : null}
@@ -107,12 +107,12 @@ export function LogoField({
         title={url ? "Trocar ou remover a logo" : "Enviar logo"}
       >
         {box}
-        <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-line bg-white text-muted shadow-field transition group-hover:text-pen">
+        <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-field transition group-hover:text-pen">
           <Icon name={url ? "edit" : "upload"} size={12} />
         </span>
       </button>
       {menu ? (
-        <span className="absolute left-0 top-[calc(100%+6px)] z-40 w-44 animate-pop-in rounded-lg bg-white p-1 shadow-menu">
+        <span className="absolute left-0 top-[calc(100%+6px)] z-40 w-44 animate-pop-in rounded-lg bg-surface p-1 shadow-menu">
           <button type="button" onClick={() => input.current?.click()} className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] hover:bg-hover">
             <Icon name="upload" size={14} className="text-muted" />
             Trocar logo

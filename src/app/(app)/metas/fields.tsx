@@ -56,7 +56,7 @@ export function OfficeGoalFields({ month }: { month: string }) {
               type="button"
               onClick={() => setPeriod(p.value)}
               className={`h-9 rounded-lg px-3 text-[13px] font-medium transition sm:h-8 ${
-                period === p.value ? "bg-white text-ink shadow-panel" : "text-muted hover:text-ink-2"
+                period === p.value ? "bg-surface text-ink shadow-panel" : "text-muted hover:text-ink-2"
               }`}
             >
               {p.label}
@@ -211,7 +211,7 @@ export function DistributionEditor({
         value={values[k] ?? ""}
         onChange={(e) => set(k, e.target.value)}
         placeholder="0"
-        className={`h-11 w-full rounded-md border border-line-strong bg-white pr-2.5 text-right text-base tabular-nums outline-none transition focus:border-pen focus:ring-[3px] focus:ring-pen/15 sm:h-9 sm:text-sm ${money ? "pl-8" : "pl-2.5"}`}
+        className={`h-11 w-full rounded-md border border-line-strong bg-surface pr-2.5 text-right text-base tabular-nums outline-none transition focus:border-accent focus:ring-[3px] focus:ring-accent/25 sm:h-9 sm:text-sm ${money ? "pl-8" : "pl-2.5"}`}
       />
     </span>
   );
@@ -219,7 +219,7 @@ export function DistributionEditor({
   return (
     <>
       {/* Placar da distribuição */}
-      <div className={`rounded-lg border p-3 sm:col-span-2 ${ok ? "border-ok/30 bg-ok-soft" : "border-[#e09f3e]/40 bg-warn-soft"}`}>
+      <div className={`rounded-lg border p-3 sm:col-span-2 ${ok ? "border-ok/30 bg-ok-soft" : "border-warn-dot/40 bg-warn-soft"}`}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <span className={`text-[13px] font-medium ${ok ? "text-ok" : "text-warn"}`}>
             {ok ? "Distribuição fechada" : diff > 0 ? `Faltam ${show(diff)}` : sum > 0 ? `Passou ${show(-diff)}` : "Distribua o total"}
@@ -229,9 +229,9 @@ export function DistributionEditor({
             <span className="text-muted"> de {show(target)}</span>
           </span>
         </div>
-        <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-white/70">
+        <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-surface/70">
           <span
-            className={`block h-full rounded-full ${ok ? "bg-ok" : sum > target ? "bg-alert" : "bg-[#e09f3e]"}`}
+            className={`block h-full rounded-full ${ok ? "bg-ok" : sum > target ? "bg-alert" : "bg-warn-dot"}`}
             style={{ width: `${target ? Math.min(sum / target, 1) * 100 : 0}%` }}
           />
         </span>
@@ -302,7 +302,7 @@ export function DistributionEditor({
                 const mismatch = sg != null && rowSum > 0 && !closes(rowSum, sg);
                 return (
                   <tr key={r.id} className="border-b border-line last:border-b-0">
-                    <td className="sticky left-0 bg-white px-3 py-2">
+                    <td className="sticky left-0 bg-surface px-3 py-2">
                       <span className="block max-w-[9rem] truncate font-medium">{r.name}</span>
                       {sg != null ? <span className="block text-[11px] text-muted">Meta dele: {show(sg)}</span> : null}
                     </td>

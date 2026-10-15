@@ -54,7 +54,7 @@ export default async function PrincipalPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { supabase, canManage, orgId } = await getContext();
+  const { supabase, canManage, orgId, canSeeCommissions: seeComm } = await getContext();
 
   const [{ data: p }, { data: contacts }] = await Promise.all([
     supabase.from("principals").select("*").eq("id", id).maybeSingle(),
@@ -90,13 +90,15 @@ export default async function PrincipalPage({
 
       <div className="grid max-w-5xl gap-6 lg:gap-0">
         {/* ---------- Resumo da regra de comissão ---------- */}
-        <div className="flex gap-3 rounded-xl border border-line bg-white p-5">
+        {seeComm ? (
+        <div className="flex gap-3 rounded-xl border border-line bg-surface p-5">
           <Avatar name={p.name} size={44} />
           <div className="min-w-0">
             <p className="text-[13px] font-medium text-pen-ink">Como esta fábrica paga a sua comissão</p>
             <p className="mt-1 text-sm leading-relaxed">{commissionSummary(p)}</p>
           </div>
         </div>
+        ) : null}
 
         <form action={save} className="grid gap-6 lg:gap-0">
           <fieldset disabled={!canManage} className="m-0 grid min-w-0 gap-6 border-0 p-0 lg:gap-0">
@@ -158,6 +160,7 @@ export default async function PrincipalPage({
               </div>
             </Section>
 
+            {seeComm ? (
             <Section
               icon="percent"
               title="Comissão"
@@ -214,6 +217,7 @@ export default async function PrincipalPage({
                 </Field>
               </div>
             </Section>
+            ) : null}
 
             <Section icon="file" title="Anotações">
               <textarea name="notes" rows={4} defaultValue={v(p.notes)} className={`${inputCls} h-auto py-3`} />

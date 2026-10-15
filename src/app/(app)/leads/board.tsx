@@ -94,7 +94,7 @@ export function LeadBoard({ leads, today, qs }: { leads: BoardLead[]; today: str
                       <Link
                         href={`/leads?lead=${l.id}${qs ? `&${qs}` : ""}`}
                         scroll={false}
-                        className={`block rounded-lg border bg-white p-3 shadow-field transition hover:border-line-strong hover:shadow-panel ${
+                        className={`block rounded-lg border bg-surface p-3 shadow-field transition hover:border-line-strong hover:shadow-panel ${
                           late ? "border-alert/40" : "border-line"
                         }`}
                       >

@@ -13,7 +13,7 @@ export function WhatsAppButton({ phone, label }: { phone: string | null; label?:
       aria-label="Abrir WhatsApp"
       title="Abrir WhatsApp"
       className={`relative z-10 inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg text-[#1f8f5a] transition hover:bg-ok-soft ${
-        label ? "h-11 border border-line-strong bg-white px-3.5 text-sm font-medium shadow-field sm:h-8 sm:px-3 sm:text-[13px]" : "h-10 w-10 sm:h-8 sm:w-8"
+        label ? "h-11 border border-line-strong bg-surface px-3.5 text-sm font-medium shadow-field sm:h-8 sm:px-3 sm:text-[13px]" : "h-10 w-10 sm:h-8 sm:w-8"
       }`}
     >
       <Icon name="whatsapp" size={label ? 16 : 18} />

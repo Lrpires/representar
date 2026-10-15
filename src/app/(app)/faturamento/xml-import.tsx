@@ -188,7 +188,7 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
                         disabled={left === 0}
                         placeholder="0"
                         onChange={(e) => setQty((q) => ({ ...q, [i.id]: e.target.value }))}
-                        className="h-10 w-24 shrink-0 rounded-md border border-line-strong bg-white px-2 text-right text-sm tabular-nums outline-none focus:border-pen focus:ring-[3px] focus:ring-pen/15 disabled:bg-subtle sm:h-8"
+                        className="h-10 w-24 shrink-0 rounded-md border border-line-strong bg-surface px-2 text-right text-sm tabular-nums outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/25 disabled:bg-subtle sm:h-8"
                       />
                     </li>
                   );

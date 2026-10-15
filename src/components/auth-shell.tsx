@@ -6,13 +6,13 @@ import { Icon, type IconName } from "./icons";
 const points: { icon: IconName; title: string; text: string }[] = [
   { icon: "receipt", title: "Pedido em menos de 2 minutos", text: "Cliente, representada e itens. Total e comissão calculados na hora." },
   { icon: "percent", title: "Comissão sob controle", text: "O previsto, o que falta receber e o que já caiu, por representada." },
-  { icon: "calendar", title: "Nenhum cliente esquecido", text: "Próximo contato agendado para cada lead e cliente." },
+  { icon: "calendar", title: "Nenhum cliente esquecido", text: "Próximo contato agendado para cada prospecto e cliente." },
 ];
 
 // Moldura das telas de entrada: formulário à esquerda e apresentação à direita (computador).
 export function AuthShell({ children, showcase = true }: { children: ReactNode; showcase?: boolean }) {
   return (
-    <main className={`grid min-h-dvh bg-white ${showcase ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]" : ""}`}>
+    <main className={`grid min-h-dvh bg-surface ${showcase ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]" : ""}`}>
       <div className="flex flex-col px-6 py-8 sm:px-10">
         <Link href="/" className="flex w-fit items-center gap-2.5" aria-label="Representar, página inicial">
           <Logo size={30} />
@@ -25,19 +25,23 @@ export function AuthShell({ children, showcase = true }: { children: ReactNode; 
       </div>
 
       {showcase ? (
-        <aside className="relative hidden overflow-hidden bg-pen lg:flex lg:flex-col lg:justify-center lg:px-16">
+        <aside className="relative hidden overflow-hidden bg-side lg:flex lg:flex-col lg:justify-center lg:px-16">
           <div
             aria-hidden="true"
             className="absolute inset-0 opacity-[0.14] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px] [mask-image:radial-gradient(ellipse_at_70%_40%,black_20%,transparent_70%)]"
           />
-          <div
-            aria-hidden="true"
-            className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-[#2e9e6b] opacity-20 blur-3xl"
-          />
+          {/* Curva de alta: meses fechados até a meta (laranja) */}
+          <svg aria-hidden="true" viewBox="0 0 400 240" className="absolute -right-6 bottom-16 w-[26rem] text-white/50">
+            <path d="M20 210 L150 150 L230 175 L380 40" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="6 7" />
+            <circle cx="20" cy="210" r="7" fill="currentColor" />
+            <circle cx="150" cy="150" r="7" fill="currentColor" />
+            <circle cx="230" cy="175" r="7" fill="currentColor" />
+            <circle cx="380" cy="40" r="13" fill="#FF5B22" />
+          </svg>
           <div className="relative max-w-md">
-            <p className="text-[13px] font-medium text-[#9fd9bf]">Para representantes comerciais</p>
+            <p className="font-mono text-xs uppercase tracking-[0.08em] text-[#a8a49b]">01 — Para representantes comerciais</p>
             <h2 className="mt-3 text-[1.875rem] font-semibold leading-[1.18] tracking-[-0.02em] text-white">
-              Pedidos, clientes, comissões e contas em um só lugar.
+              Mais pedidos, menos planilha.
             </h2>
             <ul className="mt-10 grid gap-3">
               {points.map((p) => (

@@ -26,14 +26,7 @@ function inRange(n: number | null, min: number, max: number) {
   return n === null || (!Number.isNaN(n) && n >= min && n <= max);
 }
 
-export async function updatePrincipal(id: string, formData: FormData) {
-  const { supabase, canManage } = await getContext();
-  const path = here(id);
-  if (!canManage) fail(path, "Só administrador e gerente podem alterar representadas.");
-
-  const name = text(formData, "name");
-  if (!name) fail(path, "Informe o nome da representada.");
-
+function readCommissionRule(formData: FormData, path: string) {
   const commission = num(formData, "commission");
   if (!inRange(commission, 0, 100)) fail(path, "A comissão deve ser um número entre 0 e 100.");
 
@@ -64,6 +57,33 @@ export async function updatePrincipal(id: string, formData: FormData) {
     chargebackDays = num(formData, "commission_chargeback_days");
     if (!inRange(chargebackDays, 0, 730)) fail(path, "Os dias de estorno devem ficar entre 0 e 730.");
   }
+
+  return {
+    default_commission_pct: commission,
+    commission_base: base,
+    commission_trigger: trigger,
+    commission_release: release,
+    commission_close_mode: closeMode,
+    commission_close_day: closeDay,
+    commission_days_after: daysAfter,
+    commission_pay_method: pay,
+    commission_needs_invoice: formData.get("commission_needs_invoice") === "on",
+    commission_chargeback: chargeback,
+    commission_chargeback_days: chargebackDays,
+    commission_notes: optional(formData, "commission_notes"),
+  };
+}
+
+export async function updatePrincipal(id: string, formData: FormData) {
+  const { supabase, canManage, canSeeCommissions } = await getContext();
+  const path = here(id);
+  if (!canManage) fail(path, "Só administrador e gerente podem alterar representadas.");
+
+  const name = text(formData, "name");
+  if (!name) fail(path, "Informe o nome da representada.");
+
+  // A regra de comissão só é lida e salva por quem enxerga comissões (o gerente não vê esses campos).
+  const commissionRule = canSeeCommissions ? readCommissionRule(formData, path) : {};
 
   const cnpjRaw = text(formData, "cnpj");
   if (cnpjRaw && !isValidCnpj(cnpjRaw)) fail(path, "CNPJ inválido");
@@ -98,18 +118,7 @@ export async function updatePrincipal(id: string, formData: FormData) {
       territory: optional(formData, "territory"),
       contact: optional(formData, "contact"),
       notes: optional(formData, "notes"),
-      default_commission_pct: commission,
-      commission_base: base,
-      commission_trigger: trigger,
-      commission_release: release,
-      commission_close_mode: closeMode,
-      commission_close_day: closeDay,
-      commission_days_after: daysAfter,
-      commission_pay_method: pay,
-      commission_needs_invoice: formData.get("commission_needs_invoice") === "on",
-      commission_chargeback: chargeback,
-      commission_chargeback_days: chargebackDays,
-      commission_notes: optional(formData, "commission_notes"),
+      ...commissionRule,
     })
     .eq("id", id);
   if (error) fail(path, `Não foi possível salvar: ${error.message}`);

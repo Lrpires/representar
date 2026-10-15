@@ -51,11 +51,11 @@ export function Kpi({
     </>
   );
   return href ? (
-    <Link href={href} className="block min-w-0 bg-white p-4 transition-colors hover:bg-subtle sm:p-5">
+    <Link href={href} className="block min-w-0 bg-surface p-4 transition-colors hover:bg-subtle sm:p-5">
       {body}
     </Link>
   ) : (
-    <div className="min-w-0 bg-white p-4 sm:p-5">{body}</div>
+    <div className="min-w-0 bg-surface p-4 sm:p-5">{body}</div>
   );
 }
 
@@ -72,7 +72,7 @@ export function RankList({
   more?: { href: string; label: string };
 }) {
   return (
-    <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-white">
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-surface">
       <header className="flex items-center justify-between border-b border-line px-4 py-3">
         <h2 className="text-sm font-semibold">{title}</h2>
         {more ? (
@@ -96,7 +96,7 @@ export function RankList({
                 </span>
                 <span className="mt-1.5 flex items-center gap-2 pl-6">
                   <span className="block h-1.5 flex-1 overflow-hidden rounded-full bg-active">
-                    <span className="block h-full rounded-full bg-pen" style={{ width: `${Math.max(r.share * 100, 1.5)}%` }} />
+                    <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(r.share * 100, 1.5)}%` }} />
                   </span>
                   <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-muted">{Math.round(r.share * 100)}%</span>
                 </span>

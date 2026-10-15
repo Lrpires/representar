@@ -169,7 +169,8 @@ export async function registerInvoice(orderId: string, formData: FormData) {
   revalidatePath("/pedidos");
   revalidatePath("/comissoes");
   revalidatePath("/faturamento");
-  const msg = "Faturamento registrado. A comissão ficou a receber.";
+  const { canSeeCommissions } = await getContext();
+  const msg = canSeeCommissions ? "Faturamento registrado. A comissão ficou a receber." : "Faturamento registrado.";
   redirect(fromBilling ? `/faturamento?ok=${encodeURIComponent(msg)}` : `${here(orderId)}?ok=${encodeURIComponent(msg)}`);
 }
 
@@ -184,7 +185,9 @@ export async function deleteInvoice(orderId: string, invoiceId: string) {
   const sellerId = (inv.orders as unknown as { seller_id: string } | null)?.seller_id;
   if (!isBackOffice && sellerId !== user.id) fail(here(orderId), "Você não pode excluir esta nota.");
   const commission = (inv.commissions as unknown as { status: string }[] | null)?.[0];
-  if (commission?.status === "recebida") {
+  // Quem não vê comissões pergunta ao banco se a desta nota já foi recebida.
+  const { data: paidRpc } = await supabase.rpc("invoice_commission_received", { p_invoice: invoiceId });
+  if (commission?.status === "recebida" || paidRpc === true) {
     fail(here(orderId), "A comissão desta nota já foi recebida. Desmarque o recebimento em Comissões antes de excluir.");
   }
 

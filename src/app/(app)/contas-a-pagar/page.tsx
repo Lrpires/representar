@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getContext } from "@/lib/session";
 import { createPayable, updatePayable, markPaid, undoPaid, deletePayable } from "./actions";
-import { PAYABLE_CATEGORIES, categoryInfo } from "@/lib/payables";
+import { PAYABLE_CATEGORIES, categoryInfo, type PayableOption } from "@/lib/payables";
 import { brl, formatDate, todayISO } from "@/lib/format";
 import { priceText } from "@/lib/orders";
 import { monthInfo } from "@/lib/month";
@@ -21,7 +21,11 @@ const PATH = "/contas-a-pagar";
 type Payable = {
   id: string; description: string; category: string; amount: number; due_date: string;
   status: string; paid_at: string | null; notes: string | null;
+  type_id?: string | null; cost_center_id?: string | null; payment_method_id?: string | null; supplier?: string | null;
 };
+
+// Listas do escritório (tipos, centros de custo, formas de pagamento). Sem a migração 018, usa as categorias antigas.
+type Lists = { legacy: boolean; byId: Map<string, PayableOption>; tipos: PayableOption[]; centros: PayableOption[]; formas: PayableOption[] };
 
 const addDays = (iso: string, n: number) => {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -32,7 +36,7 @@ const addDays = (iso: string, n: number) => {
 export default async function PayablesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string; status?: string; cat?: string; novo?: string; editar?: string; pagar?: string; ok?: string; erro?: string }>;
+  searchParams: Promise<{ mes?: string; status?: string; cat?: string; tipo?: string; centro?: string; novo?: string; editar?: string; pagar?: string; ok?: string; erro?: string }>;
 }) {
   const sp = await searchParams;
   const { supabase, isBackOffice } = await getContext();
@@ -41,23 +45,42 @@ export default async function PayablesPage({
   const today = todayISO();
   const in7 = addDays(today, 7);
 
+  const { data: optionData, error: optionError } = await supabase
+    .from("payable_options")
+    .select("id, kind, name, active, sort")
+    .order("sort");
+  const all = (optionData ?? []) as PayableOption[];
+  const lists: Lists = {
+    legacy: !!optionError,
+    byId: new Map(all.map((o) => [o.id, o] as const)),
+    tipos: all.filter((o) => o.kind === "tipo"),
+    centros: all.filter((o) => o.kind === "centro"),
+    formas: all.filter((o) => o.kind === "forma"),
+  };
+
   let query = supabase
     .from("payables")
-    .select("id, description, category, amount, due_date, status, paid_at, notes")
+    .select(
+      lists.legacy
+        ? "id, description, category, amount, due_date, status, paid_at, notes"
+        : "id, description, category, amount, due_date, status, paid_at, notes, type_id, cost_center_id, payment_method_id, supplier",
+    )
     .order("due_date");
   // "Vencidas" mostra as de qualquer mês.
   query =
     sp.status === "vencidas"
       ? query.eq("status", "pendente").lt("due_date", today)
       : query.gte("due_date", month.start).lte("due_date", month.end);
-  if (sp.cat) query = query.eq("category", sp.cat);
+  if (lists.legacy && sp.cat) query = query.eq("category", sp.cat);
+  if (!lists.legacy && sp.tipo) query = query.eq("type_id", sp.tipo);
+  if (!lists.legacy && sp.centro) query = query.eq("cost_center_id", sp.centro);
 
   const [{ data, error }, { data: overdueData }, { data: weekData }] = await Promise.all([
     query,
     supabase.from("payables").select("amount").eq("status", "pendente").lt("due_date", today),
     supabase.from("payables").select("amount").eq("status", "pendente").gte("due_date", today).lte("due_date", in7),
   ]);
-  const rows = (data ?? []) as Payable[];
+  const rows = (data ?? []) as unknown as Payable[];
   const overdue = (r: Payable) => r.status === "pendente" && r.due_date < today;
   const filtered = rows.filter((r) =>
     !sp.status || sp.status === "vencidas" ? true : sp.status === "pendentes" ? r.status === "pendente" : r.status === "paga",
@@ -70,7 +93,7 @@ export default async function PayablesPage({
 
   const qs = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
-    const merged = { mes: sp.mes, status: sp.status, cat: sp.cat, ...patch };
+    const merged = { mes: sp.mes, status: sp.status, cat: sp.cat, tipo: sp.tipo, centro: sp.centro, ...patch };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `?${s}` : "";
@@ -79,15 +102,29 @@ export default async function PayablesPage({
   const closeHref = `${PATH}${qs({})}`;
   const editing = rows.find((r) => r.id === sp.editar);
   const paying = rows.find((r) => r.id === sp.pagar && r.status === "pendente");
+  const typeLabel = (r: Payable) =>
+    lists.legacy ? categoryInfo(r.category).label : (r.type_id && lists.byId.get(r.type_id)?.name) || categoryInfo(r.category).label;
+  const detail = (r: Payable) =>
+    lists.legacy
+      ? ""
+      : [r.cost_center_id && lists.byId.get(r.cost_center_id)?.name, r.payment_method_id && lists.byId.get(r.payment_method_id)?.name]
+          .filter(Boolean)
+          .join(" · ");
+  // Quanto cada centro de custo gastou no mês (pagas + a pagar).
+  const byCenter = lists.legacy
+    ? []
+    : [...rows.reduce((m, r) => m.set(r.cost_center_id ?? "", (m.get(r.cost_center_id ?? "") ?? 0) + Number(r.amount)), new Map<string, number>())]
+        .sort((a, b) => b[1] - a[1]);
+  const monthTotal = rows.reduce((s, r) => s + Number(r.amount), 0);
 
   return (
     <>
       <PageHeader
         title="Contas a pagar"
-        hint="Despesas do escritório: combustível, hospedagem, impostos e o que mais sair do caixa."
+        hint="Despesas do escritório por tipo, centro de custo e forma de pagamento. As listas ficam em Configurações."
         action={
           <>
-            <div className="hidden items-center gap-1 rounded-lg border border-line-strong bg-white p-0.5 shadow-field sm:flex">
+            <div className="hidden items-center gap-1 rounded-lg border border-line-strong bg-surface p-0.5 shadow-field sm:flex">
               <Link href={`${PATH}${qs({ mes: month.prev })}`} className={`${iconBtn} h-7 w-7`} aria-label="Mês anterior">
                 <Icon name="chevron-left" size={16} />
               </Link>
@@ -102,7 +139,7 @@ export default async function PayablesPage({
       />
 
       {/* Seletor de mês no celular */}
-      <div className="-mt-3 mb-4 flex items-center justify-between rounded-lg border border-line-strong bg-white p-0.5 sm:hidden">
+      <div className="-mt-3 mb-4 flex items-center justify-between rounded-lg border border-line-strong bg-surface p-0.5 sm:hidden">
         <Link href={`${PATH}${qs({ mes: month.prev })}`} className={iconBtn} aria-label="Mês anterior">
           <Icon name="chevron-left" size={18} />
         </Link>
@@ -123,7 +160,7 @@ export default async function PayablesPage({
         </EmptyState>
       ) : (
         <>
-          <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>div]:bg-white" style={{ gap: 1 }}>
+          <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>div]:bg-surface" style={{ gap: 1 }}>
             <div className="p-4">
               <dt className="text-[13px] text-muted">A pagar no mês</dt>
               <dd className="mt-1 text-xl font-semibold tabular-nums">{brl(toPay)}</dd>
@@ -136,7 +173,7 @@ export default async function PayablesPage({
             </Link>
             <div className="p-4">
               <dt className="flex items-center gap-1.5 text-[13px] text-muted">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#e09f3e]" />Próximos 7 dias
+                <span className="h-1.5 w-1.5 rounded-full bg-warn-dot" />Próximos 7 dias
               </dt>
               <dd className="mt-1 text-xl font-semibold tabular-nums">{brl(weekTotal)}</dd>
             </div>
@@ -147,6 +184,27 @@ export default async function PayablesPage({
               <dd className="mt-1 text-xl font-semibold tabular-nums text-ok">{brl(paid)}</dd>
             </div>
           </dl>
+
+          {byCenter.length > 1 || (byCenter.length === 1 && byCenter[0][0]) ? (
+            <section className="mb-5 rounded-xl border border-line bg-surface p-4">
+              <p className="mb-3 text-[13px] font-medium text-ink-2">Por centro de custo no mês</p>
+              <ul className="grid gap-x-8 gap-y-2.5 sm:grid-cols-2">
+                {byCenter.slice(0, 8).map(([id, v]) => (
+                  <li key={id || "sem"}>
+                    <Link href={`${PATH}${qs({ centro: id || undefined })}`} className="group block">
+                      <span className="flex items-baseline justify-between gap-3 text-[13px]">
+                        <span className="truncate group-hover:text-ink">{id ? lists.byId.get(id)?.name ?? "—" : "Sem centro de custo"}</span>
+                        <span className="shrink-0 font-mono tabular-nums">{brl(v)}</span>
+                      </span>
+                      <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-active">
+                        <span className="block h-full rounded-full bg-accent" style={{ width: `${monthTotal ? (v / monthTotal) * 100 : 0}%` }} />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Segmented>
@@ -163,14 +221,21 @@ export default async function PayablesPage({
                 Pagas
               </FilterPill>
             </Segmented>
-            <div className="ml-auto w-full sm:w-auto">
-              <UrlSelect
-                param="cat"
-                ariaLabel="Categoria"
-                allLabel="Todas as categorias"
-                options={PAYABLE_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
-              />
-            </div>
+            {lists.legacy ? (
+              <div className="ml-auto w-full sm:w-auto">
+                <UrlSelect
+                  param="cat"
+                  ariaLabel="Categoria"
+                  allLabel="Todas as categorias"
+                  options={PAYABLE_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+                />
+              </div>
+            ) : (
+              <div className="ml-auto grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+                <UrlSelect param="tipo" ariaLabel="Tipo de despesa" allLabel="Todos os tipos" options={lists.tipos.map((o) => ({ value: o.id, label: o.name }))} />
+                <UrlSelect param="centro" ariaLabel="Centro de custo" allLabel="Todos os centros" options={lists.centros.map((o) => ({ value: o.id, label: o.name }))} />
+              </div>
+            )}
           </div>
 
           {filtered.length === 0 ? (
@@ -189,7 +254,7 @@ export default async function PayablesPage({
                   <tr>
                     <th className={th}>Vencimento</th>
                     <th className={th}>Descrição</th>
-                    <th className={th}>Categoria</th>
+                    <th className={th}>{lists.legacy ? "Categoria" : "Tipo"}</th>
                     <th className={`${th} text-right`}>Valor</th>
                     <th className={th}>Situação</th>
                     <th className={`${th} w-48 text-right`}>
@@ -200,7 +265,6 @@ export default async function PayablesPage({
                 <tbody>
                   {filtered.map((r) => {
                     const late = overdue(r);
-                    const cat = categoryInfo(r.category);
                     return (
                       <tr key={r.id} className={`${tr} ${late ? "bg-alert-soft/50" : ""}`}>
                         <td className={`${td} whitespace-nowrap tabular-nums ${late ? "font-medium text-alert" : "text-ink-2"}`}>
@@ -210,13 +274,11 @@ export default async function PayablesPage({
                           <Link href={`${PATH}${qs({ editar: r.id })}`} scroll={false} className="block truncate font-medium hover:text-pen">
                             {r.description}
                           </Link>
-                          {r.notes ? <p className="truncate text-xs text-muted">{r.notes}</p> : null}
+                          {r.supplier || r.notes ? <p className="truncate text-xs text-muted">{[r.supplier, r.notes].filter(Boolean).join(" · ")}</p> : null}
                         </td>
                         <td className={td}>
-                          <span className="inline-flex items-center gap-1.5 text-ink-2">
-                            <Icon name={cat.icon} size={14} className="text-faint" />
-                            {cat.label}
-                          </span>
+                          <span className="block text-ink-2">{typeLabel(r)}</span>
+                          {detail(r) ? <span className="block truncate text-xs text-muted">{detail(r)}</span> : null}
                         </td>
                         <td className={`${td} text-right font-semibold tabular-nums ${late ? "text-alert" : ""}`}>{brl(Number(r.amount))}</td>
                         <td className={td}>
@@ -257,7 +319,7 @@ export default async function PayablesPage({
                             <span className="block truncate text-[15px] font-medium">{r.description}</span>
                             <span className={`block text-[13px] tabular-nums ${late ? "font-medium text-alert" : "text-muted"}`}>
                               {late ? "Venceu em " : "Vence em "}
-                              {formatDate(r.due_date)}
+                              {formatDate(r.due_date)} · {typeLabel(r)}
                             </span>
                           </span>
                         </span>
@@ -281,7 +343,7 @@ export default async function PayablesPage({
         <SheetForm action={createPayable} closeHref={closeHref} submitLabel="Salvar conta">
           <input type="hidden" name="back" value={backQs} />
           <ErrorNote message={sp.erro} />
-          <PayableFields today={today} />
+          <PayableFields today={today} lists={lists} />
           <Field label="Repetir" hint="Para contas fixas, como aluguel ou telefone.">
             <select name="repeat" defaultValue="1" className={inputCls}>
               <option value="1">Só esta vez</option>
@@ -304,7 +366,7 @@ export default async function PayablesPage({
           <SheetForm action={updatePayable.bind(null, editing.id)} closeHref={closeHref} submitLabel="Salvar alterações">
             <input type="hidden" name="back" value={backQs} />
             <ErrorNote message={sp.erro} />
-            <PayableFields today={today} row={editing} />
+            <PayableFields today={today} row={editing} lists={lists} />
             <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-alert/20 p-3 sm:col-span-2">
               <p className="text-[13px] text-muted">Excluir apaga só esta conta.</p>
               <ConfirmButton
@@ -335,21 +397,63 @@ export default async function PayablesPage({
   );
 }
 
-function PayableFields({ today, row }: { today: string; row?: Payable }) {
+function PayableFields({ today, row, lists }: { today: string; row?: Payable; lists: Lists }) {
+  // Itens arquivados só aparecem se a conta já usava.
+  const opts = (items: PayableOption[], current?: string | null) => items.filter((o) => o.active || o.id === current);
   return (
     <>
       <Field label="Descrição" className="sm:col-span-2">
         <input name="description" required defaultValue={row?.description ?? ""} placeholder="Ex.: Combustível viagem Caruaru" className={inputCls} />
       </Field>
-      <Field label="Categoria">
-        <select name="category" defaultValue={row?.category ?? "combustivel"} className={inputCls}>
-          {PAYABLE_CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {lists.legacy ? (
+        <Field label="Categoria">
+          <select name="category" defaultValue={row?.category ?? "combustivel"} className={inputCls}>
+            {PAYABLE_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : (
+        <>
+          <Field label="Tipo de despesa">
+            <select name="type_id" required defaultValue={row?.type_id ?? ""} className={inputCls}>
+              <option value="" disabled>
+                Escolha…
+              </option>
+              {opts(lists.tipos, row?.type_id).map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Centro de custo">
+            <select name="cost_center_id" defaultValue={row?.cost_center_id ?? ""} className={inputCls}>
+              <option value="">Nenhum</option>
+              {opts(lists.centros, row?.cost_center_id).map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Forma de pagamento">
+            <select name="payment_method_id" defaultValue={row?.payment_method_id ?? ""} className={inputCls}>
+              <option value="">Nenhuma</option>
+              {opts(lists.formas, row?.payment_method_id).map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Fornecedor" hint="Opcional.">
+            <input name="supplier" defaultValue={row?.supplier ?? ""} placeholder="Ex.: Posto Ipiranga" className={inputCls} />
+          </Field>
+        </>
+      )}
       <Field label="Valor (R$)">
         <input
           name="amount"

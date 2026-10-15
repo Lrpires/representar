@@ -33,7 +33,7 @@ export default async function OrderPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { supabase, user, canManage, isBackOffice, role } = await getContext();
+  const { supabase, user, canManage, isBackOffice, role, canSeeCommissions } = await getContext();
   const settings = await getSettings();
 
   const { data: o } = await supabase
@@ -141,7 +141,7 @@ export default async function OrderPage({
       {aging && aging.level !== "ok" ? (
         <div
           className={`mb-4 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-sm ${
-            aging.level === "critico" ? "border-alert/30 bg-alert-soft text-alert" : "border-[#e09f3e]/40 bg-warn-soft text-warn"
+            aging.level === "critico" ? "border-alert/30 bg-alert-soft text-alert" : "border-warn-dot/40 bg-warn-soft text-warn"
           }`}
         >
           <Icon name="alert" size={18} />
@@ -158,7 +158,7 @@ export default async function OrderPage({
       ) : null}
 
       {/* ---------- Andamento ---------- */}
-      <section className="mb-5 rounded-xl border border-line bg-white p-4 sm:p-5">
+      <section className="mb-5 rounded-xl border border-line bg-surface p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <Stepper
             status={o.status}
@@ -267,6 +267,7 @@ export default async function OrderPage({
 
       {editable && editor ? (
         <OrderEditor
+          showCommission={canSeeCommissions}
           initial={{
             id,
             customer_id: o.customer_id,
@@ -375,9 +376,9 @@ function Stepper({
                     ? "bg-hover text-faint"
                     : done
                       ? active
-                        ? "bg-pen text-white ring-4 ring-pen/15"
-                        : "bg-pen text-white"
-                      : "border border-line-strong bg-white text-faint"
+                        ? "bg-pen text-on-pen ring-4 ring-pen/15"
+                        : "bg-pen text-on-pen"
+                      : "border border-line-strong bg-surface text-faint"
                 }`}
               >
                 <Icon name={done && !active ? "check" : s.icon} size={13} strokeWidth={2.2} />
@@ -425,7 +426,7 @@ function Billing({
 }) {
   const desc = new Map(items.map((i) => [i.id, i]));
   return (
-    <section className="mb-5 overflow-hidden rounded-xl border border-line bg-white">
+    <section className="mb-5 overflow-hidden rounded-xl border border-line bg-surface">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">
@@ -493,7 +494,7 @@ function Billing({
                     {canDelete && c?.status !== "recebida" ? (
                       <form action={deleteAction(inv.id)}>
                         <ConfirmButton
-                          message={`Excluir a NF ${inv.number ?? ""}? A comissão dela também será apagada.`}
+                          message={`Excluir a NF ${inv.number ?? ""}?`}
                           className={`${iconBtn} hover:!text-alert`}
                         >
                           <Icon name="trash" size={15} />
@@ -567,7 +568,7 @@ function OrderView({
   );
   return (
     <div className="grid gap-5">
-      <section className="rounded-xl border border-line bg-white p-4 sm:p-5">
+      <section className="rounded-xl border border-line bg-surface p-4 sm:p-5">
         <h2 className="mb-3 text-sm font-semibold">Dados do pedido</h2>
         <div className="grid gap-x-10 sm:grid-cols-2">
           <Properties>
@@ -589,7 +590,7 @@ function OrderView({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-line bg-white">
+      <section className="overflow-hidden rounded-xl border border-line bg-surface">
         <header className="border-b border-line px-4 py-3 sm:px-5">
           <h2 className="text-sm font-semibold">
             Itens <span className="ml-1 font-normal text-muted">{items.length}</span>
@@ -653,7 +654,7 @@ function OrderView({
       </section>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <section className="rounded-xl border border-line bg-white p-4 sm:p-5">
+        <section className="rounded-xl border border-line bg-surface p-4 sm:p-5">
           <h2 className="mb-2 text-sm font-semibold">Observações</h2>
           {o.notes ? (
             <p className="whitespace-pre-line text-sm leading-relaxed text-ink-2">{o.notes}</p>
@@ -661,7 +662,7 @@ function OrderView({
             <p className="text-sm text-faint">Nenhuma observação.</p>
           )}
         </section>
-        <section className="rounded-xl border border-line bg-white p-4 sm:p-5">
+        <section className="rounded-xl border border-line bg-surface p-4 sm:p-5">
           <h2 className="mb-3 text-sm font-semibold">Resumo</h2>
           <dl className="grid gap-2.5 text-sm">
             <div className="flex justify-between">

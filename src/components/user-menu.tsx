@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./icons";
 import { Avatar } from "./ui";
+import { ThemeSwitch } from "./theme";
 
 export type MenuUser = { name: string; email: string; roleName: string; photoUrl: string | null };
 
@@ -49,15 +50,15 @@ export function UserMenu({
           aria-expanded={open}
           aria-haspopup="menu"
           className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition ${
-            open ? "bg-white shadow-panel" : "hover:bg-active/70"
+            open ? "bg-white/10" : "hover:bg-white/[0.06]"
           }`}
         >
           <Avatar name={user.name} size={32} round src={user.photoUrl} />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-medium leading-tight text-ink">{user.name}</span>
-            <span className="block truncate text-[11px] leading-tight text-muted">{user.roleName}</span>
+            <span className="block truncate text-[13px] font-medium leading-tight text-white">{user.name}</span>
+            <span className="block truncate text-[11px] leading-tight text-[#a8a49b]">{user.roleName}</span>
           </span>
-          <Icon name="chevrons-updown" size={14} className="shrink-0 text-faint" />
+          <Icon name="chevrons-updown" size={14} className="shrink-0 text-[#6e6b64]" />
         </button>
       ) : (
         <button
@@ -75,7 +76,7 @@ export function UserMenu({
       {open ? (
         <div
           role="menu"
-          className={`absolute z-50 w-64 animate-pop-in rounded-xl bg-white p-1.5 shadow-menu ${
+          className={`absolute z-50 w-64 animate-pop-in rounded-xl bg-surface p-1.5 shadow-menu ${
             variant === "sidebar" ? "bottom-[calc(100%+6px)] left-0" : "right-0 top-[calc(100%+6px)]"
           }`}
         >
@@ -99,6 +100,8 @@ export function UserMenu({
               </Link>
             ) : null}
           </div>
+          <div className="h-px bg-line" />
+          <ThemeSwitch className="px-2.5 py-2.5" />
           <div className="h-px bg-line" />
           <form action={signOut} className="pt-1">
             <button role="menuitem" className={`${item} text-alert hover:bg-alert-soft hover:text-alert`}>

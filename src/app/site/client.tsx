@@ -109,65 +109,99 @@ export function Reveal({ children, delay = 0, className = "" }: { children: Reac
 }
 
 const links = [
-  { href: "#telas", label: "Telas" },
+  { href: "#telas", label: "Produto" },
   { href: "#faturamento", label: "Faturamento" },
   { href: "#recursos", label: "Recursos" },
   { href: "#precos", label: "Preços" },
   { href: "#duvidas", label: "Dúvidas" },
 ];
 
-// Cabeçalho fixo: transparente sobre o topo escuro e branco depois que a página rola.
+type Theme = "dia" | "noite";
+const THEME_KEY = "representar-tema";
+
+// Tema do site: segue o celular/computador da pessoa, ou a escolha dela no botão.
+function useSiteTheme(): [Theme, () => void] {
+  const [theme, setTheme] = useState<Theme>("dia");
+  useEffect(() => {
+    const current = document.documentElement.dataset.lp === "noite" ? "noite" : "dia";
+    setTheme(current);
+  }, []);
+  const toggle = () => {
+    const next: Theme = theme === "noite" ? "dia" : "noite";
+    document.documentElement.dataset.lp = next;
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch {}
+    setTheme(next);
+  };
+  return [theme, toggle];
+}
+
+// Roda antes de desenhar a página, para não piscar no tema errado.
+export const themeBootScript = `try{var t=localStorage.getItem("${THEME_KEY}");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"noite":"dia";document.documentElement.dataset.lp=t}catch(e){}`;
+
+function ThemeButton({ theme, onClick }: { theme: Theme; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={theme === "noite" ? "Usar tema claro" : "Usar tema escuro"}
+      title={theme === "noite" ? "Tema claro" : "Tema escuro"}
+      className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-2 transition hover:bg-hover hover:text-ink"
+    >
+      {theme === "noite" ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2.5V5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" />
+        </svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+// Cabeçalho fixo no papel da marca; ganha uma borda quando a página rola.
 export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const [theme, toggle] = useSiteTheme();
 
   useEffect(() => {
-    const on = () => setScrolled(window.scrollY > 24);
+    const on = () => setScrolled(window.scrollY > 12);
     on();
     window.addEventListener("scroll", on, { passive: true });
     return () => window.removeEventListener("scroll", on);
   }, []);
 
-  const light = scrolled || open;
-
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${
-        light ? "border-b border-line bg-white/85 backdrop-blur-xl" : "border-b border-transparent"
+      className={`fixed inset-x-0 top-0 z-50 transition-colors duration-200 ${
+        scrolled || open ? "border-b border-line bg-paper/90 backdrop-blur-xl" : "border-b border-transparent bg-paper"
       }`}
     >
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6">
+      <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center gap-3 px-4 sm:gap-8 sm:px-8 lg:px-16">
         <Link href="/" className="flex items-center gap-2.5" aria-label="Representar, início">
-          <Logo size={28} />
-          <span className={`text-[15px] font-semibold tracking-tight ${light ? "text-ink" : "text-white"}`}>Representar</span>
+          <Logo size={30} tone={theme === "noite" ? "dark" : "light"} />
+          <span className="text-[19px] font-bold tracking-[-0.05em] text-ink sm:text-[22px]">Representar</span>
         </Link>
-        <nav className="hidden flex-1 items-center justify-center gap-1 md:flex">
+        <nav className="hidden items-center gap-7 lg:flex">
           {links.map((l) => (
-            <a
-              key={l.href}
-              href={l.href}
-              className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
-                light ? "text-ink-2 hover:bg-hover hover:text-ink" : "text-white/70 hover:bg-white/10 hover:text-white"
-              }`}
-            >
+            <a key={l.href} href={l.href} className="text-[15px] text-ink-2 transition-colors hover:text-ink">
               {l.label}
             </a>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-2 md:ml-0">
-          <Link
-            href="/login"
-            className={`hidden h-9 items-center rounded-lg px-3 text-[13px] font-medium transition-colors sm:inline-flex ${
-              light ? "text-ink-2 hover:bg-hover" : "text-white/80 hover:bg-white/10 hover:text-white"
-            }`}
-          >
+        <div className="ml-auto flex items-center gap-1 sm:gap-3">
+          <ThemeButton theme={theme} onClick={toggle} />
+          <Link href="/login" className="hidden px-2 text-[15px] text-ink-2 transition-colors hover:text-ink sm:inline">
             Entrar
           </Link>
           <Link
             href="/login?modo=criar"
-            className={`inline-flex h-9 items-center rounded-lg px-3.5 text-[13px] font-semibold transition ${
-              light ? "bg-pen text-white shadow-btn hover:bg-pen-dark" : "bg-white text-[#0a2b34] hover:bg-white/90"
-            }`}
+            className="inline-flex h-10 items-center whitespace-nowrap rounded-xl bg-accent px-3.5 text-[14px] font-semibold text-on-accent transition hover:bg-accent-dark sm:h-11 sm:px-5 sm:text-[15px]"
           >
             Teste grátis
           </Link>
@@ -176,14 +210,14 @@ export function SiteHeader() {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label="Menu"
-            className={`flex h-9 w-9 items-center justify-center rounded-lg md:hidden ${light ? "text-ink hover:bg-hover" : "text-white hover:bg-white/10"}`}
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-ink hover:bg-hover lg:hidden"
           >
             <Icon name={open ? "x" : "menu"} size={20} />
           </button>
         </div>
       </div>
       {open ? (
-        <nav className="grid gap-0.5 border-t border-line bg-white px-4 pb-4 pt-2 md:hidden">
+        <nav className="grid gap-0.5 border-t border-line bg-paper px-4 pb-4 pt-2 lg:hidden">
           {links.map((l) => (
             <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 text-[15px] font-medium text-ink hover:bg-hover">
               {l.label}
@@ -235,7 +269,7 @@ export function Showcase({ tabs }: { tabs: ShowcaseTab[] }) {
                 setAuto(false);
               }}
               className={`relative flex shrink-0 items-center gap-2 overflow-hidden rounded-full border px-4 py-2 text-[13px] font-medium transition-colors ${
-                on ? "border-pen bg-pen text-white shadow-btn" : "border-line bg-white text-ink-2 hover:border-line-strong hover:text-ink"
+                on ? "border-ink bg-ink text-paper" : "border-line bg-transparent text-ink-2 hover:border-line-strong hover:text-ink"
               }`}
             >
               <Icon name={t.icon} size={15} />
@@ -244,7 +278,7 @@ export function Showcase({ tabs }: { tabs: ShowcaseTab[] }) {
                 <span
                   key={`${active}-${paused}`}
                   aria-hidden="true"
-                  className="absolute bottom-0 left-0 h-[2px] bg-white/60"
+                  className="absolute bottom-0 left-0 h-[2px] bg-accent"
                   style={{ animation: `lp-progress ${DURATION}ms linear forwards`, animationPlayState: paused ? "paused" : "running" }}
                 />
               ) : null}
@@ -256,14 +290,14 @@ export function Showcase({ tabs }: { tabs: ShowcaseTab[] }) {
       <div className="mt-8 lg:mt-12">
         <div key={tab.id} className="grid min-w-0 animate-[lp-fade-up_500ms_cubic-bezier(0.22,1,0.36,1)] gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-16">
           <div>
-            <h3 className="text-2xl font-semibold leading-tight tracking-[-0.02em] text-ink sm:text-[1.75rem]">{tab.title}</h3>
+            <h3 className="text-[1.75rem] font-bold leading-[1.05] tracking-[-0.035em] text-ink sm:text-[2.25rem]">{tab.title}</h3>
             <p className="mt-3 text-[15px] leading-relaxed text-muted">{tab.text}</p>
           </div>
           <ul className="grid content-center gap-3">
             {tab.points.map((p) => (
               <li key={p} className="flex gap-3 text-[14px] leading-snug text-ink-2">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pen-soft text-pen">
-                  <Icon name="check" size={12} />
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-ink">
+                  <Icon name="check" size={12} strokeWidth={2.2} />
                 </span>
                 {p}
               </li>
@@ -290,7 +324,7 @@ export function Pricing() {
   return (
     <>
       <div className="flex justify-center">
-        <div role="radiogroup" aria-label="Forma de pagamento" className="inline-flex rounded-full border border-line bg-white p-1 shadow-soft">
+        <div role="radiogroup" aria-label="Forma de pagamento" className="inline-flex rounded-xl border border-line bg-white p-1">
           {[
             { v: false, l: "Mensal" },
             { v: true, l: "Anual" },
@@ -301,74 +335,58 @@ export function Pricing() {
               role="radio"
               aria-checked={annual === o.v}
               onClick={() => setAnnual(o.v)}
-              className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors ${
-                annual === o.v ? "bg-ink text-white" : "text-muted hover:text-ink"
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-[14px] font-medium transition-colors ${
+                annual === o.v ? "bg-ink text-paper" : "text-muted hover:text-ink"
               }`}
             >
               {o.l}
-              {o.v ? (
-                <span className={`rounded-full px-1.5 py-px text-[11px] font-semibold ${annual ? "bg-white/15 text-white" : "bg-ok-soft text-ok"}`}>
-                  −{savePct}%
-                </span>
-              ) : null}
+              {o.v ? <span className="rounded bg-accent px-1.5 py-px font-mono text-[11px] font-semibold text-on-accent">−{savePct}%</span> : null}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="mt-10 grid gap-5 lg:grid-cols-3 lg:items-stretch">
-        {PLANS.map((p) => {
+      <div className="mt-10 grid gap-4 lg:grid-cols-3 lg:items-stretch">
+        {PLANS.map((p, i) => {
           const hi = p.highlight;
-          const value = price(p);
           return (
             <div
               key={p.id}
-              className={`relative flex flex-col rounded-2xl p-6 sm:p-7 ${
-                hi
-                  ? "bg-[#0a2b34] text-white shadow-[0_30px_60px_-20px_rgba(10,43,52,0.55)] ring-1 ring-white/10 lg:-my-3 lg:py-10"
-                  : "border border-line bg-white"
-              }`}
+              className={`relative flex flex-col rounded-md p-7 sm:p-8 ${hi ? "bg-side text-[#f3f0e8]" : "border border-line bg-white text-ink"}`}
             >
-              {hi ? (
-                <>
-                  <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-                    <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full bg-[#2fa07a] opacity-25 blur-3xl" />
-                    <div className="absolute -bottom-24 -left-10 h-56 w-56 rounded-full bg-[#1d7b93] opacity-30 blur-3xl" />
-                  </div>
-                  <span className="absolute right-5 top-5 rounded-full bg-[#9fe3c4] px-2.5 py-1 text-[11px] font-semibold text-[#0a2b34] lg:top-7">
-                    Mais escolhido
-                  </span>
-                </>
-              ) : null}
-              <div className="relative flex flex-1 flex-col">
-                <h3 className={`text-lg font-semibold ${hi ? "text-white" : "text-ink"}`}>{p.name}</h3>
-                <p className={`mt-1.5 min-h-[2.75rem] text-[13px] leading-relaxed ${hi ? "text-white/65" : "text-muted"}`}>{p.tagline}</p>
-                <div className="mt-6 flex items-baseline gap-1">
-                  <span className={`text-sm font-medium ${hi ? "text-white/70" : "text-muted"}`}>R$</span>
-                  <span className="text-[2.75rem] font-semibold leading-none tracking-[-0.03em] tabular-nums">{money(value)}</span>
-                  <span className={`ml-1 text-sm ${hi ? "text-white/60" : "text-muted"}`}>/mês</span>
-                </div>
-                <p className={`mt-2 h-5 text-[12px] ${hi ? "text-white/55" : "text-faint"}`}>
-                  {annual ? `R$ ${money(p.annual * 12)} por ano · ${p.users}` : p.users}
+              <div className="flex items-center justify-between">
+                <p className={`font-mono text-[12px] uppercase tracking-[0.08em] ${hi ? "text-[#a8a49b]" : "text-muted"}`}>
+                  0{i + 1} — {p.name}
                 </p>
-                <Link
-                  href={`/login?modo=criar&plano=${p.id}`}
-                  className={`mt-6 inline-flex h-11 items-center justify-center rounded-xl text-sm font-semibold transition ${
-                    hi ? "bg-white text-[#0a2b34] hover:bg-white/90" : "bg-pen text-white shadow-btn hover:bg-pen-dark"
-                  }`}
-                >
-                  {p.cta}
-                </Link>
-                <p className={`mt-2.5 text-center text-[12px] ${hi ? "text-white/50" : "text-faint"}`}>{TRIAL_DAYS} dias grátis, sem cartão</p>
-                <ul className={`mt-7 grid gap-3 border-t pt-6 ${hi ? "border-white/10" : "border-line"}`}>
-                  {p.features.map((f) => (
-                    <li key={f} className={`flex gap-2.5 text-[13.5px] leading-snug ${hi ? "text-white/85" : "text-ink-2"}`}>
-                      <Icon name="check" size={16} className={`mt-px shrink-0 ${hi ? "text-[#9fe3c4]" : "text-ok"}`} />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+                {hi ? <span className="rounded bg-accent px-2 py-0.5 text-[11.5px] font-semibold text-on-accent">Mais escolhido</span> : null}
               </div>
+              <div className={`my-4 h-px bg-[repeating-linear-gradient(90deg,currentColor_0_6px,transparent_6px_12px)] opacity-30`} />
+              <p className={`min-h-[2.75rem] text-[14px] leading-relaxed ${hi ? "text-[#c9c5bb]" : "text-ink-2"}`}>{p.tagline}</p>
+              <div className="mt-6 flex items-baseline gap-1.5">
+                <span className={`font-mono text-sm ${hi ? "text-[#a8a49b]" : "text-muted"}`}>R$</span>
+                <span className="font-mono text-[3.25rem] font-medium leading-none tracking-[-0.05em] tabular-nums">{money(price(p))}</span>
+                <span className={`text-sm ${hi ? "text-[#a8a49b]" : "text-muted"}`}>/mês</span>
+              </div>
+              <p className={`mt-2 h-5 font-mono text-[12px] ${hi ? "text-[#a8a49b]" : "text-muted"}`}>
+                {annual ? `R$ ${money(p.annual * 12)} por ano · ${p.users}` : p.users}
+              </p>
+              <Link
+                href={`/login?modo=criar&plano=${p.id}`}
+                className={`mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold transition ${
+                  hi ? "bg-accent text-on-accent hover:bg-accent-dark" : "border border-line-strong text-ink hover:bg-hover"
+                }`}
+              >
+                {p.cta}
+              </Link>
+              <p className={`mt-2.5 text-center font-mono text-[11.5px] ${hi ? "text-[#8a867d]" : "text-faint"}`}>{TRIAL_DAYS} dias grátis · sem cartão</p>
+              <ul className={`mt-7 grid gap-3 border-t pt-6 ${hi ? "border-[#f3f0e8]/10" : "border-line"}`}>
+                {p.features.map((f) => (
+                  <li key={f} className={`flex gap-2.5 text-[14px] leading-snug ${hi ? "text-[#e3ded2]" : "text-ink-2"}`}>
+                    <Icon name="check" size={16} strokeWidth={2} className={`mt-px shrink-0 ${hi ? "text-accent" : "text-ink"}`} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
             </div>
           );
         })}

@@ -4,3 +4,8 @@ node_modules
 .env
 next-env.d.ts
 *.tsbuildinfo
+
+# Materiais locais (não fazem parte do sistema)
+Design System/
+modelos-site/
+.DS_Store

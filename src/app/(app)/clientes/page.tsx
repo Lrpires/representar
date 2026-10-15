@@ -68,7 +68,7 @@ export default async function CustomersPage({
 
   // Mapa: posição de cada cliente e a data do último pedido (para a cor do pin).
   const today = todayISO();
-  const COLORS = { ativo: "var(--color-pen)", parado: "#e09f3e", nunca: "#9eaab1" };
+  const COLORS = { ativo: "var(--color-pen)", parado: "#ff5b22", nunca: "#a8a49b" };
   const daysSince = (iso: string) => Math.round((Date.parse(today) - Date.parse(iso)) / 86400000);
   let mapPoints: PinPoint[] = [];
   let pending: PinPending[] = [];
@@ -143,7 +143,7 @@ export default async function CustomersPage({
                   scroll={false}
                   aria-current={view === v ? "true" : undefined}
                   className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition sm:h-8 ${
-                    view === v ? "bg-white text-ink shadow-panel" : "text-muted hover:text-ink-2"
+                    view === v ? "bg-surface text-ink shadow-panel" : "text-muted hover:text-ink-2"
                   }`}
                 >
                   <Icon name={v === "lista" ? "menu" : "pin"} size={15} />

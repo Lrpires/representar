@@ -45,11 +45,11 @@ type Lead = BoardLead & {
 
 // Cor do pin pela etapa do funil.
 const STAGE_COLORS: Record<string, string> = {
-  novo: "#9eaab1",
-  contato_feito: "#2b6f9e",
-  proposta: "#e09f3e",
-  ganho: "#23855a",
-  perdido: "#c8423a",
+  novo: "#a8a49b",
+  contato_feito: "#0f3d3e",
+  proposta: "#ff5b22",
+  ganho: "#1e8e5a",
+  perdido: "#c8352b",
 };
 
 export default async function LeadsPage({
@@ -118,7 +118,7 @@ export default async function LeadsPage({
         lng: Number(l.longitude),
         quality: l.geo_quality ?? null,
         phone: l.phone,
-        color: STAGE_COLORS[l.stage] ?? "#9eaab1",
+        color: STAGE_COLORS[l.stage] ?? "#a8a49b",
         lines: [
           { text: `Etapa: ${stageLabel(l.stage)}${l.estimated_value ? ` · ${brl(Number(l.estimated_value))}` : ""}` },
           ...(l.next_contact && l.stage !== "ganho" && l.stage !== "perdido"
@@ -126,7 +126,7 @@ export default async function LeadsPage({
             : []),
         ],
         href: `${PATH}?lead=${l.id}&ver=mapa`,
-        hrefLabel: "Abrir lead",
+        hrefLabel: "Abrir prospecto",
       };
     });
   const pending: PinPending[] = (shown as Lead[])
@@ -149,9 +149,9 @@ export default async function LeadsPage({
   return (
     <>
       <PageHeader
-        title="Leads"
+        title="Prospecção"
         hint="Potenciais clientes, do primeiro contato ao fechamento. Nenhum fica sem próximo contato."
-        action={<NewButton label="Novo lead" fab />}
+        action={<NewButton label="Novo prospecto" fab />}
       />
 
       <div className="mb-4 grid gap-3 empty:hidden">
@@ -160,17 +160,17 @@ export default async function LeadsPage({
       </div>
 
       {error ? (
-        <EmptyState icon="alert" title="Não foi possível carregar os leads">
+        <EmptyState icon="alert" title="Não foi possível carregar a prospecção">
           Confira se a migração 009 foi rodada no Supabase.
         </EmptyState>
       ) : all.length === 0 && !q ? (
-        <EmptyState icon="kanban" title="Cadastre seu primeiro lead" action={<NewButton label="Novo lead" />}>
+        <EmptyState icon="kanban" title="Cadastre seu primeiro prospecto" action={<NewButton label="Novo prospecto" />}>
           Anote quem pode virar cliente, mova pelas etapas do funil e agende o próximo contato para
           não esquecer de ninguém.
         </EmptyState>
       ) : (
         <>
-          <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>div]:bg-white" style={{ gap: 1 }}>
+          <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>div]:bg-surface" style={{ gap: 1 }}>
             <div className="p-4">
               <dt className="text-[13px] text-muted">Em andamento</dt>
               <dd className="mt-1 text-xl font-semibold tabular-nums">{open.length}</dd>
@@ -210,7 +210,7 @@ export default async function LeadsPage({
               </FilterPill>
             </Segmented>
             <div className="w-full sm:ml-auto sm:w-64">
-              <SearchBox placeholder="Buscar lead" className="w-full" hint />
+              <SearchBox placeholder="Buscar prospecto" className="w-full" hint />
             </div>
             <div className="inline-flex rounded-[0.6rem] bg-hover p-0.5" role="group" aria-label="Modo de exibição">
               {(["quadro", "mapa"] as const).map((v) => (
@@ -220,7 +220,7 @@ export default async function LeadsPage({
                   scroll={false}
                   aria-current={view === v ? "true" : undefined}
                   className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition sm:h-8 ${
-                    view === v ? "bg-white text-ink shadow-panel" : "text-muted hover:text-ink-2"
+                    view === v ? "bg-surface text-ink shadow-panel" : "text-muted hover:text-ink-2"
                   }`}
                 >
                   <Icon name={v === "quadro" ? "kanban" : "pin"} size={15} />
@@ -243,7 +243,7 @@ export default async function LeadsPage({
               />
               {noAddress ? (
                 <p className="mt-2 text-xs text-muted">
-                  {noAddress} {noAddress === 1 ? "lead não aparece" : "leads não aparecem"} no mapa por falta de endereço ou
+                  {noAddress} {noAddress === 1 ? "prospecto não aparece" : "prospectos não aparecem"} no mapa por falta de endereço ou
                   endereço não encontrado. Informe ao menos o CEP ou a cidade no cadastro.
                 </p>
               ) : null}
@@ -255,8 +255,8 @@ export default async function LeadsPage({
       )}
 
       {/* Novo lead */}
-      <Sheet open={sp.novo === "1"} title="Novo lead" description="Só o nome é obrigatório. Agende já o próximo contato." closeHref={closeHref}>
-        <SheetForm action={createLead} closeHref={closeHref} submitLabel="Salvar lead">
+      <Sheet open={sp.novo === "1"} title="Novo prospecto" description="Só o nome é obrigatório. Agende já o próximo contato." closeHref={closeHref}>
+        <SheetForm action={createLead} closeHref={closeHref} submitLabel="Salvar prospecto">
           <ErrorNote message={sp.erro} />
           <LeadFields today={today} />
         </SheetForm>
@@ -265,7 +265,7 @@ export default async function LeadsPage({
       {/* Ficha do lead */}
       <Sheet
         open={!!lead}
-        title={lead ? lead.name : "Lead"}
+        title={lead ? lead.name : "Prospecto"}
         description={lead ? [lead.company, lead.city].filter(Boolean).join(" · ") || undefined : undefined}
         closeHref={closeHref}
       >
@@ -307,7 +307,7 @@ export default async function LeadsPage({
                     className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] transition sm:h-8 ${
                       lead.stage === s.value
                         ? "border-pen bg-pen-soft font-medium text-pen-ink"
-                        : "border-line-strong bg-white text-ink-2 hover:bg-hover"
+                        : "border-line-strong bg-surface text-ink-2 hover:bg-hover"
                     }`}
                   >
                     <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
@@ -319,7 +319,7 @@ export default async function LeadsPage({
 
             {lead.stage === "ganho" && !lead.customer_id ? (
               <form action={convertLead.bind(null, lead.id)} className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-ok/25 bg-ok-soft p-4">
-                <p className="min-w-0 flex-1 text-sm text-ok">Negócio fechado! Transforme este lead em cliente para fazer pedidos.</p>
+                <p className="min-w-0 flex-1 text-sm text-ok">Negócio fechado! Transforme este prospecto em cliente para fazer pedidos.</p>
                 <SubmitButton className={primaryBtn} pending="Convertendo…">
                   Converter em cliente
                 </SubmitButton>
@@ -359,7 +359,7 @@ export default async function LeadsPage({
                 required
                 rows={3}
                 placeholder="O que foi conversado?"
-                className={`${textareaCls} bg-white`}
+                className={`${textareaCls} bg-surface`}
               />
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <Field label="Quando">
@@ -381,7 +381,7 @@ export default async function LeadsPage({
               <ol className="relative grid gap-4 pl-6 before:absolute before:bottom-2 before:left-[7px] before:top-2 before:w-px before:bg-line">
                 {(interactions ?? []).map((i) => (
                   <li key={i.id} className="relative">
-                    <span className="absolute -left-6 top-1 flex h-[15px] w-[15px] items-center justify-center rounded-full border border-line-strong bg-white">
+                    <span className="absolute -left-6 top-1 flex h-[15px] w-[15px] items-center justify-center rounded-full border border-line-strong bg-surface">
                       <span className="h-1.5 w-1.5 rounded-full bg-pen" />
                     </span>
                     <p className="text-xs text-muted">{dateTime(i.happened_at)}</p>

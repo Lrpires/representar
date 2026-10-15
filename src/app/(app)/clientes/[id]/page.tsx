@@ -136,7 +136,7 @@ export default async function CustomerPage({
         <OkNote message={sp.ok} />
       </div>
 
-      <dl className="mb-6 grid grid-cols-3 overflow-hidden rounded-xl border border-line bg-line [&>div]:bg-white" style={{ gap: 1 }}>
+      <dl className="mb-6 grid grid-cols-3 overflow-hidden rounded-xl border border-line bg-line [&>div]:bg-surface" style={{ gap: 1 }}>
         <div className="p-3.5 sm:p-5">
           <dt className="text-xs text-muted sm:text-[13px]">Total comprado no ano</dt>
           <dd className="mt-1.5 truncate text-base font-semibold tabular-nums tracking-[-0.02em] sm:text-2xl">{brl(yearTotal)}</dd>
@@ -217,7 +217,7 @@ export default async function CustomerPage({
                     required
                     rows={3}
                     placeholder="O que foi conversado? Ex.: pediu catálogo novo, voltar a ligar na sexta."
-                    className={`${textareaCls} bg-white`}
+                    className={`${textareaCls} bg-surface`}
                   />
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:items-end">
                     <Field label="Data e hora do contato" className="sm:w-56">
@@ -238,7 +238,7 @@ export default async function CustomerPage({
                   <ol className="relative grid gap-5 pl-6 before:absolute before:bottom-2 before:left-[7px] before:top-2 before:w-px before:bg-line">
                     {(interactions ?? []).map((i) => (
                       <li key={i.id} className="relative">
-                        <span className="absolute -left-6 top-1 flex h-[15px] w-[15px] items-center justify-center rounded-full border border-line-strong bg-white">
+                        <span className="absolute -left-6 top-1 flex h-[15px] w-[15px] items-center justify-center rounded-full border border-line-strong bg-surface">
                           <span className="h-1.5 w-1.5 rounded-full bg-pen" />
                         </span>
                         <div className="flex items-start justify-between gap-3">

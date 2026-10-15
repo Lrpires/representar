@@ -97,7 +97,7 @@ export default async function TeamPage({
       </div>
 
       {/* Resumo por perfil */}
-      <dl className="mb-6 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4 [&>div]:bg-white" style={{ gap: 1 }}>
+      <dl className="mb-6 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4 [&>div]:bg-surface" style={{ gap: 1 }}>
         {ROLES.map((r) => (
           <div key={r} className="p-4">
             <dt className="text-[13px] text-muted">{PLURAL[r]}</dt>
@@ -213,7 +213,7 @@ export default async function TeamPage({
           <p className="mb-3 text-[13px] text-muted">
             A pessoa entra sozinha ao criar a conta no site com o e-mail convidado.
           </p>
-          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-white">
+          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
             {(invites ?? []).map((i) => (
               <li key={i.id} className="flex items-center gap-3 px-4 py-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-line-strong text-muted">
@@ -240,7 +240,7 @@ export default async function TeamPage({
       {/* Permissões */}
       <section>
         <h2 className="mb-3 text-sm font-semibold">O que cada perfil pode fazer</h2>
-        <div className="overflow-x-auto rounded-xl border border-line bg-white">
+        <div className="overflow-x-auto rounded-xl border border-line bg-surface">
           <table className="w-full min-w-[34rem] text-sm">
             <thead className="border-b border-line bg-subtle">
               <tr>

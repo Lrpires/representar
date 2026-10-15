@@ -122,7 +122,7 @@ export function Combobox({
         <div
           id={listId}
           role="listbox"
-          className="scroll-thin absolute left-0 right-0 top-[calc(100%+4px)] z-40 max-h-72 min-w-[16rem] animate-pop-in overflow-y-auto rounded-lg bg-white p-1 shadow-menu"
+          className="scroll-thin absolute left-0 right-0 top-[calc(100%+4px)] z-40 max-h-72 min-w-[16rem] animate-pop-in overflow-y-auto rounded-lg bg-surface p-1 shadow-menu"
         >
           {list.length === 0 ? (
             <p className="px-3 py-2.5 text-[13px] text-muted">{emptyText}</p>

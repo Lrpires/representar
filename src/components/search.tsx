@@ -63,7 +63,7 @@ export function SearchBox({
         onChange={(e) => setValue(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className={`h-11 w-full rounded-lg border border-line-strong bg-white pl-9 text-base text-ink shadow-field outline-none transition-[border-color,box-shadow] placeholder:text-faint hover:border-[#c5cdd1] focus:border-pen focus:ring-[3px] focus:ring-pen/15 sm:h-8 sm:text-[13px] ${
+        className={`h-11 w-full rounded-lg border border-line-strong bg-surface pl-9 text-base text-ink shadow-field outline-none transition-[border-color,box-shadow] placeholder:text-faint hover:border-[#bdb8ab] focus:border-accent focus:ring-[3px] focus:ring-accent/25 sm:h-8 sm:text-[13px] ${
           hint ? "pr-3 sm:pr-12" : "pr-3"
         }`}
       />

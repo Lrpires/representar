@@ -162,7 +162,7 @@ export default async function BillingPage({
         </EmptyState>
       ) : (
         <>
-          <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>*]:bg-white" style={{ gap: 1 }}>
+          <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4 [&>*]:bg-surface" style={{ gap: 1 }}>
             <div className="p-4">
               <dt className="text-[13px] text-muted">Faturado {P ? `(${PERIODS.find((p) => p.value === (sp.periodo ?? "mes"))?.label.toLowerCase()})` : ""}</dt>
               <dd className="mt-1 truncate text-xl font-semibold tabular-nums">{brl(invTotal)}</dd>
@@ -175,7 +175,7 @@ export default async function BillingPage({
             </div>
             <Link href={qs({ aba: "a-faturar" })} className="p-4 transition hover:bg-subtle">
               <dt className="flex items-center gap-1.5 text-[13px] text-muted">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#e09f3e]" />Em atenção
+                <span className="h-1.5 w-1.5 rounded-full bg-warn-dot" />Em atenção
               </dt>
               <dd className={`mt-1 text-xl font-semibold tabular-nums ${warn ? "text-warn" : ""}`}>{warn}</dd>
               <dd className="text-xs text-muted">a partir de {settings.warnDays} dias</dd>

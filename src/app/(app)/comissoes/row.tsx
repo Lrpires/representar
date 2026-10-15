@@ -87,7 +87,7 @@ export function CommissionRow({ r, late, backQs, label, today }: { r: Row; late:
                 inputMode="decimal"
                 required
                 defaultValue={priceText(exp)}
-                className="h-11 w-full rounded-lg border border-line-strong bg-white pl-9 pr-3 text-right text-base font-medium tabular-nums shadow-field outline-none transition focus:border-pen focus:ring-[3px] focus:ring-pen/15 sm:h-9 sm:text-sm"
+                className="h-11 w-full rounded-lg border border-line-strong bg-surface pl-9 pr-3 text-right text-base font-medium tabular-nums shadow-field outline-none transition focus:border-accent focus:ring-[3px] focus:ring-accent/25 sm:h-9 sm:text-sm"
               />
             </label>
             <SubmitButton className={`${primaryBtn} shrink-0`} pending="…">

@@ -21,6 +21,7 @@ const goals: Item = { href: "/metas", label: "Metas", short: "Metas", icon: "tar
 const commissions: Item = { href: "/comissoes", label: "Comissões", short: "Comissões", icon: "percent" };
 const payables: Item = { href: "/contas-a-pagar", label: "Contas a pagar", short: "Contas", icon: "wallet" };
 const team: Item = { href: "/equipe", label: "Equipe", short: "Equipe", icon: "shield" };
+const importer: Item = { href: "/importar", label: "Importar dados", short: "Importar", icon: "upload" };
 const settings: Item = { href: "/configuracoes", label: "Configurações", short: "Ajustes", icon: "settings" };
 
 type Access = { showTeam?: boolean; showFinance?: boolean; showCommissions?: boolean };
@@ -32,7 +33,7 @@ function groupsFor({ showTeam, showFinance, showCommissions }: Access): { title?
     { title: "Carteira", items: [customers, leads] },
     { title: "Financeiro", items: [...(showCommissions ? [commissions] : []), ...(showFinance ? [payables] : [])] },
     { title: "Catálogo", items: [principals, products] },
-    ...(showTeam ? [{ title: "Escritório", items: [team, settings] }] : []),
+    ...(showTeam ? [{ title: "Escritório", items: [team, importer, settings] }] : []),
   ].filter((g) => g.items.length > 0);
 }
 
@@ -119,7 +120,7 @@ export function MobileTabs({
     ...(showFinance ? [payables] : []),
     principals,
     products,
-    ...(showTeam ? [team, settings] : []),
+    ...(showTeam ? [team, importer, settings] : []),
   ];
   const moreActive = moreItems.some((i) => isActive(i.href));
 

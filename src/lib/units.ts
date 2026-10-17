@@ -36,3 +36,15 @@ export function unitGroupsFor(enabled: string[], keep?: string) {
   if (keep) on.add(keep);
   return UNIT_GROUPS.map((g) => ({ ...g, units: g.units.filter(([v]) => on.has(v)) })).filter((g) => g.units.length > 0);
 }
+
+// Abreviação para mostrar quantidades ("120 kg", "340 pç").
+const SHORT: Record<string, string> = {
+  unidade: "un.", peca: "pç", par: "pares", duzia: "dz", cento: "cento", milheiro: "milheiro", conjunto: "conj.",
+  kit: "kits", jogo: "jogos", caixa: "cx", pacote: "pct", fardo: "fardos", saco: "sacos", rolo: "rolos",
+  bobina: "bobinas", cartela: "cartelas", display: "displays", palete: "paletes", lata: "latas", frasco: "frascos",
+  tubo: "tubos", galao: "galões", barril: "barris", kg: "kg", grama: "g", tonelada: "t", litro: "L",
+  metro_cubico: "m³", metro: "m", metro_quadrado: "m²", centimetro: "cm", hora: "h",
+};
+export function unitShort(value: string): string {
+  return SHORT[value] ?? unitLabel(value).toLowerCase();
+}

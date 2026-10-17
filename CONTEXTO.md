@@ -73,11 +73,13 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 
 **Metas**: por vendedor, por representada ou geral. A meta do escritório é sempre a **soma** das metas distribuídas (não existe número solto). Mostra ritmo diário pelos dias úteis restantes.
 
-**Painel (cockpit)**: filtros de período, representada e vendedor; indicadores (vendido, pedidos, ticket, faturado, aguardando nota, clientes); bloco de **Comissões** (gerada, recebida, a receber, atrasada, por representada, próximos vencimentos — só para quem vê comissões); gráfico de vendas; meta; pedidos em atraso; rankings; contatos do dia; clientes para reativar. O vendedor vê só os números dele.
+**Painel (cockpit)**: filtros de período, representada e vendedor; indicadores (vendido, pedidos, ticket, faturado, **produtos vendidos** — quantos produtos *diferentes* saíram no período (70 long necks + 4 packs + 30 latas = 3 produtos) —, clientes atendidos); gráfico de vendas; meta; situação dos pedidos; pedidos em atraso; rankings (representadas, vendedores, clientes, produtos); contatos do dia; clientes para reativar. **Comissões não aparecem no Painel** (ficam só na tela Comissões). O vendedor vê só os números dele. As consultas do Painel buscam em páginas de 1.000 linhas (limite do banco), para nada ficar de fora em períodos movimentados.
 
 **Clientes e Prospecção**: CNPJ preenche dados (BrasilAPI), CEP preenche endereço (ViaCEP); mapa com pinos (OpenStreetMap/Nominatim, pino arrastável para corrigir); interações e próximo contato; prospecto vira cliente com um clique.
 
 **Contas a pagar**: tipo de despesa, centro de custo, forma de pagamento e fornecedor (listas editáveis em Configurações, já vêm prontas), contas repetidas por mês, vencidas em vermelho, resumo por centro de custo.
+
+**Importar dados** (`/importar`, administrador e gerente): modelos em Excel para Representadas → Clientes → Produtos, com aba de instruções e listas de escolha; ao enviar, prévia linha a linha (novo, atualiza, com erro) antes de gravar. Reconhece cadastros existentes (CNPJ, nome ou código) e atualiza em vez de duplicar; célula vazia não apaga dado. Código em `src/lib/import-*.ts` e `src/app/(app)/importar/`.
 
 **Configurações** (só o administrador altera): logo, **cor da empresa**, numeração de pedidos, prazos de atraso, unidades de venda, listas das contas a pagar, excluir escritório.
 
@@ -118,7 +120,7 @@ Storage: `product-images` (público), `invoices` (privado, link temporário), `a
 ## 9. Pendências e próximos passos
 
 - **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 019 liberando leitura de clientes ao financeiro.
-- **Importação por planilha** (clientes, produtos, representadas, pedidos) com prévia e validação — proposta, não iniciada.
+- **Importação: próxima etapa** — notas fiscais em lote (vários XMLs de uma vez, trazendo o histórico de faturamento e comissões) e pedidos antigos por planilha. Representadas, clientes e produtos já importam.
 - **Cobrança/assinatura, teste grátis e limites por plano** — não existem.
 - Ícones sem versão no design system (lixeira, editar, relógio…) usam o desenho antigo com o traço novo.
 - Material local fora do Git: pastas `Design System/` (design system da marca) e `modelos-site/` (4 modelos de site).

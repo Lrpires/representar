@@ -177,3 +177,19 @@ export function rank<T>(rows: T[], key: (r: T) => string | null | undefined, val
   }
   return [...m.entries()].sort((a, b) => b[1] - a[1]);
 }
+
+// O banco devolve no máximo 1.000 linhas por consulta: busca em páginas até acabar
+// (sem isso, um período movimentado era cortado sem aviso).
+export async function fetchAll<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+  max = 50000,
+): Promise<{ data: T[]; error: unknown }> {
+  const out: T[] = [];
+  for (let from = 0; from < max; from += 1000) {
+    const { data, error } = await page(from, from + 999);
+    if (error) return { data: out, error };
+    out.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
+  return { data: out, error: null };
+}

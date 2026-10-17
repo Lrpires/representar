@@ -7,7 +7,8 @@ import { formatOrderNumber, statusInfo, SOLD_STATUSES, OPEN_STATUSES } from "@/l
 import { orderAging, AGING_STYLE } from "@/lib/aging";
 import { stageLabel } from "@/lib/leads";
 import { brl, formatDate, todayISO } from "@/lib/format";
-import { resolvePeriod, buildSeries, delta, rank, addDays } from "@/lib/cockpit";
+import { resolvePeriod, buildSeries, delta, rank, addDays, fetchAll } from "@/lib/cockpit";
+import { unitShort } from "@/lib/units";
 import { goalProgress, goalScope, type GoalRow } from "@/lib/goals";
 import { loadGoals } from "@/lib/goals-data";
 import { CockpitShell } from "@/components/cockpit/filters";
@@ -26,8 +27,8 @@ function greeting(): string {
 }
 
 type Order = {
-  id: string; number: number; status: string; order_date: string; total: number; subtotal: number; discount_pct: number;
-  commission_pct: number | null; principal_id: string; seller_id: string; customer_id: string;
+  id: string; number: number; status: string; order_date: string; total: number;
+  principal_id: string; seller_id: string; customer_id: string;
   customers: { name: string } | null; principals: { name: string } | null;
 };
 
@@ -37,12 +38,12 @@ export default async function HomePage({
   searchParams: Promise<{ periodo?: string; de?: string; ate?: string; rep?: string; vend?: string }>;
 }) {
   const sp = await searchParams;
-  const { supabase, canManage, role, isBackOffice, canSeeCommissions, user } = await getContext();
+  const { supabase, canManage, role, isBackOffice, user } = await getContext();
   const [counts, settings, profile] = await Promise.all([getCounts(), getSettings(), getProfile()]);
   const today = todayISO();
   const P = resolvePeriod(sp.periodo, sp.de, sp.ate, today);
   const rep = sp.rep || null;
-  // Vendedor só enxerga o que é dele: pedidos, clientes, comissões e a própria meta.
+  // Vendedor só enxerga o que é dele: pedidos, clientes e a própria meta.
   const isSeller = role === "seller";
   const vend = isBackOffice ? sp.vend || null : isSeller ? user.id : null;
   const canOrder = role !== "finance";
@@ -56,8 +57,7 @@ export default async function HomePage({
           title="Cadastre sua primeira representada para começar"
           action={canManage ? <Link href="/representadas?novo=1" className={primaryBtn}>Nova representada</Link> : null}
         >
-          Informe as empresas que você representa e a comissão de cada uma. Depois é só cadastrar os
-          clientes e fazer o primeiro pedido.
+          Informe as empresas que você representa. Depois é só cadastrar os clientes e fazer o primeiro pedido.
         </EmptyState>
       </>
     );
@@ -77,7 +77,6 @@ export default async function HomePage({
     { data: prevData },
     { data: invCur },
     { data: invPrev },
-    { data: comm },
     { data: items },
     { data: history },
     { data: principals },
@@ -88,43 +87,59 @@ export default async function HomePage({
     goalData,
     { data: openData },
   ] = await Promise.all([
-    scoped(
-      supabase
-        .from("orders")
-        .select("id, number, status, order_date, total, subtotal, discount_pct, commission_pct, principal_id, seller_id, customer_id, customers(name), principals(name)")
-        .gte("order_date", P.start)
-        .lte("order_date", P.end),
-    ).order("number", { ascending: false }).limit(20000),
-    scoped(supabase.from("orders").select("order_date, total, customer_id").in("status", SOLD).gte("order_date", P.prevStart).lte("order_date", P.prevEnd)).limit(20000),
-    scoped(
-      supabase.from("order_invoices").select("value, issued_at, orders!inner(principal_id, seller_id, status)").neq("orders.status", "cancelado").gte("issued_at", P.start).lte("issued_at", P.end),
-      "orders.",
-    ).limit(20000),
-    scoped(
-      supabase.from("order_invoices").select("value, orders!inner(principal_id, seller_id, status)").neq("orders.status", "cancelado").gte("issued_at", P.prevStart).lte("issued_at", P.prevEnd),
-      "orders.",
-    ).limit(20000),
-    !canSeeCommissions
-      ? Promise.resolve({ data: [] as never[] })
-      : scoped(
-      supabase
-        .from("commissions")
-        .select("id, value, status, due_date, received_value, received_at, principal_id, order_invoices(issued_at, number)")
-        .neq("status", "cancelada"),
-    ).limit(20000),
-    scoped(
-      supabase
-        .from("order_items")
-        .select("description, code, qty, line_total, orders!inner(order_date, status, principal_id, seller_id)")
-        .in("orders.status", SOLD)
-        .gte("orders.order_date", P.start)
-        .lte("orders.order_date", P.end),
-      "orders.",
-    ).limit(20000),
+    fetchAll((a, b) =>
+      scoped(
+        supabase
+          .from("orders")
+          .select("id, number, status, order_date, total, principal_id, seller_id, customer_id, customers(name), principals(name)")
+          .gte("order_date", P.start)
+          .lte("order_date", P.end),
+      )
+        .order("number", { ascending: false })
+        .range(a, b),
+    ),
+    fetchAll((a, b) =>
+      scoped(supabase.from("orders").select("order_date, total, customer_id").in("status", SOLD).gte("order_date", P.prevStart).lte("order_date", P.prevEnd))
+        .order("id")
+        .range(a, b),
+    ),
+    fetchAll((a, b) =>
+      scoped(
+        supabase.from("order_invoices").select("value, issued_at, orders!inner(principal_id, seller_id, status)").neq("orders.status", "cancelado").gte("issued_at", P.start).lte("issued_at", P.end),
+        "orders.",
+      )
+        .order("id")
+        .range(a, b),
+    ),
+    fetchAll((a, b) =>
+      scoped(
+        supabase.from("order_invoices").select("value, orders!inner(principal_id, seller_id, status)").neq("orders.status", "cancelado").gte("issued_at", P.prevStart).lte("issued_at", P.prevEnd),
+        "orders.",
+      )
+        .order("id")
+        .range(a, b),
+    ),
+    fetchAll((a, b) =>
+      scoped(
+        supabase
+          .from("order_items")
+          .select("description, code, unit, qty, line_total, orders!inner(order_date, status, principal_id, seller_id)")
+          .in("orders.status", SOLD)
+          .gte("orders.order_date", P.start)
+          .lte("orders.order_date", P.end),
+        "orders.",
+      )
+        .order("id")
+        .range(a, b),
+    ),
     // Últimos 12 meses: base para clientes novos e clientes para reativar.
-    scoped(
-      supabase.from("orders").select("customer_id, order_date, total, customers(name, phone)").in("status", SOLD).gte("order_date", addDays(today, -365)),
-    ).limit(20000),
+    fetchAll((a, b) =>
+      scoped(
+        supabase.from("orders").select("customer_id, order_date, total, customers(name, phone)").in("status", SOLD).gte("order_date", addDays(today, -365)),
+      )
+        .order("id")
+        .range(a, b),
+    ),
     supabase.from("principals").select("id, name").order("name"),
     isBackOffice
       ? supabase.from("members").select("user_id, full_name, email, role")
@@ -159,31 +174,6 @@ export default async function HomePage({
   const prevInvoiced = (invPrev ?? []).reduce((s, i) => s + Number(i.value), 0);
   const customers = new Set(sold.map((o) => o.customer_id));
   const prevCustomers = new Set(prevSold.map((o) => o.customer_id));
-  const commissions = comm ?? [];
-  const inPeriod = (d: string | null | undefined) => !!d && d >= P.start && d <= P.end;
-  const commGenerated = commissions
-    .filter((c) => inPeriod((c.order_invoices as unknown as { issued_at: string } | null)?.issued_at))
-    .reduce((s, c) => s + Number(c.value), 0);
-  const commExpected = sold.reduce(
-    (s, o) => s + (Number(o.subtotal) * (1 - Number(o.discount_pct) / 100) * Number(o.commission_pct ?? 0)) / 100,
-    0,
-  );
-  const inPrev = (d: string | null | undefined) => !!d && d >= P.prevStart && d <= P.prevEnd;
-  const issuedAt = (c: (typeof commissions)[number]) => (c.order_invoices as unknown as { issued_at: string } | null)?.issued_at;
-  const commGeneratedPrev = commissions.filter((c) => inPrev(issuedAt(c))).reduce((s, c) => s + Number(c.value), 0);
-  const openComm = commissions.filter((c) => c.status === "a_receber");
-  const lateList = openComm.filter((c) => c.due_date < today);
-  const toReceive = openComm.reduce((s, c) => s + Number(c.value), 0);
-  const lateComm = lateList.reduce((s, c) => s + Number(c.value), 0);
-  const received = commissions.filter((c) => c.status === "recebida");
-  const receivedPeriod = received.filter((c) => inPeriod(c.received_at)).reduce((s, c) => s + Number(c.received_value ?? c.value), 0);
-  const receivedPrev = received.filter((c) => inPrev(c.received_at)).reduce((s, c) => s + Number(c.received_value ?? c.value), 0);
-  // A receber por representada e os próximos vencimentos (atrasadas primeiro).
-  const commByPrincipal = [...openComm.reduce((m, c) => m.set(c.principal_id, (m.get(c.principal_id) ?? 0) + Number(c.value)), new Map<string, number>())]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4);
-  const nextDues = [...openComm].sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 4);
-  const openOrdersValue = (openData ?? []).reduce((s, o) => s + Number(o.total), 0);
 
   // Clientes novos: compraram no período e não tinham comprado nos 12 meses anteriores ao início.
   const before = new Set((history ?? []).filter((h) => h.order_date < P.start).map((h) => h.customer_id));
@@ -222,11 +212,15 @@ export default async function HomePage({
   const bySeller = rank(sold, (o) => o.seller_id, (o) => Number(o.total)).slice(0, 6);
   const byCustomer = rank(sold, (o) => o.customer_id, (o) => Number(o.total)).slice(0, 6);
   const customerName = new Map(sold.map((o) => [o.customer_id, o.customers?.name ?? "Cliente"] as const));
-  const productRows = (items ?? []).map((i) => ({ k: `${i.code ?? ""}|${i.description}`, v: Number(i.line_total), q: Number(i.qty) }));
+  const productRows = (items ?? []).map((i) => ({ k: `${i.code ?? ""}|${i.description}`, v: Number(i.line_total), q: Number(i.qty), u: String(i.unit ?? "unidade") }));
   const byProduct = rank(productRows, (r) => r.k, (r) => r.v).slice(0, 6);
   const productQty = new Map<string, number>();
   for (const r of productRows) productQty.set(r.k, (productQty.get(r.k) ?? 0) + r.q);
   const productTotal = productRows.reduce((s, r) => s + r.v, 0);
+  // Produtos vendidos = quantos produtos DIFERENTES saíram no período (não a soma das quantidades).
+  const productUnit = new Map(productRows.map((r) => [r.k, r.u] as const));
+  const distinctProducts = productQty.size;
+  const qtyText = (q: number, u: string) => `${q.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} ${unitShort(u)}`;
 
   /* ---------- Clientes para reativar (sem comprar há 60+ dias) ---------- */
   const lastBuy = new Map<string, { date: string; total: number; name: string; phone: string | null }>();
@@ -317,13 +311,13 @@ export default async function HomePage({
           </div>
           <Kpi label="Pedidos" icon="file" value={String(sold.length)} delta={delta(sold.length, prevSold.length)} sub={`antes ${prevSold.length}`} href="/pedidos" />
           <Kpi label="Ticket médio" icon="tag" value={brl(ticket)} delta={delta(ticket, prevTicket)} />
-          <Kpi label="Faturado (NF)" icon="receipt" value={brl(invoiced)} delta={delta(invoiced, prevInvoiced)} href="/comissoes" />
+          <Kpi label="Faturado (NF)" icon="receipt" value={brl(invoiced)} delta={delta(invoiced, prevInvoiced)} href="/faturamento" />
           <Kpi
-            label="Aguardando nota"
-            icon="clock"
-            value={brl(openOrdersValue)}
-            sub={`${(openData ?? []).length} ${(openData ?? []).length === 1 ? "pedido" : "pedidos"} em aberto`}
-            href="/faturamento?aba=a-faturar"
+            label="Produtos vendidos"
+            icon="tag"
+            value={String(distinctProducts)}
+            sub={distinctProducts === 1 ? "produto diferente no período" : "produtos diferentes no período"}
+            href="/produtos"
           />
           <div className="col-span-2 md:col-span-1">
           <Kpi
@@ -336,79 +330,6 @@ export default async function HomePage({
           />
           </div>
         </dl>
-
-        {/* Comissões (só administrador e financeiro) */}
-        {canSeeCommissions ? (
-        <section className="mb-5 overflow-hidden rounded-xl border border-line bg-surface">
-          <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line px-4 py-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Icon name="percent" size={16} className="text-accent-ink" />
-              Comissões
-              <span className="font-normal text-muted">das notas faturadas</span>
-            </h2>
-            <Link href="/comissoes" className="inline-flex items-center gap-1 text-xs font-medium text-ink-2 hover:text-ink">
-              Ver comissões <Icon name="arrow-right" size={12} />
-            </Link>
-          </header>
-          <dl className="grid grid-cols-2 bg-line md:grid-cols-4" style={{ gap: 1 }}>
-            <CommStat
-              label="Gerada no período"
-              value={brl(commGenerated)}
-              delta={delta(commGenerated, commGeneratedPrev)}
-              sub={commExpected ? `prevista nos pedidos ${brl(commExpected)}` : "pelas notas emitidas"}
-            />
-            <CommStat label="Recebida no período" value={brl(receivedPeriod)} delta={delta(receivedPeriod, receivedPrev)} sub={`antes ${brl(receivedPrev)}`} tone="ok" />
-            <CommStat label="A receber" value={brl(toReceive)} sub={`${openComm.length} ${openComm.length === 1 ? "nota" : "notas"}`} href="/comissoes?status=a_receber" />
-            <CommStat
-              label="Atrasada"
-              value={brl(lateComm)}
-              sub={lateList.length ? `${lateList.length} ${lateList.length === 1 ? "nota vencida" : "notas vencidas"}` : "nada vencido"}
-              tone={lateComm > 0 ? "alert" : undefined}
-              href="/comissoes?status=atrasadas"
-            />
-          </dl>
-          {openComm.length ? (
-            <div className="grid gap-px bg-line md:grid-cols-2">
-              <div className="bg-surface p-4">
-                <p className="mb-3 text-xs font-medium text-muted">A receber por representada</p>
-                <ul className="grid gap-2.5">
-                  {commByPrincipal.map(([id, v]) => (
-                    <li key={id}>
-                      <span className="flex items-baseline justify-between gap-3 text-[13px]">
-                        <span className="truncate font-medium">{pName.get(id) ?? "Representada"}</span>
-                        <span className="shrink-0 font-mono tabular-nums">{brl(v)}</span>
-                      </span>
-                      <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-active">
-                        <span className="block h-full rounded-full bg-accent" style={{ width: `${toReceive ? (v / toReceive) * 100 : 0}%` }} />
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="bg-surface p-4">
-                <p className="mb-2 text-xs font-medium text-muted">Próximos vencimentos</p>
-                <ul className="divide-y divide-line">
-                  {nextDues.map((c) => {
-                    const overdue = c.due_date < today;
-                    const nf = (c.order_invoices as unknown as { number: string | null } | null)?.number;
-                    return (
-                      <li key={c.id} className="flex items-center gap-3 py-2 text-[13px]">
-                        <span className={`w-14 shrink-0 font-mono text-xs ${overdue ? "font-medium text-alert" : "text-muted"}`}>{formatDate(c.due_date).slice(0, 5)}</span>
-                        <span className="min-w-0 flex-1 truncate">
-                          {pName.get(c.principal_id) ?? "Representada"}
-                          {nf ? <span className="text-muted"> · NF {nf}</span> : null}
-                        </span>
-                        {overdue ? <Badge tone="alert">Atrasada</Badge> : null}
-                        <span className="shrink-0 font-mono tabular-nums">{brl(Number(c.value))}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            </div>
-          ) : null}
-        </section>
-        ) : null}
 
         {/* Pedidos em atraso (não dependem do período: todo pedido ainda sem faturar) */}
         {late.length ? (
@@ -564,7 +485,7 @@ export default async function HomePage({
               name: k.split("|").slice(1).join("|"),
               value: brl(v),
               share: productTotal ? v / productTotal : 0,
-              sub: `${(productQty.get(k) ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} un.`,
+              sub: qtyText(productQty.get(k) ?? 0, productUnit.get(k) ?? "unidade"),
             }))}
           />
         </div>
@@ -702,40 +623,3 @@ function MiniStat({ label, value, alert, ok, href }: { label: string; value: str
   );
 }
 
-function CommStat({
-  label,
-  value,
-  sub,
-  delta: d,
-  tone,
-  href,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  delta?: number | null;
-  tone?: "ok" | "alert";
-  href?: string;
-}) {
-  const body = (
-    <>
-      <dt className="text-[12.5px] text-muted">{label}</dt>
-      <dd className={`mt-1 font-mono text-xl font-medium tracking-[-0.03em] tabular-nums ${tone === "alert" ? "text-alert" : "text-ink"}`}>{value}</dd>
-      <dd className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-        {d != null && d !== 0 ? (
-          <span className={`font-medium ${d > 0 ? "text-ok" : "text-alert"}`}>
-            {d > 0 ? "▲" : "▼"} {Math.abs(Math.round(d * 100))}%
-          </span>
-        ) : null}
-        {sub}
-      </dd>
-    </>
-  );
-  return href ? (
-    <Link href={href} className="block bg-surface px-4 py-3.5 transition-colors hover:bg-subtle">
-      {body}
-    </Link>
-  ) : (
-    <div className="bg-surface px-4 py-3.5">{body}</div>
-  );
-}

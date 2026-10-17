@@ -20,7 +20,7 @@ Next.js (App Router) + Supabase (Postgres, Auth, RLS) + Tailwind. Web app respon
 ## Como rodar
 
 1. Crie um projeto no [Supabase](https://supabase.com).
-2. No SQL Editor, rode **em ordem** os arquivos de `supabase/migrations/` (001 a 009).
+2. No SQL Editor, rode **em ordem** os arquivos de `supabase/migrations/` (001 a 018).
    Da 006 em diante, todos podem ser rodados de novo sem erro.
 3. Em Authentication, defina a Site URL como `http://localhost:3000` e adicione
    `http://localhost:3000/auth/callback` nas Redirect URLs.

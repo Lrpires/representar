@@ -100,6 +100,12 @@ export async function registerInvoice(orderId: string, formData: FormData) {
     lines.push({ order_item_id: it.id, qty: q });
   }
 
+  // Nota repetida: mesma chave de acesso, ou mesmo número (e série) da mesma representada.
+  const number = optional(formData, "number");
+  const series = optional(formData, "series");
+  const dup = await findDuplicateInvoice(supabase, { principalId: o.principal_id, number, series, accessKey });
+  if (dup) fail(back, dup);
+
   // Arquivo da nota (opcional).
   let filePath: string | null = null;
   let fileName: string | null = null;
@@ -117,8 +123,8 @@ export async function registerInvoice(orderId: string, formData: FormData) {
   const row = {
     org_id: orgId,
     order_id: orderId,
-    number: optional(formData, "number"),
-    series: optional(formData, "series"),
+    number,
+    series,
     issued_at: issuedAt,
     value: round2(value),
     file_path: filePath,
@@ -132,7 +138,8 @@ export async function registerInvoice(orderId: string, formData: FormData) {
     .select("id")
     .single();
   // Sem a migração 017 ainda não há onde guardar a chave: lança a nota sem ela.
-  if (error?.message.includes("access_key")) {
+  // (Só quando a coluna não existe. Nota repetida também cita "access_key" na mensagem, e essa tem de ser barrada.)
+  if (error && error.code !== "23505" && /access_key/.test(error.message) && /column|schema cache/i.test(error.message)) {
     ({ data: invoice, error } = await supabase.from("order_invoices").insert(row).select("id").single());
   }
   if (error?.code === "23505") {
@@ -235,4 +242,38 @@ export async function reopenFinalized(orderId: string) {
   revalidatePath("/pedidos");
   revalidatePath("/faturamento");
   redirect(`${here(orderId)}?ok=${encodeURIComponent("Pedido reaberto para novas notas.")}`);
+}
+
+const stripZeros = (n: string) => n.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+
+// Procura uma nota já lançada igual a esta. Devolve a mensagem de erro, ou null se não houver.
+async function findDuplicateInvoice(
+  supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
+  { principalId, number, series, accessKey }: { principalId: string; number: string | null; series: string | null; accessKey: string },
+): Promise<string | null> {
+  const label = (r: { number: string | null; orders: unknown }) => {
+    const n = (r.orders as { number: number } | null)?.number;
+    return `A NF ${r.number ?? ""} já foi lançada${n ? ` no pedido nº ${n}` : ""}.`;
+  };
+  if (accessKey) {
+    const { data, error } = await supabase
+      .from("order_invoices")
+      .select("number, orders(number)")
+      .eq("access_key", accessKey)
+      .limit(1);
+    if (!error && data?.length) return `${label(data[0])} (mesma chave de acesso)`;
+  }
+  if (!number || !stripZeros(number)) return null;
+  // Mesmo número da mesma representada (zeros à esquerda e pontos não importam: "000.045.871" = "45871").
+  const n = stripZeros(number);
+  const { data } = await supabase
+    .from("order_invoices")
+    .select("number, series, orders!inner(number, principal_id)")
+    .eq("orders.principal_id", principalId)
+    .ilike("number", `%${n}%`)
+    .limit(50);
+  const same = (data ?? []).find(
+    (r) => r.number && stripZeros(r.number) === n && (!series || !r.series || stripZeros(r.series) === stripZeros(series)),
+  );
+  return same ? label(same) : null;
 }

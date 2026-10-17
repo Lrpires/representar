@@ -77,7 +77,7 @@ export default async function SettingsPage({
 
           <FormSection
             title="Numeração dos pedidos"
-            hint="Escolha de qual número começar e, se quiser, um prefixo ou sufixo, como PED-1001/26."
+            hint="A numeração é separada por representada. Escolha de qual número cada uma começa e, se quiser, um prefixo ou sufixo, como PED-1001/26."
           >
             <OrderNumbering
               start={settings.orderStart}

@@ -205,7 +205,8 @@ export function OrderNumbering({
   const [s, setS] = useState(String(start));
   const [p, setP] = useState(prefix);
   const [x, setX] = useState(suffix);
-  const next = Math.max(lastNumber + 1, Number(s) || 1);
+  const first = Number(s) || 1;
+  void lastNumber; // a numeração agora é por representada (cada uma tem a sua sequência)
 
   return (
     <div className="grid gap-4">
@@ -228,15 +229,14 @@ export function OrderNumbering({
         </Field>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-pen-soft px-4 py-3">
-        <span className="text-[13px] text-pen-ink">Próximo pedido:</span>
+        <span className="text-[13px] text-pen-ink">Primeiro pedido de cada representada:</span>
         <span className="font-mono text-base font-semibold text-pen-ink">
-          {formatOrderNumber(next, { orderPrefix: p, orderSuffix: x })}
+          {formatOrderNumber(first, { orderPrefix: p, orderSuffix: x })}
         </span>
-        {lastNumber > 0 && Number(s) <= lastNumber ? (
-          <span className="w-full text-xs text-pen-ink/80">
-            Já existem pedidos até o nº {lastNumber}, então a numeração continua a partir daí.
-          </span>
-        ) : null}
+        <span className="w-full text-xs text-pen-ink/80">
+          Cada representada tem a sua sequência: os pedidos da representada A seguem 1, 2, 3… e a representada B começa
+          de novo no seu primeiro número. Quem já tem pedidos continua de onde parou.
+        </span>
       </div>
     </div>
   );

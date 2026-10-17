@@ -14,7 +14,7 @@
 ## 2. Como trabalhar comigo (regras do dono do projeto)
 
 - Responder em **português do Brasil**, de forma **simples** (o dono é empreendedor, não programador).
-- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **019**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
+- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **020**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
 - Visual no nível Linear/Notion, **mobile first**, seguindo o design system da marca (seção 7).
 - Commit e push só quando o dono pedir ("faz o commit e o push").
 
@@ -41,7 +41,7 @@ src/app/imprimir/       pedido para impressão/PDF        src/app/nf/[id]/  abre
 src/components/         ui.tsx (componentes base), nav.tsx, theme.tsx, icons.tsx, pin-map.tsx, cockpit/…
 src/lib/                regras: session (perfis), orders, aging, nfe (XML), goals, cockpit, theme (cor da empresa),
                         payables, commission(-due), geocode, lookup (CNPJ/CEP), settings…
-supabase/migrations/    001 a 018
+supabase/migrations/    001 a 019
 ```
 
 ## 4. Perfis e o que cada um vê
@@ -59,7 +59,7 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 
 **Pedidos**
 - Status: `rascunho` → `enviado` → `parcial` (faturado em parte) → `faturado` → `entregue`; ou `cancelado`.
-- Itens do catálogo ou digitados à mão. Numeração configurável (início, prefixo, sufixo).
+- Itens do catálogo ou digitados à mão. **Numeração separada por representada** (cada uma tem a sua sequência 1, 2, 3…), com início, prefixo e sufixo configuráveis (migração 019).
 - Representada sugerida pela última compra do cliente. % de comissão vem da representada (campo oculto para quem não vê comissões).
 - PDF/impressão com a logo do escritório e envio por WhatsApp.
 
@@ -98,6 +98,7 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 | 016 | Status `parcial` no pedido |
 | 017 | Prazos de atraso, finalizar pedido, chave de acesso da NF-e |
 | 018 | Comissões só para administrador/financeiro, gatilho de cancelamento, listas das contas a pagar (`payable_options`) |
+| 019 | Numeração dos pedidos por representada (e renumeração dos pedidos existentes) |
 
 Storage: `product-images` (público), `invoices` (privado, link temporário), `avatars`, `logos`.
 
@@ -119,7 +120,7 @@ Storage: `product-images` (público), `invoices` (privado, link temporário), `a
 
 ## 9. Pendências e próximos passos
 
-- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 019 liberando leitura de clientes ao financeiro.
+- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 020 liberando leitura de clientes ao financeiro.
 - **Importação: próxima etapa** — notas fiscais em lote (vários XMLs de uma vez, trazendo o histórico de faturamento e comissões) e pedidos antigos por planilha. Representadas, clientes e produtos já importam.
 - **Cobrança/assinatura, teste grátis e limites por plano** — não existem.
 - Ícones sem versão no design system (lixeira, editar, relógio…) usam o desenho antigo com o traço novo.

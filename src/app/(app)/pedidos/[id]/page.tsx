@@ -116,9 +116,13 @@ export default async function OrderPage({
         }
         action={
           <>
-            <Link href={`/imprimir/pedido/${id}`} target="_blank" className={ghostBtn} title="Imprimir ou salvar em PDF">
+            <a href={`/pedidos/${id}/pdf`} download className={ghostBtn} title="Baixar o pedido em PDF">
+              <Icon name="download" size={15} />
+              <span className="hidden sm:inline">Baixar PDF</span>
+            </a>
+            <Link href={`/imprimir/pedido/${id}`} target="_blank" className={ghostBtn} title="Imprimir">
               <Icon name="printer" size={15} />
-              <span className="hidden sm:inline">Imprimir / PDF</span>
+              <span className="hidden sm:inline">Imprimir</span>
             </Link>
             {role !== "finance" ? (
               <form action={duplicateOrder.bind(null, id)}>

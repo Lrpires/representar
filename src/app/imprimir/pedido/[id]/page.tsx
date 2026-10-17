@@ -6,7 +6,8 @@ import { brl, formatDate } from "@/lib/format";
 import { unitLabel } from "@/lib/units";
 import { logoUrl } from "@/lib/storage";
 import { PrintButton } from "@/components/print-button";
-import { Logo } from "@/components/ui";
+import { Logo, accentBtn } from "@/components/ui";
+import { Icon } from "@/components/icons";
 
 export const metadata = { title: "Pedido" };
 
@@ -50,8 +51,14 @@ export default async function PrintOrderPage({ params }: { params: Promise<{ id:
 
       <div className="sticky top-0 z-10 border-b border-line bg-white/90 backdrop-blur print:hidden">
         <div className="mx-auto flex max-w-[52rem] items-center justify-between gap-3 px-4 py-3">
-          <p className="text-[13px] text-muted">Use “Salvar como PDF” na janela de impressão para enviar por e-mail ou WhatsApp.</p>
-          <PrintButton />
+          <p className="text-[13px] text-muted">Baixe o PDF para enviar por e-mail ou WhatsApp, ou imprima direto.</p>
+          <div className="flex gap-2">
+            <a href={`/pedidos/${id}/pdf`} download className={accentBtn}>
+              <Icon name="download" size={15} />
+              Baixar PDF
+            </a>
+            <PrintButton />
+          </div>
         </div>
       </div>
 

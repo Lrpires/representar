@@ -61,7 +61,7 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 - Status: `rascunho` → `enviado` → `parcial` (faturado em parte) → `faturado` → `entregue`; ou `cancelado`.
 - Itens do catálogo ou digitados à mão. **Numeração separada por representada** (cada uma tem a sua sequência 1, 2, 3…), com início, prefixo e sufixo configuráveis (migração 019).
 - Representada sugerida pela última compra do cliente. % de comissão vem da representada (campo oculto para quem não vê comissões).
-- PDF/impressão com a logo do escritório e envio por WhatsApp.
+- **Baixar PDF** direto com um clique (gerado no servidor, A4, com logo, cor da empresa e número de páginas: `src/lib/order-pdf.tsx`, rota `/pedidos/[id]/pdf`), além da tela de impressão e do envio por WhatsApp.
 
 **Faturamento (notas fiscais)**
 - Um pedido pode ter várias notas (faturamento parcial). Se faltar saldo, o pedido fica `parcial`; o botão **"Finalizar pedido"** encerra mesmo sem o restante (pode reabrir).

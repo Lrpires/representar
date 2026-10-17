@@ -1,13 +1,13 @@
 "use client";
 
 import { Icon } from "./icons";
-import { primaryBtn } from "./ui";
+import { ghostBtn } from "./ui";
 
 export function PrintButton() {
   return (
-    <button type="button" onClick={() => window.print()} className={primaryBtn}>
+    <button type="button" onClick={() => window.print()} className={ghostBtn}>
       <Icon name="printer" size={15} />
-      Imprimir / Salvar PDF
+      Imprimir
     </button>
   );
 }

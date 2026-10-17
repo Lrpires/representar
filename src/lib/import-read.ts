@@ -1,5 +1,7 @@
 // Leitura da planilha de importação (sem acesso ao banco): usada pelas ações de importar e testável sozinha.
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
+import { posix } from "node:path";
 import { parseNumber } from "@/lib/format";
 import { UNITS } from "@/lib/units";
 import { normHeader, visibleColumns, type ImportDef } from "@/lib/import-schema";
@@ -46,12 +48,19 @@ const UNIT_ALIASES: Record<string, string> = {
   un: "unidade", und: "unidade", unid: "unidade", pc: "peca", pca: "peca", pcs: "peca", pecas: "peca",
   cx: "caixa", pct: "pacote", m: "metro", mt: "metro", m2: "metro_quadrado", m3: "metro_cubico",
   g: "grama", gr: "grama", l: "litro", lt: "litro", dz: "duzia", t: "tonelada", ton: "tonelada", h: "hora",
+  quilograma: "kg", quilo: "kg", kilo: "kg", kilograma: "kg", kgs: "kg", metrolinear: "metro", ml: "metro",
+  metroquadrado: "metro_quadrado", metrocubico: "metro_cubico", cm: "centimetro", mil: "milheiro", cto: "cento",
 };
 export function unitValue(raw: string): string | null {
   if (!raw) return "unidade";
-  const n = lower(raw).replace(/[.\s]/g, "");
-  const found = UNITS.find((u) => u.value === n || lower(u.label).replace(/\s/g, "") === n || lower(u.label).replace(/[()\s²³]/g, "") === n);
-  return found?.value ?? UNIT_ALIASES[n] ?? null;
+  const clean = lower(raw).replace(/[.\s]/g, "");
+  // Tenta como veio e no singular ("metros" → "metro", "peças" → "peca", "pares" → "par").
+  for (const n of [clean, clean.replace(/es$/, ""), clean.replace(/s$/, "")]) {
+    const found = UNITS.find((u) => u.value === n || lower(u.label).replace(/\s/g, "") === n || lower(u.label).replace(/[()\s²³]/g, "") === n);
+    if (found) return found.value;
+    if (UNIT_ALIASES[n]) return UNIT_ALIASES[n];
+  }
+  return null;
 }
 
 export function cepText(raw: string, errors: string[]) {
@@ -81,6 +90,51 @@ export function filled(obj: Record<string, unknown>) {
 
 /* ---------------------------------------------------------------- leitura */
 
+// Alguns programas (Excel na web e outros) gravam o arquivo num formato que o Excel entende,
+// mas a biblioteca de leitura não: caminhos internos começando com "/" (ex.: "/xl/workbook.xml")
+// e as marcações com prefixo (ex.: "<x:workbook>" no lugar de "<workbook>"). Convertemos para o
+// formato comum antes de abrir. O conteúdo da planilha não muda.
+const SHEET_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+export async function normalizeXlsx(buf: ArrayBuffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(buf);
+  let changed = false;
+  for (const name of Object.keys(zip.files)) {
+    if (zip.files[name].dir || !/\.(xml|rels)$/i.test(name)) continue;
+    const original = await zip.file(name)!.async("string");
+    let xml = original.replace(/^\uFEFF/, "");
+
+    // 1) Caminhos absolutos nas ligações internas viram relativos à pasta do arquivo.
+    if (/\.rels$/i.test(name)) {
+      const base = name.replace(/_rels\/[^/]*\.rels$/, "");
+      xml = xml.replace(/(<Relationship\b[^>]*?\bTarget=")\/([^"]+)"/g, (m, head: string, target: string) =>
+        /TargetMode="External"/.test(m) ? m : `${head}${posix.relative(base || ".", target) || target}"`,
+      );
+    }
+
+    // 2) Comentários e anotações das células não são usados na importação e cada programa grava de
+    //    um jeito: são retirados da leitura (a planilha da pessoa não é alterada).
+    if (/\.rels$/i.test(name)) {
+      xml = xml.replace(/<Relationship\b[^>]*\bType="[^"]*\/(comments|vmlDrawing|threadedComment|person)"[^>]*\/>/g, "");
+    } else if (/^xl\/worksheets\/[^/]+\.xml$/i.test(name)) {
+      xml = xml.replace(/<([A-Za-z0-9_]+:)?legacyDrawing\b[^>]*\/>/g, "");
+    }
+
+    // 3) Marcações com prefixo da planilha ("x:") voltam ao nome simples.
+    const prefix = xml.match(new RegExp(`xmlns:([A-Za-z0-9_]+)="${SHEET_NS.replace(/[./]/g, "\\$&")}"`))?.[1];
+    if (prefix && !new RegExp(`xmlns="${SHEET_NS.replace(/[./]/g, "\\$&")}"`).test(xml)) {
+      xml = xml
+        .replace(new RegExp(`<(/?)${prefix}:`, "g"), "<$1")
+        .replace(new RegExp(`xmlns:${prefix}="`), 'xmlns="');
+    }
+
+    if (xml !== original) {
+      zip.file(name, xml);
+      changed = true;
+    }
+  }
+  return changed ? zip.generateAsync({ type: "nodebuffer" }) : Buffer.from(buf);
+}
+
 export async function readSheet(def: ImportDef, file: { name: string; size: number; arrayBuffer(): Promise<ArrayBuffer> }, canSeeCommissions: boolean) {
   if (!file || file.size === 0) return { error: "Escolha a planilha preenchida." } as const;
   if (file.size > MAX_BYTES) return { error: "Arquivo maior que 5 MB. Divida em partes menores." } as const;
@@ -88,8 +142,9 @@ export async function readSheet(def: ImportDef, file: { name: string; size: numb
 
   const wb = new ExcelJS.Workbook();
   try {
-    await wb.xlsx.load(Buffer.from(await file.arrayBuffer()) as unknown as ExcelJS.Buffer);
-  } catch {
+    await wb.xlsx.load((await normalizeXlsx(await file.arrayBuffer())) as unknown as ExcelJS.Buffer);
+  } catch (e) {
+    console.error("[importar] falha ao abrir planilha:", file.name, e);
     return { error: "Não foi possível ler o arquivo. Ele está em Excel (.xlsx)?" } as const;
   }
   const ws = wb.worksheets.find((w) => lower(w.name) === lower(def.title)) ?? wb.worksheets[0];

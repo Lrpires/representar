@@ -21,7 +21,7 @@ async function planPrincipals(ctx: Ctx, rows: { line: number; cells: Cells }[]):
   return rows.map(({ line, cells: c }) => {
     const errors: string[] = [];
     if (!c.name) errors.push("Nome vazio");
-    if (c.cnpj && !isValidCnpj(c.cnpj)) errors.push("CNPJ inválido");
+    if (c.cnpj && !isValidCnpj(c.cnpj)) errors.push("CNPJ inválido (os dígitos não conferem)");
     const commission = num(c.commission ?? "");
     if (commission !== null && (Number.isNaN(commission) || commission < 0 || commission > 100)) errors.push("Comissão deve ficar entre 0 e 100");
     const days = num(c.days ?? "");
@@ -78,7 +78,7 @@ async function planCustomers(ctx: Ctx, rows: { line: number; cells: Cells }[]): 
   return rows.map(({ line, cells: c }) => {
     const errors: string[] = [];
     if (!c.name) errors.push("Razão social vazia");
-    if (c.cnpj && !isValidCnpj(c.cnpj)) errors.push("CNPJ inválido");
+    if (c.cnpj && !isValidCnpj(c.cnpj)) errors.push("CNPJ inválido (os dígitos não conferem)");
     if (c.phone && !isValidPhone(c.phone)) errors.push("Telefone incompleto (inclua o DDD)");
     const zip = cepText(c.zip ?? "", errors);
     const state = ufText(c.state ?? "", errors);

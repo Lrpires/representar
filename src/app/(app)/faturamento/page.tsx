@@ -282,7 +282,6 @@ export default async function BillingPage({
                               <RowLink href={qs({ nota: i.id })} className="font-medium text-ink">
                                 NF {i.number || "s/n"}
                               </RowLink>
-                              {i.series ? <span className="ml-1 text-xs text-muted">série {i.series}</span> : null}
                             </td>
                             <td className={`${td} tabular-nums text-ink-2`}>{formatDate(i.issued_at)}</td>
                             <td className={td}>

@@ -78,14 +78,17 @@ export default async function BillingPage({
   type InvDetail = {
     id: string; number: string | null; series: string | null; issued_at: string; value: number; access_key?: string | null;
     file_path: string | null; file_name: string | null; notes: string | null; created_at: string; order_id: string;
-    orders: { number: number; status: string; seller_id: string; customers: { name: string } | null; principals: { name: string } | null } | null;
-    order_invoice_items: { qty: number; order_items: { description: string; code: string | null; unit: string; qty: number } | null }[];
+    orders: {
+      number: number; status: string; seller_id: string; discount_pct: number;
+      customers: { name: string; cnpj: string | null } | null; principals: { name: string; cnpj: string | null } | null;
+    } | null;
+    order_invoice_items: { qty: number; order_items: { description: string; code: string | null; unit: string; unit_price: number } | null }[];
     commissions: { value: number; pct: number; due_date: string; status: string; received_value: number | null; received_at: string | null }[];
   };
   let detail: InvDetail | null = null;
   if (sp.nota) {
     const base =
-      "id, number, series, issued_at, value, file_path, file_name, notes, created_at, order_id, orders!inner(number, status, seller_id, customers(name), principals(name)), order_invoice_items(qty, order_items(description, code, unit, qty)), commissions(value, pct, due_date, status, received_value, received_at)";
+      "id, number, series, issued_at, value, file_path, file_name, notes, created_at, order_id, orders!inner(number, status, seller_id, discount_pct, customers(name, cnpj), principals(name, cnpj)), order_invoice_items(qty, order_items(description, code, unit, unit_price)), commissions(value, pct, due_date, status, received_value, received_at)";
     let { data, error: e } = await supabase.from("order_invoices").select(`${base}, access_key`).eq("id", sp.nota).maybeSingle();
     if (e) ({ data } = await supabase.from("order_invoices").select(base).eq("id", sp.nota).maybeSingle()); // sem a migração 017
     detail = (data as unknown as InvDetail) ?? null;
@@ -437,7 +440,7 @@ export default async function BillingPage({
       <Sheet
         open={!!detail}
         title={detail ? `NF ${detail.number || "sem número"}` : "Nota fiscal"}
-        description={detail ? `${detail.series ? `Série ${detail.series} · ` : ""}emitida em ${formatDate(detail.issued_at)}` : undefined}
+        description={detail ? `Emitida em ${formatDate(detail.issued_at)}` : undefined}
         closeHref={qs({ nota: undefined })}
       >
         {detail ? (
@@ -466,26 +469,25 @@ export default async function BillingPage({
                 <Icon name="chevron-right" size={16} className="text-faint group-hover:text-ink" />
               </Link>
 
-              {/* Dados da nota */}
+              {/* Espelho da nota: quem emitiu, para quem, valor e data */}
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
                 <div>
-                  <dt className="text-xs text-muted">Valor</dt>
+                  <dt className="text-xs text-muted">Emitente</dt>
+                  <dd className="font-medium">{detail.orders?.principals?.name ?? "—"}</dd>
+                  {detail.orders?.principals?.cnpj ? <dd className="text-xs text-muted">{detail.orders.principals.cnpj}</dd> : null}
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Destinatário</dt>
+                  <dd className="font-medium">{detail.orders?.customers?.name ?? "—"}</dd>
+                  {detail.orders?.customers?.cnpj ? <dd className="text-xs text-muted">{detail.orders.customers.cnpj}</dd> : null}
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Valor da nota</dt>
                   <dd className="font-mono text-base font-semibold tabular-nums">{brl(Number(detail.value))}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted">Emissão</dt>
                   <dd className="tabular-nums">{formatDate(detail.issued_at)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Número / série</dt>
-                  <dd>
-                    {detail.number || "—"}
-                    {detail.series ? ` · série ${detail.series}` : ""}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Lançada em</dt>
-                  <dd className="tabular-nums">{formatDate(String(detail.created_at).slice(0, 10))}</dd>
                 </div>
                 {detail.access_key ? (
                   <div className="col-span-2">
@@ -518,31 +520,40 @@ export default async function BillingPage({
                 <p className="text-xs text-muted">Nenhum arquivo (PDF ou XML) anexado a esta nota.</p>
               )}
 
-              {/* Quantidades */}
+              {/* Itens faturados nesta nota (preço do pedido, com o desconto geral) */}
               {detail.order_invoice_items.length ? (
                 <section>
-                  <p className="mb-2 text-xs font-medium text-muted">Itens desta nota</p>
-                  <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line">
-                    {detail.order_invoice_items.map((l, n) => (
-                      <li key={n} className="flex items-center gap-3 px-3 py-2.5 text-[13px]">
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate">
-                            {l.order_items?.code ? <span className="mr-1.5 font-mono text-xs text-muted">{l.order_items.code}</span> : null}
-                            {l.order_items?.description ?? "Item removido do pedido"}
-                          </span>
-                        </span>
-                        <span className="shrink-0 tabular-nums">
-                          {numText(Number(l.qty), 3)}
-                          {l.order_items ? (
-                            <span className="text-muted">
-                              {" "}
-                              de {numText(Number(l.order_items.qty), 3)} {unitLabel(l.order_items.unit).toLowerCase()}
-                            </span>
-                          ) : null}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="mb-2 text-xs font-medium text-muted">Itens da nota</p>
+                  <div className="overflow-hidden rounded-lg border border-line">
+                    <table className="w-full text-[13px]">
+                      <thead className="bg-subtle text-[11px] text-muted">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">Produto</th>
+                          <th className="px-3 py-2 text-right font-medium">Qtd.</th>
+                          <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">Valor un.</th>
+                          <th className="px-3 py-2 text-right font-medium">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line">
+                        {detail.order_invoice_items.map((l, n) => {
+                          const price = Number(l.order_items?.unit_price ?? 0) * (1 - Number(detail!.orders?.discount_pct ?? 0) / 100);
+                          return (
+                            <tr key={n}>
+                              <td className="px-3 py-2.5">
+                                {l.order_items?.code ? <span className="block font-mono text-[11px] text-muted">{l.order_items.code}</span> : null}
+                                {l.order_items?.description ?? "Item removido do pedido"}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
+                                {numText(Number(l.qty), 3)} {l.order_items ? unitLabel(l.order_items.unit).toLowerCase() : ""}
+                              </td>
+                              <td className="hidden whitespace-nowrap px-3 py-2.5 text-right font-mono tabular-nums sm:table-cell">{brl(price)}</td>
+                              <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono tabular-nums">{brl(price * Number(l.qty))}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </section>
               ) : null}
 
@@ -562,6 +573,7 @@ export default async function BillingPage({
               ) : null}
             </div>
 
+            <p className="border-t border-line px-5 py-2 text-[11px] text-faint">Lançada no sistema em {formatDate(String(detail.created_at).slice(0, 10))}</p>
             <footer className="flex flex-col-reverse gap-2 border-t border-line bg-subtle px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:items-center sm:pb-3">
               {canDelete ? (
                 commission?.status === "recebida" ? (

@@ -19,6 +19,7 @@ export type OrgSettings = {
   orderSuffix: string;
   warnDays: number; // pedido sem faturar: amarelo a partir de N dias
   criticalDays: number; // vermelho a partir de N dias
+  usePriceTables: boolean; // tabelas de preço ligadas (migração 022); desligadas, o pedido usa o último preço
 };
 
 // Configurações do escritório (uma consulta por página). Se a migração 008 ainda
@@ -44,5 +45,6 @@ export const getSettings = cache(async (): Promise<OrgSettings> => {
     orderSuffix: d?.order_suffix ?? "",
     warnDays: Number(d?.order_warn_days ?? 7),
     criticalDays: Number(d?.order_critical_days ?? 15),
+    usePriceTables: d?.use_price_tables === true,
   };
 });

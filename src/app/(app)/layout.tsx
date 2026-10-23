@@ -62,7 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
         ) : null}
 
-        <SideNav counts={navCounts} showTeam={showTeam} showFinance={showFinance} showCommissions={canSeeCommissions} />
+        <SideNav counts={navCounts} showTeam={showTeam} showFinance={showFinance} showCommissions={canSeeCommissions} showPriceTables={settings.usePriceTables} />
 
         <div className="mt-auto grid gap-2 pt-6">
           {next ? (
@@ -128,6 +128,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
 
       <MobileTabs
+        showPriceTables={settings.usePriceTables}
         showTeam={showTeam}
         showFinance={showFinance}
         showCommissions={canSeeCommissions}

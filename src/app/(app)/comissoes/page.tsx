@@ -43,11 +43,15 @@ export default async function CommissionsPage({
   const q = safeQ(sp.q).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
   const baseCols =
     "id, order_id, value, due_date, status, received_at, received_value, principal_id, orders(number, commission_pct, customers(name)), principals(name)";
-  const build = (withReceipts: boolean) => {
+  const build = (withReceipts: boolean, withInstallments = false) => {
     const nfCols = `${q ? "order_invoices!inner" : "order_invoices"}(id, number, series, issued_at, value, file_path)`;
     let qy = supabase
       .from("commissions")
-      .select(`${baseCols}, ${nfCols}${withReceipts ? ", closed_at, close_reason, commission_receipts(id, amount, received_at, notes)" : ""}`)
+      .select(
+        `${baseCols}, ${nfCols}${withReceipts ? ", closed_at, close_reason, commission_receipts(id, amount, received_at, notes)" : ""}${
+          withInstallments ? ", order_invoice_installments(number, due_date, position)" : ""
+        }`,
+      )
       .order("due_date");
     if (q) qy = qy.ilike("order_invoices.number", `%${q}%`).limit(300);
     // "Atrasadas" mostra as de qualquer mês; os outros filtros, só o mês escolhido (pelo vencimento).
@@ -56,8 +60,9 @@ export default async function CommissionsPage({
     if (sp.rep) qy = qy.eq("principal_id", sp.rep);
     return qy;
   };
-  const first = await build(true);
-  // Sem a migração 020 (recebimentos), carrega do jeito antigo.
+  // Tenta com as parcelas (021) e os recebimentos (020); sem essas migrações, carrega com o que houver.
+  const full = await build(true, true);
+  const first = full.error ? await build(true) : full;
   const listResult = first.error ? await build(false) : first;
 
   const needs020 = !!first.error && !listResult.error;

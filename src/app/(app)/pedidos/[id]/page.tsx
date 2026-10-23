@@ -278,11 +278,13 @@ export default async function OrderPage({
               qty: numText(Number(i.qty), 3),
               price: priceText(Number(i.list_price)),
               discount: Number(i.discount_pct) ? numText(Number(i.discount_pct), 2) : "",
+              options: (i.options as Record<string, string> | null) ?? null,
             })),
           }}
           customers={editor.customers}
           principals={editor.principals}
           products={editor.products}
+          priceHistory={editor.priceHistory}
           units={editor.units}
           defaultUnit={editor.defaultUnit}
         />
@@ -320,6 +322,7 @@ export default async function OrderPage({
         <SheetForm action={registerInvoice.bind(null, id)} closeHref={here} submitLabel="Registrar faturamento">
           <ErrorNote message={sp.erro} />
           <InvoiceFields
+            paymentTerms={o.payment_terms}
             expected={{ principalCnpj: principal?.cnpj ?? null, customerCnpj: customer?.cnpj ?? null }}
             today={todayISO()}
             discountPct={Number(o.discount_pct)}

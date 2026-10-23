@@ -6,7 +6,7 @@ import { getContext } from "@/lib/session";
 import { fail } from "@/lib/flash";
 import { text, optional, parseNumber } from "@/lib/format";
 import { round2 } from "@/lib/orders";
-import { commissionDueDate } from "@/lib/commission-due";
+import { planCommissions, type InstallmentIn, type PlanRule } from "@/lib/commission-plan";
 
 const here = (id: string) => `/pedidos/${id}`;
 
@@ -69,7 +69,7 @@ export async function registerInvoice(orderId: string, formData: FormData) {
 
   const { data: o } = await supabase
     .from("orders")
-    .select("id, status, seller_id, principal_id, commission_pct, principals(commission_close_mode, commission_close_day, commission_days_after)")
+    .select("id, status, seller_id, principal_id, commission_pct, principals(commission_trigger, commission_release, commission_close_mode, commission_close_day, commission_days_after)")
     .eq("id", orderId)
     .maybeSingle();
   if (!o) fail("/pedidos", "Pedido não encontrado.");
@@ -107,6 +107,20 @@ export async function registerInvoice(orderId: string, formData: FormData) {
     if (q > left + 1e-9) fail(back, `${it.description}: só faltam ${String(left).replace(".", ",")} para faturar.`);
     lines.push({ order_item_id: it.id, qty: q });
   }
+
+  // Parcelas (duplicatas): vencimento e valor de cada uma (do XML ou digitadas).
+  const instDue = formData.getAll("inst_due").map(String);
+  const instValue = formData.getAll("inst_value").map(String);
+  const instNumber = formData.getAll("inst_number").map(String);
+  const installments: InstallmentIn[] = [];
+  instDue.forEach((due, i) => {
+    const raw = (instValue[i] ?? "").trim();
+    if (!due && !raw) return; // linha vazia
+    const v = parseNumber(raw);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) fail(back, `Parcela ${i + 1}: informe o vencimento.`);
+    if (!Number.isFinite(v) || v <= 0) fail(back, `Parcela ${i + 1}: informe o valor.`);
+    installments.push({ number: instNumber[i]?.trim() || null, dueDate: due, value: round2(v) });
+  });
 
   // Nota repetida: mesma chave de acesso, ou mesmo número (e série) da mesma representada.
   const number = optional(formData, "number");
@@ -164,20 +178,61 @@ export async function registerInvoice(orderId: string, formData: FormData) {
     await supabase.from("order_invoice_items").insert(lines.map((l) => ({ invoice_id: invoice.id, ...l })));
   }
 
-  // Comissão desta nota: valor faturado × % do pedido, vencendo pela regra da representada.
+  // Parcelas da nota (migração 021). Sem a tabela, a nota fica sem parcelas e a comissão sai inteira.
+  let instIds: string[] = [];
+  if (installments.length) {
+    const { data: inst, error: instErr } = await supabase
+      .from("order_invoice_installments")
+      .insert(
+        installments.map((x, n) => ({
+          org_id: orgId,
+          invoice_id: invoice.id,
+          position: n + 1,
+          number: x.number,
+          due_date: x.dueDate,
+          value: x.value,
+        })),
+      )
+      .select("id, position");
+    if (!instErr && inst) instIds = [...inst].sort((a, b) => a.position - b.position).map((x) => x.id);
+  }
+
+  // Comissões desta nota: no faturamento, o valor completo; na liquidez, uma por parcela,
+  // vencendo pela regra da representada aplicada ao vencimento de cada parcela.
   const pct = Number(o.commission_pct ?? 0);
-  const rule = o.principals as unknown as Parameters<typeof commissionDueDate>[1];
-  await supabase.from("commissions").insert({
+  const rule = (o.principals ?? {}) as unknown as PlanRule;
+  const plan = planCommissions({
+    issuedAt,
+    invoiceValue: round2(value),
+    pct,
+    installments: instIds.length ? installments : [],
+    rule,
+  });
+  const rows = plan.map((c) => ({
     org_id: orgId,
     order_id: orderId,
     invoice_id: invoice.id,
+    installment_id: c.installmentIndex != null ? instIds[c.installmentIndex] : null,
     principal_id: o.principal_id,
     seller_id: o.seller_id,
-    base_value: round2(value),
+    base_value: c.base,
     pct,
-    value: round2((value * pct) / 100),
-    due_date: commissionDueDate(issuedAt, rule ?? {}),
-  });
+    value: c.value,
+    due_date: c.dueDate,
+  }));
+  const { error: commErr } = await supabase.from("commissions").insert(rows);
+  // Sem a migração 021 (comissão por parcela), grava a comissão do jeito antigo: uma por nota.
+  if (commErr && /installment_id/.test(commErr.message)) {
+    const total = plan.reduce((t, c) => t + c.value, 0);
+    const { installment_id: _drop, ...first } = rows[0];
+    void _drop;
+    await supabase.from("commissions").insert({
+      ...first,
+      base_value: round2(value),
+      value: round2(total),
+      due_date: plan[0].dueDate,
+    });
+  }
 
   await syncOrder(supabase, orderId);
   revalidatePath(here(orderId));

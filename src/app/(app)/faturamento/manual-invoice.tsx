@@ -14,6 +14,7 @@ export type ManualOrder = {
   status: string;
   total: number;
   discountPct: number;
+  paymentTerms: string | null;
   customerName: string;
   customerCnpj: string | null;
   principalName: string;
@@ -97,6 +98,7 @@ export function ManualInvoice({ orders, today, initialOrderId }: { orders: Manua
           key={chosen.id}
           items={chosen.items}
           discountPct={chosen.discountPct}
+          paymentTerms={chosen.paymentTerms}
           today={today}
           expected={{ principalCnpj: chosen.principalCnpj, customerCnpj: chosen.customerCnpj }}
         />

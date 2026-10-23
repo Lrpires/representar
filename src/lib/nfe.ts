@@ -5,6 +5,8 @@
 import { digits } from "./br";
 
 export type NfeItem = { code: string; description: string; unit: string; qty: number; unitPrice: number; total: number };
+// Parcela (duplicata) da cobrança: número, vencimento e valor.
+export type NfeInstallment = { number: string; dueDate: string; value: number };
 export type Nfe = {
   accessKey: string | null;
   number: string;
@@ -16,6 +18,7 @@ export type Nfe = {
   destDoc: string; // CNPJ ou CPF, só números
   destName: string;
   items: NfeItem[];
+  installments: NfeInstallment[];
 };
 
 const num = (s: string | null | undefined) => {
@@ -54,8 +57,14 @@ export function parseNfe(xml: string): Nfe {
     };
   });
 
+  // Cobrança: <cobr><dup><nDup/><dVenc/><vDup/></dup>…
+  const installments: NfeInstallment[] = all("dup", inf)
+    .map((d) => ({ number: text("nDup", d), dueDate: text("dVenc", d).slice(0, 10), value: num(text("vDup", d)) }))
+    .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d.dueDate) && d.value > 0);
+
   return {
     accessKey,
+    installments,
     number: text("nNF", ide).replace(/^0+(?=\d)/, ""),
     series: text("serie", ide),
     issuedAt: issued.slice(0, 10),

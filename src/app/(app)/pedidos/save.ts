@@ -7,6 +7,7 @@ import { lineTotals, orderTotals, num } from "@/lib/orders";
 
 export type ItemInput = {
   variant_id: string | null;
+  options?: Record<string, string> | null; // opções escolhidas na grade, ex.: {"Cor": "Azul"}
   code: string;
   description: string;
   unit: string;
@@ -126,8 +127,7 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
   }
 
   // Grava os itens novos antes de apagar os antigos: se algo falhar, nada se perde.
-  const { error: itemsError } = await supabase.from("order_items").insert(
-    items.map((i, position) => {
+  const rowsToInsert = items.map((i, position) => {
       const l = lineTotals(lines[position]);
       return {
         org_id: orgId,
@@ -142,9 +142,14 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
         discount_pct: lines[position].discount,
         unit_price: l.unit,
         line_total: l.total,
+        options: i.variant_id && i.options && Object.keys(i.options).length ? i.options : null,
       };
-    }),
-  );
+  });
+  let { error: itemsError } = await supabase.from("order_items").insert(rowsToInsert);
+  // Sem a migração 022 (coluna options), grava sem as opções (elas já estão na descrição).
+  if (itemsError?.message.includes("options")) {
+    ({ error: itemsError } = await supabase.from("order_items").insert(rowsToInsert.map(({ options: _o, ...r }) => r)));
+  }
   if (itemsError) return { error: friendly(itemsError.message) };
   if (oldItemIds.length) await supabase.from("order_items").delete().in("id", oldItemIds);
 

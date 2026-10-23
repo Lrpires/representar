@@ -264,13 +264,13 @@ export function FormSection({
   return (
     <section
       id={id}
-      className="grid scroll-mt-20 gap-3 border-t border-line pt-6 first:border-t-0 first:pt-0 sm:gap-4 xl:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] xl:gap-10 xl:pt-8"
+      className="grid scroll-mt-20 gap-3 border-t border-line pt-6 first:border-t-0 first:pt-0 sm:gap-4 xl:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] xl:gap-10 xl:py-8 xl:first:pt-0 xl:last:pb-0"
     >
       <div>
         <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
         {hint ? <p className="mt-1 text-[13px] leading-relaxed text-muted">{hint}</p> : null}
       </div>
-      <div className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5">{children}</div>
+      <div className="min-w-0 rounded-xl border border-line bg-surface p-5 sm:p-6">{children}</div>
     </section>
   );
 }

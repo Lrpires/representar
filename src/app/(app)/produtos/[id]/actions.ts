@@ -261,3 +261,32 @@ export async function deleteProduct(id: string) {
   revalidatePath("/produtos");
   redirect(`/produtos?ok=${encodeURIComponent("Produto excluído.")}`);
 }
+
+// Listas de opções do produto (no máximo duas) e as opções que ele não tem.
+export async function setProductOptions(id: string, formData: FormData) {
+  const { supabase, orgId, canManage } = await getContext();
+  const path = here(id);
+  if (!canManage) fail(path, "Só administrador e gerente podem alterar produtos.");
+
+  const lists = formData.getAll("list_id").map(String);
+  if (lists.length > 2) fail(path, "Escolha no máximo 2 listas (ex.: Cor e Tamanho).");
+
+  const { error } = await supabase.from("product_option_lists").delete().eq("product_id", id);
+  if (error) fail(path, "Falta rodar a migração 022 no Supabase.");
+  if (lists.length) {
+    await supabase
+      .from("product_option_lists")
+      .insert(lists.map((list_id, position) => ({ org_id: orgId, product_id: id, list_id, position })));
+  }
+
+  // Opções desmarcadas ficam escondidas só neste produto.
+  const all = formData.getAll("value_id").map(String);
+  const hidden = all.filter((v) => formData.get(`on_${v}`) !== "on");
+  await supabase.from("product_option_hidden").delete().eq("product_id", id);
+  if (hidden.length) {
+    await supabase
+      .from("product_option_hidden")
+      .insert(hidden.map((value_id) => ({ org_id: orgId, product_id: id, value_id })));
+  }
+  done(id, "Opções do produto salvas.");
+}

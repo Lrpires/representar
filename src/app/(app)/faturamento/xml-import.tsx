@@ -103,6 +103,13 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
           <input type="hidden" name="issued_at" value={nfe.issuedAt} />
           <input type="hidden" name="value" value={priceText(nfe.total)} />
           <input type="hidden" name="access_key" value={nfe.accessKey ?? ""} />
+          {nfe.installments.map((d, i) => (
+            <span key={i} className="hidden">
+              <input type="hidden" name="inst_number" value={d.number || String(i + 1).padStart(3, "0")} />
+              <input type="hidden" name="inst_due" value={d.dueDate} />
+              <input type="hidden" name="inst_value" value={priceText(d.value)} />
+            </span>
+          ))}
           <div className="rounded-lg border border-line bg-subtle p-3 sm:col-span-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="text-sm font-semibold">
@@ -114,6 +121,9 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
             <p className="mt-1 text-xs text-muted">
               {nfe.issuedAt ? `Emitida em ${formatDate(nfe.issuedAt)} · ` : ""}
               {nfe.items.length} {nfe.items.length === 1 ? "item" : "itens"}
+              {nfe.installments.length
+                ? ` · ${nfe.installments.length} ${nfe.installments.length === 1 ? "parcela" : "parcelas"}: ${nfe.installments.map((d) => formatDate(d.dueDate)).join(", ")}`
+                : ""}
             </p>
             <p className="mt-1.5 text-xs text-ink-2">
               <span className="text-muted">De:</span> {nfe.emitName || nfe.emitCnpj}

@@ -14,7 +14,7 @@
 ## 2. Como trabalhar comigo (regras do dono do projeto)
 
 - Responder em **português do Brasil**, de forma **simples** (o dono é empreendedor, não programador).
-- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **021**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
+- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **023**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
 - Visual no nível Linear/Notion, **mobile first**, seguindo o design system da marca (seção 7).
 - Commit e push só quando o dono pedir ("faz o commit e o push").
 
@@ -70,7 +70,11 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 
 **Avisos de atraso**: pedido enviado e não totalmente faturado fica amarelo (atenção) e vermelho (crítico) após X/Y dias, definidos em Configurações. Aparecem no Painel, Pedidos e Faturamento.
 
-**Comissões**: nascem de cada nota (valor da nota × % do pedido), com vencimento pela regra da representada. Recebimento em **várias partes** (cada pagamento é lançado e somado; enquanto faltar, fica em aberto) e **encerramento manual com motivo** (devolução parcial, inadimplência…), que pode ser reaberto. Busca pelo número da NF em todos os meses (migração 020). Cancelar o pedido cancela as comissões a receber (gatilho no banco). Só administrador e financeiro veem.
+**Opções do produto (cor, tamanho, voltagem…)**: listas cadastradas uma vez em Produtos → "Cores, tamanhos e opções" (`/produtos/opcoes`), de todas as representadas ou de uma só, e ligadas em lote aos produtos (cada produto usa até 2 listas). No produto, dá para desmarcar opções que ele não tem. Cada opção pode ter acréscimo de preço (valor ou %). No pedido, escolher um produto com lista abre uma grade (por cor, ou cor × tamanho); cada opção com quantidade vira uma linha, com a descrição "Produto — Cor / Tamanho" e as opções guardadas em `order_items.options`.
+
+**Preço sugerido no pedido**: o último preço que aquele cliente pagou no produto (e na mesma cor, se houver); se ele nunca comprou, o preço fica em branco. Tabelas de preço são opcionais (Configurações → Preços nos pedidos): ligadas, aparecem no menu e o pedido sugere o preço da tabela vigente.
+
+**Comissões**: nascem de cada nota (valor da nota × % do pedido), com vencimento pela regra da representada. Se a representada paga **no faturamento**, é uma comissão só, com o valor completo, contada da emissão. Se paga **na liquidez**, nasce **uma comissão por parcela** da nota (duplicata), proporcional ao valor dela e vencendo pela regra aplicada ao vencimento da parcela (ex.: "dia 10 do mês seguinte": parcela de 10/12 → comissão em janeiro). As parcelas vêm do XML (`<dup>`) ou são digitadas/geradas pelo prazo do pedido ao lançar a nota (migração 021). Recebimento em **várias partes** (cada pagamento é lançado e somado; enquanto faltar, fica em aberto) e **encerramento manual com motivo** (devolução parcial, inadimplência…), que pode ser reaberto. Busca pelo número da NF em todos os meses (migração 020). Cancelar o pedido cancela as comissões a receber (gatilho no banco). Só administrador e financeiro veem.
 
 **Metas**: por vendedor, por representada ou geral. A meta do escritório é sempre a **soma** das metas distribuídas (não existe número solto). Mostra ritmo diário pelos dias úteis restantes.
 
@@ -101,6 +105,8 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 | 018 | Comissões só para administrador/financeiro, gatilho de cancelamento, listas das contas a pagar (`payable_options`) |
 | 019 | Numeração dos pedidos por representada (e renumeração dos pedidos existentes) |
 | 020 | Recebimentos de comissão em partes (`commission_receipts`), comissão encerrada com motivo, moeda e formato dos números do escritório |
+| 021 | Parcelas da nota (`order_invoice_installments`) e comissão por parcela (`commissions.installment_id`) |
+| 022 | Listas de opções (`option_lists`, `option_values`, `product_option_lists`, `product_option_hidden`), `order_items.options`, `organizations.use_price_tables` |
 
 Storage: `product-images` (público), `invoices` (privado, link temporário), `avatars`, `logos`.
 
@@ -122,7 +128,7 @@ Storage: `product-images` (público), `invoices` (privado, link temporário), `a
 
 ## 9. Pendências e próximos passos
 
-- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 021 liberando leitura de clientes ao financeiro.
+- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 023 liberando leitura de clientes ao financeiro.
 - **Importação: próxima etapa** — notas fiscais em lote (vários XMLs de uma vez, trazendo o histórico de faturamento e comissões) e pedidos antigos por planilha. Representadas, clientes e produtos já importam.
 - **Cobrança/assinatura, teste grátis e limites por plano** — não existem.
 - Ícones sem versão no design system (lixeira, editar, relógio…) usam o desenho antigo com o traço novo.

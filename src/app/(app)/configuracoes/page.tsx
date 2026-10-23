@@ -10,7 +10,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { ColorPicker, DelaySettings, LogoUploader, NumberSettings, OrderNumbering, UnitPicker } from "./controls";
 import { SubmitButton } from "@/components/submit";
 import {
-  PageHeader, FormSection, Field, ErrorNote, OkNote, SaveBar, Notice, inputCls, primaryBtn, dangerBtn, ghostBtn, quietBtn,
+  PageHeader, FormSection, Field, Checkbox, ErrorNote, OkNote, SaveBar, Notice, inputCls, primaryBtn, dangerBtn, ghostBtn, quietBtn,
 } from "@/components/ui";
 
 export default async function SettingsPage({
@@ -48,7 +48,7 @@ export default async function SettingsPage({
         </div>
       ) : null}
 
-      <div className="mb-6 max-w-5xl">
+      <div className="max-w-5xl border-b border-line pb-6 xl:pb-8">
         <FormSection title="Logo" hint="Aparece no menu, no lugar do nome do escritório.">
           <LogoUploader
             orgId={orgId}
@@ -61,7 +61,7 @@ export default async function SettingsPage({
       </div>
 
       <form action={saveSettings} className="max-w-5xl">
-        <fieldset disabled={locked} className="m-0 grid min-w-0 gap-6 border-0 p-0 xl:gap-0">
+        <fieldset disabled={locked} className="m-0 grid min-w-0 gap-6 border-0 p-0 pt-6 xl:gap-0 xl:pt-8">
           <FormSection title="Escritório" hint="O nome que aparece no sistema e nos pedidos.">
             <Field label="Nome do escritório">
               <input name="name" required defaultValue={settings.name} className={inputCls} />
@@ -103,6 +103,19 @@ export default async function SettingsPage({
           </FormSection>
 
           <FormSection
+            title="Preços nos pedidos"
+            hint="O pedido sugere o último preço que aquele cliente pagou no produto (e na cor, se houver). Se ele nunca comprou, o preço fica em branco."
+          >
+            <Checkbox
+              name="use_price_tables"
+              defaultChecked={settings.usePriceTables}
+              hint="Para quem trabalha com tabela da fábrica: aparece no menu e, havendo tabela vigente da representada, o pedido sugere o preço dela."
+            >
+              Usar tabelas de preço
+            </Checkbox>
+          </FormSection>
+
+          <FormSection
             title="Unidades de venda"
             hint="Só as unidades marcadas aparecem ao cadastrar produtos e itens de pedido."
           >
@@ -120,8 +133,8 @@ export default async function SettingsPage({
       </form>
 
       {/* ---------- Cadastros das contas a pagar (cada item salva na hora) ---------- */}
-      <section id="contas" className="mt-6 max-w-5xl scroll-mt-24">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+      <section id="contas" className="mt-10 max-w-5xl scroll-mt-24 border-t border-line pt-8">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold tracking-[-0.01em]">Contas a pagar</h2>
             <p className="mt-0.5 text-[13px] text-muted">Listas usadas ao lançar cada conta. Já vêm prontas; ajuste ao jeito do escritório.</p>
@@ -190,7 +203,7 @@ export default async function SettingsPage({
 
       <form className="mb-6 max-w-5xl">
         {isOwner ? (
-          <div className="mt-6 xl:mt-0">
+          <div className="mt-10 border-t border-line pt-8">
             <FormSection
               title="Excluir escritório"
               hint="Apaga o escritório e todos os dados: clientes, pedidos, comissões, prospecção e contas. Não dá para desfazer."

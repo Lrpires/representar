@@ -15,6 +15,7 @@ export type Row = {
   received_at: string | null; received_value: number | null; principal_id: string;
   closed_at?: string | null; close_reason?: string | null;
   commission_receipts?: Receipt[];
+  order_invoice_installments?: { number: string | null; due_date: string; position: number } | null;
   orders: { number: number; commission_pct: number | null; customers: { name: string } | null } | null;
   order_invoices: { id: string; number: string | null; series: string | null; issued_at: string; value: number; file_path: string | null } | null;
   principals: { name: string } | null;
@@ -77,7 +78,12 @@ export function CommissionRow({
             ) : null}
           </p>
           <p className="truncate text-xs text-muted">
-            {nf ? `Emitida em ${formatDate(nf.issued_at)}` : ""} · {r.principals?.name}
+            {r.order_invoice_installments
+              ? `Parcela ${r.order_invoice_installments.number || r.order_invoice_installments.position} · cliente vence ${formatDate(r.order_invoice_installments.due_date)}`
+              : nf
+                ? `Emitida em ${formatDate(nf.issued_at)}`
+                : ""}{" "}
+            · {r.principals?.name}
           </p>
         </div>
       </div>

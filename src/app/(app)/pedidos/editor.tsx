@@ -9,10 +9,22 @@ import { Combobox, type ComboOption } from "@/components/combobox";
 import { Icon } from "@/components/icons";
 import { ErrorNote, Field, SaveBar, ghostBtn, iconBtn, inputCls, primaryBtn, textareaCls } from "@/components/ui";
 import { useNumberFormat } from "@/components/number-format";
+import { describeWithOptions, optionsText, type OptionList } from "@/lib/options";
+import { OptionGrid, type GridLine } from "./option-grid";
 
 export type EditorCustomer = { id: string; name: string; city: string | null; state: string | null; cnpj: string | null; last_principal_id: string | null };
 export type EditorPrincipal = { id: string; name: string; commission: number | null };
-export type EditorProduct = { id: string; principal_id: string; code: string; name: string; unit: string; lastPrice: number | null };
+export type EditorProduct = {
+  id: string;
+  principal_id: string;
+  code: string;
+  name: string;
+  unit: string;
+  tablePrice: number | null; // preço da tabela vigente (só quando o escritório usa tabelas)
+  lists: OptionList[]; // listas de opções (cor, tamanho…): abrem a grade no pedido
+};
+// Cliente → produto → [opções ("Azul / M" ou ""), preço], do pedido mais recente para o mais antigo.
+export type PriceHistory = Record<string, Record<string, [string, number][]>>;
 export type EditorUnit = { value: string; label: string };
 
 type Row = ItemInput & { key: string };
@@ -20,6 +32,7 @@ type Row = ItemInput & { key: string };
 const newRow = (unit: string, key: string = crypto.randomUUID()): Row => ({
   key,
   variant_id: null,
+  options: null,
   code: "",
   description: "",
   unit,
@@ -37,6 +50,7 @@ export function OrderEditor({
   customers,
   principals,
   products,
+  priceHistory = {},
   units,
   defaultUnit,
   showCommission = true,
@@ -45,6 +59,7 @@ export function OrderEditor({
   customers: EditorCustomer[];
   principals: EditorPrincipal[];
   products: EditorProduct[];
+  priceHistory?: PriceHistory;
   units: EditorUnit[];
   defaultUnit: string;
   showCommission?: boolean; // vendedor e gerente não veem a comissão (o % segue o padrão da representada)
@@ -63,6 +78,8 @@ export function OrderEditor({
   // A representada veio da sugestão (última compra)? Então troca junto se trocar de cliente.
   const [principalAuto, setPrincipalAuto] = useState(false);
   const [pending, start] = useTransition();
+  // Produto com cores/tamanhos: a grade aberta para a linha em que ele foi escolhido.
+  const [grid, setGrid] = useState<{ rowKey: string; product: EditorProduct } | null>(null);
   const top = useRef<HTMLDivElement>(null);
 
   const set = <K extends keyof OrderInput>(k: K, v: OrderInput[K]) => {
@@ -120,10 +137,14 @@ export function OrderEditor({
           id: p.id,
           label: p.name,
           sub: [p.code, units.find((u) => u.value === p.unit)?.label ?? p.unit].filter(Boolean).join(" · "),
-          right: p.lastPrice != null ? brl(p.lastPrice) : undefined,
+          right: (() => {
+            const price = p.tablePrice ?? lastPaid(p.id);
+            return price != null ? brl(price) : p.lists.length ? p.lists.map((l) => l.kind).join(" × ") : undefined;
+          })(),
           search: `${p.name} ${p.code}`,
         })),
-    [products, f.principal_id, units],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [products, f.principal_id, f.customer_id, units],
   );
 
   const lines = rows.map((r) => ({ qty: num(r.qty), price: num(r.price), discount: num(r.discount) }));
@@ -142,17 +163,67 @@ export function OrderEditor({
     setDirty(true);
   }
 
+  // Preços deste cliente no produto (vazio se ele nunca comprou: o preço fica em branco).
+  function historyOf(variantId: string): [string, number][] {
+    return (f.customer_id && priceHistory[f.customer_id]?.[variantId]) || [];
+  }
+  function lastPaid(variantId: string, options?: Record<string, string> | null): number | null {
+    const h = historyOf(variantId);
+    if (options === undefined) return h[0]?.[1] ?? null;
+    return h.find(([o]) => o === optionsText(options))?.[1] ?? null;
+  }
+  // Preço base para a grade: tabela vigente, ou o último preço do cliente numa opção sem acréscimo.
+  function basePriceOf(p: EditorProduct): number | null {
+    if (p.tablePrice != null) return p.tablePrice;
+    const plain = new Set(p.lists.flatMap((l) => l.values.filter((v) => !v.priceAdjust).map((v) => v.name)));
+    for (const [o, price] of historyOf(p.id)) {
+      const names = o ? o.split(" / ") : [];
+      if (names.every((n) => plain.has(n))) return price;
+    }
+    return null;
+  }
+
   function pickProduct(row: Row, id: string) {
     const p = products.find((x) => x.id === id);
     if (!p) return;
+    if (p.lists.length) {
+      setGrid({ rowKey: row.key, product: p });
+      return;
+    }
+    const suggested = p.tablePrice ?? lastPaid(p.id, null) ?? lastPaid(p.id);
     setRow(row.key, {
       variant_id: p.id,
+      options: null,
       code: p.code,
       description: p.name,
       unit: p.unit,
-      price: p.lastPrice != null && !row.price ? priceText(p.lastPrice) : row.price,
+      price: suggested != null && !row.price ? priceText(suggested) : row.price,
       qty: row.qty || "1",
     });
+  }
+
+  // Cada opção com quantidade na grade vira uma linha do pedido, no lugar da linha em que o produto foi escolhido.
+  function addFromGrid(lines: GridLine[]) {
+    if (!grid) return;
+    const p = grid.product;
+    const made: Row[] = lines.map((l) => ({
+      key: crypto.randomUUID(),
+      variant_id: p.id,
+      options: l.options,
+      code: p.code,
+      description: describeWithOptions(p.name, l.options),
+      unit: p.unit,
+      qty: l.qty,
+      price: l.price,
+      discount: "",
+    }));
+    setRows((rs) => {
+      const i = rs.findIndex((r) => r.key === grid.rowKey);
+      if (i < 0) return [...rs, ...made];
+      return [...rs.slice(0, i), ...made, ...rs.slice(i + 1)];
+    });
+    setDirty(true);
+    setGrid(null);
   }
 
   function submit(intent: "draft" | "send") {
@@ -192,7 +263,7 @@ export function OrderEditor({
   const productField = (row: Row, className: string) => (
     <Combobox
       value={row.description}
-      onText={(text) => setRow(row.key, { description: text, variant_id: null })}
+      onText={(text) => setRow(row.key, { description: text, variant_id: null, options: null })}
       onSelect={(o) => pickProduct(row, o.id)}
       options={productOptions}
       openOnFocus={productOptions.length > 0}
@@ -545,6 +616,17 @@ export function OrderEditor({
           </section>
         </div>
       </div>
+
+      {grid ? (
+        <OptionGrid
+          productName={grid.product.name}
+          lists={grid.product.lists}
+          suggest={(o) => (grid.product.tablePrice != null ? null : lastPaid(grid.product.id, o))}
+          basePrice={basePriceOf(grid.product)}
+          onConfirm={addFromGrid}
+          onClose={() => setGrid(null)}
+        />
+      ) : null}
 
       <SaveBar
         note={

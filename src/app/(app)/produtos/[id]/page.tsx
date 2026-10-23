@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getContext } from "@/lib/session";
 import {
-  updateProduct, addVariant, deleteVariant, setCoverImage, deleteImage, deleteProduct,
+  updateProduct, addVariant, deleteVariant, setCoverImage, deleteImage, deleteProduct, setProductOptions,
 } from "./actions";
 import { unitGroupsFor, unitLabel } from "@/lib/units";
 import { getSettings } from "@/lib/settings";
@@ -61,6 +61,25 @@ export default async function ProductPage({
       .order("position"),
   ]);
   if (!p) notFound();
+
+  // Listas de opções que este produto pode usar (de todas as representadas ou da dele) — migração 022.
+  type RawList = {
+    id: string; kind: string; name: string; principal_id: string | null;
+    option_values: { id: string; name: string; position: number; active: boolean }[] | null;
+  };
+  const [{ data: listData, error: listError }, { data: linkData }, { data: hiddenData }] = await Promise.all([
+    supabase
+      .from("option_lists")
+      .select("id, kind, name, principal_id, option_values(id, name, position, active)")
+      .or(`principal_id.is.null,principal_id.eq.${p.principal_id}`)
+      .order("kind")
+      .order("name"),
+    supabase.from("product_option_lists").select("list_id, position").eq("product_id", id),
+    supabase.from("product_option_hidden").select("value_id").eq("product_id", id),
+  ]);
+  const optionLists = (listData ?? []) as RawList[];
+  const linked = new Set((linkData ?? []).map((l) => l.list_id as string));
+  const hiddenValues = new Set((hiddenData ?? []).map((h) => h.value_id as string));
 
   // Vendas deste produto (todas as variações), dos pedidos mais novos para os mais antigos.
   const variantIds = (variants ?? []).map((vr) => vr.id);
@@ -284,6 +303,73 @@ export default async function ProductPage({
           ) : null}
         </form>
 
+        <Section
+          icon="sparkle"
+          title="Opções no pedido"
+          hint="Cor, tamanho, voltagem… Marque as listas que este produto usa (até 2). No pedido, ele abre uma grade com essas opções. Desmarque as opções que este produto não tem."
+        >
+          {listError ? (
+            <p className="text-sm text-muted">Para usar listas de opções, rode a migração 022 no Supabase.</p>
+          ) : optionLists.length === 0 ? (
+            <p className="text-sm text-muted">
+              Nenhuma lista cadastrada.{" "}
+              <Link href="/produtos/opcoes?novo=1" className="font-medium text-accent-ink hover:underline">
+                Criar a primeira lista
+              </Link>
+            </p>
+          ) : (
+            <form action={setProductOptions.bind(null, id)}>
+              <fieldset disabled={!canManage} className="m-0 grid min-w-0 gap-3 border-0 p-0">
+                {optionLists.map((l) => {
+                  const values = [...(l.option_values ?? [])]
+                    .filter((x) => x.active)
+                    .sort((a, b) => a.position - b.position);
+                  const on = linked.has(l.id);
+                  return (
+                    <div key={l.id} className={`rounded-lg border p-3 ${on ? "border-line-strong" : "border-line"}`}>
+                      <label className="flex cursor-pointer items-center gap-3 text-sm">
+                        <input type="checkbox" name="list_id" value={l.id} defaultChecked={on} className={check} />
+                        <span className="min-w-0 flex-1">
+                          <span className="font-medium">{l.name}</span>
+                          <span className="ml-2 text-xs text-muted">{l.kind} · {values.length} opções</span>
+                        </span>
+                        <Link href={`/produtos/opcoes/${l.id}`} className="text-xs font-medium text-muted hover:text-ink">
+                          Editar lista
+                        </Link>
+                      </label>
+                      {on && values.length ? (
+                        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-line pt-3">
+                          {values.map((x) => (
+                            <label
+                              key={x.id}
+                              className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-line px-2.5 text-[13px] has-[:checked]:border-line-strong has-[:checked]:bg-subtle"
+                            >
+                              <input type="hidden" name="value_id" value={x.id} />
+                              <input type="checkbox" name={`on_${x.id}`} defaultChecked={!hiddenValues.has(x.id)} className="h-4 w-4 rounded border-line-strong" />
+                              {x.name}
+                            </label>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {canManage ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <SubmitButton className={ghostBtn} pending="Salvando…">
+                      Salvar opções
+                    </SubmitButton>
+                    <Link href="/produtos/opcoes" className="text-[13px] text-muted hover:text-ink">
+                      Ver todas as listas
+                    </Link>
+                  </div>
+                ) : null}
+              </fieldset>
+            </form>
+          )}
+        </Section>
+
+        {settings.usePriceTables ? (
         <Section icon="box" title="Variações" hint="Cor, tamanho, sabor… Cada variação recebe seu próprio preço nas tabelas.">
           <ul className="divide-y divide-line">
             {(variants ?? []).map((vr) => {
@@ -327,6 +413,7 @@ export default async function ProductPage({
             </form>
           ) : null}
         </Section>
+        ) : null}
         <Section icon="receipt" title="Pedidos com este produto" hint="Os mais recentes primeiro.">
           {sales.length === 0 ? (
             <p className="text-sm text-muted">Este produto ainda não entrou em nenhum pedido.</p>

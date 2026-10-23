@@ -65,7 +65,7 @@ export default async function BillingPage({
   /* ---------- A faturar ---------- */
   let openQuery = supabase
     .from("orders")
-    .select("id, number, status, order_date, sent_at, total, discount_pct, principal_id, customers(name, cnpj), principals(name, cnpj), order_items(id, code, description, qty, unit, unit_price, position)")
+    .select("id, number, status, order_date, sent_at, total, discount_pct, payment_terms, principal_id, customers(name, cnpj), principals(name, cnpj), order_items(id, code, description, qty, unit, unit_price, position)")
     .in("status", OPEN_STATUSES)
     .order("order_date")
     .limit(1000);
@@ -87,19 +87,28 @@ export default async function BillingPage({
     } | null;
     order_invoice_items: { qty: number; order_items: { description: string; code: string | null; unit: string; unit_price: number } | null }[];
     commissions: { value: number; pct: number; due_date: string; status: string; received_value: number | null; received_at: string | null }[];
+    order_invoice_installments?: { number: string | null; due_date: string; value: number; position: number }[];
   };
   let detail: InvDetail | null = null;
   if (sp.nota) {
     const base =
       "id, number, series, issued_at, value, file_path, file_name, notes, created_at, order_id, orders!inner(number, status, seller_id, discount_pct, customers(name, cnpj), principals(name, cnpj)), order_invoice_items(qty, order_items(description, code, unit, unit_price)), commissions(value, pct, due_date, status, received_value, received_at)";
-    let { data, error: e } = await supabase.from("order_invoices").select(`${base}, access_key`).eq("id", sp.nota).maybeSingle();
-    if (e) ({ data } = await supabase.from("order_invoices").select(base).eq("id", sp.nota).maybeSingle()); // sem a migração 017
+    // Com chave de acesso (017) e parcelas (021); sem essas migrações, carrega com o que houver.
+    let { data, error: e } = await supabase
+      .from("order_invoices")
+      .select(`${base}, access_key, order_invoice_installments(number, due_date, value, position)`)
+      .eq("id", sp.nota)
+      .maybeSingle();
+    if (e) ({ data, error: e } = await supabase.from("order_invoices").select(`${base}, access_key`).eq("id", sp.nota).maybeSingle());
+    if (e) ({ data } = await supabase.from("order_invoices").select(base).eq("id", sp.nota).maybeSingle());
     detail = (data as unknown as InvDetail) ?? null;
   }
   const canDelete = !!detail && (isBackOffice || detail.orders?.seller_id === user.id);
   const commission = detail?.commissions?.[0];
+  const commissionsOfNote = [...(detail?.commissions ?? [])].sort((a, b) => a.due_date.localeCompare(b.due_date));
   // Comissão com dinheiro já recebido (no todo ou em parte) trava a exclusão da nota.
-  const commissionPaid = !!commission && (commission.status === "recebida" || Number(commission.received_value ?? 0) > 0);
+  const commissionPaid = commissionsOfNote.some((c) => c.status === "recebida" || Number(c.received_value ?? 0) > 0);
+  const installmentsOfNote = [...(detail?.order_invoice_installments ?? [])].sort((a, b) => a.position - b.position);
 
   const invoices = ((invData ?? []) as unknown as Inv[]).filter((i) =>
     !q
@@ -131,6 +140,7 @@ export default async function BillingPage({
     id: string; number: number; status: string; order_date: string; sent_at: string | null; total: number;
     customers: { name: string; cnpj: string | null } | null; principals: { name: string; cnpj: string | null } | null;
     discount_pct: number;
+    payment_terms: string | null;
     order_items: { id: string; code: string | null; description: string; qty: number; unit: string; unit_price: number; position: number }[];
   };
   const open = ((openData ?? []) as unknown as OpenRow[])
@@ -165,6 +175,7 @@ export default async function BillingPage({
     status: o.status,
     total: Number(o.total),
     discountPct: Number(o.discount_pct ?? 0),
+    paymentTerms: o.payment_terms ?? null,
     customerName: o.customers?.name ?? "",
     customerCnpj: o.customers?.cnpj ?? null,
     principalName: o.principals?.name ?? "",
@@ -551,6 +562,22 @@ export default async function BillingPage({
                 ) : null}
               </dl>
 
+              {/* Parcelas (duplicatas) */}
+              {installmentsOfNote.length ? (
+                <section>
+                  <p className="mb-2 text-xs font-medium text-muted">Parcelas</p>
+                  <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line text-[13px]">
+                    {installmentsOfNote.map((x) => (
+                      <li key={x.position} className="flex items-center gap-3 px-3 py-2">
+                        <span className="w-12 font-mono text-xs text-muted">{x.number || x.position}</span>
+                        <span className="flex-1 tabular-nums">vence {formatDate(x.due_date)}</span>
+                        <span className="font-mono tabular-nums">{brl(Number(x.value))}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
               {/* Arquivo */}
               {detail.file_path ? (
                 <div className="flex flex-wrap gap-2">
@@ -605,26 +632,34 @@ export default async function BillingPage({
                 </section>
               ) : null}
 
-              {/* Comissão (só quem vê comissões) */}
-              {canSeeCommissions && commission ? (
-                <section className="rounded-lg border border-line p-3 text-[13px]">
-                  <p className="mb-2 text-xs font-medium text-muted">Comissão desta nota</p>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                    <span className="font-mono font-semibold tabular-nums">{brl(Number(commission.value))}</span>
-                    <span className="text-muted">{numText(Number(commission.pct), 2)}%</span>
-                    <span className="text-muted">vence {formatDate(commission.due_date)}</span>
-                    <Badge tone={commission.status === "recebida" ? "ok" : commission.status === "a_receber" ? "info" : "neutral"} dot>
-                      {commission.status === "recebida"
-                        ? "Recebida"
-                        : commission.status === "cancelada"
-                          ? "Cancelada"
-                          : commission.status === "encerrada"
-                            ? "Encerrada"
-                            : Number(commission.received_value ?? 0) > 0
-                              ? `Recebido ${brl(Number(commission.received_value))}`
-                              : "A receber"}
-                    </Badge>
-                  </div>
+              {/* Comissões desta nota (só quem vê comissões): uma por parcela, quando a representada paga na liquidez */}
+              {canSeeCommissions && commissionsOfNote.length ? (
+                <section>
+                  <p className="mb-2 text-xs font-medium text-muted">
+                    {commissionsOfNote.length === 1 ? "Comissão desta nota" : `Comissões desta nota (${commissionsOfNote.length}, uma por parcela)`}
+                  </p>
+                  <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line text-[13px]">
+                    {commissionsOfNote.map((c, n) => (
+                      <li key={n} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2">
+                        <span className="font-mono font-semibold tabular-nums">{brl(Number(c.value))}</span>
+                        <span className="text-muted">{numText(Number(c.pct), 2)}%</span>
+                        <span className="text-muted">vence {formatDate(c.due_date)}</span>
+                        <span className="ml-auto">
+                          <Badge tone={c.status === "recebida" ? "ok" : c.status === "a_receber" ? "info" : "neutral"} dot>
+                            {c.status === "recebida"
+                              ? "Recebida"
+                              : c.status === "cancelada"
+                                ? "Cancelada"
+                                : c.status === "encerrada"
+                                  ? "Encerrada"
+                                  : Number(c.received_value ?? 0) > 0
+                                    ? `Recebido ${brl(Number(c.received_value))}`
+                                    : "A receber"}
+                          </Badge>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </section>
               ) : null}
             </div>

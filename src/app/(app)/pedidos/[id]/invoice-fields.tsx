@@ -7,6 +7,8 @@ import { parseNfe, matchItems, type Nfe } from "@/lib/nfe";
 import { Field, FormGroup, inputCls } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { useNumberFormat } from "@/components/number-format";
+import { installmentsFromTerms } from "@/lib/commission-plan";
+import { InstallmentsEditor, type InstRow } from "./installments-editor";
 
 export type InvoiceItem = {
   id: string;
@@ -25,11 +27,13 @@ export function InvoiceFields({
   discountPct,
   today,
   expected,
+  paymentTerms,
 }: {
   items: InvoiceItem[];
   discountPct: number;
   today: string;
   expected?: { principalCnpj?: string | null; customerCnpj?: string | null };
+  paymentTerms?: string | null; // prazo do pedido ("30/60/90 dias"), para sugerir as parcelas
 }) {
   const { brl, num, numText, priceText, symbol } = useNumberFormat();
   const left = (i: InvoiceItem) => Math.max(i.qty - i.invoiced, 0);
@@ -49,6 +53,13 @@ export function InvoiceFields({
   const [xmlMsg, setXmlMsg] = useState<{ tone: "ok" | "warn" | "alert"; text: string }[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Parcelas: enquanto a pessoa não mexe, acompanham o prazo do pedido, a data e o valor da nota.
+  const [instRows, setInstRows] = useState<InstRow[] | null>(null);
+  const noteValue = num(shown);
+  const fromTerms = (): InstRow[] =>
+    installmentsFromTerms(paymentTerms, date, noteValue).map((x) => ({ number: x.number ?? "", due: x.dueDate, value: priceText(x.value) }));
+  const inst = instRows ?? fromTerms();
+
   async function onFile(file: File | undefined) {
     setFileName(file?.name ?? null);
     setXmlMsg([]);
@@ -61,6 +72,9 @@ export function InvoiceFields({
       setSeries(n.series);
       if (n.issuedAt) setDate(n.issuedAt);
       if (n.accessKey) setAccessKey(n.accessKey);
+      if (n.installments.length) {
+        setInstRows(n.installments.map((d, i) => ({ number: d.number || String(i + 1).padStart(3, "0"), due: d.dueDate, value: priceText(d.value) })));
+      }
       setValue(priceText(n.total));
       setValueEdited(true);
       const m = matchItems(n.items, items);
@@ -157,6 +171,15 @@ export function InvoiceFields({
           Chave de acesso: {accessKey}
         </p>
       ) : null}
+
+      <InstallmentsEditor
+        rows={inst}
+        onChange={setInstRows}
+        noteValue={noteValue}
+        termsLabel={paymentTerms}
+        onRegenerate={() => setInstRows(null)}
+        auto={instRows === null}
+      />
 
       <FormGroup title="Quantidades desta nota" />
       <div className="overflow-hidden rounded-lg border border-line sm:col-span-2">

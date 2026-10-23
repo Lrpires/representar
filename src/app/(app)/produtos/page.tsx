@@ -12,7 +12,7 @@ import { SearchBox } from "@/components/search";
 import { UrlSelect } from "@/components/url-select";
 import {
   PageHeader, Toolbar, Field, ErrorNote, OkNote, EmptyState, Badge, SheetForm, NewButton, TableShell,
-  CardList, RowLink, FilterPill, Segmented, inputCls, primaryBtn, th, td, tr,
+  CardList, RowLink, FilterPill, Segmented, inputCls, primaryBtn, ghostBtn, th, td, tr,
 } from "@/components/ui";
 
 const PATH = "/produtos";
@@ -111,7 +111,15 @@ export default async function ProductsPage({
       <PageHeader
         title="Produtos"
         hint="O catálogo de cada representada, com foto, unidade e o último preço praticado."
-        action={canManage && !noPrincipals ? <NewButton label="Novo produto" fab /> : null}
+        action={
+          <div className="flex items-center gap-2">
+            <Link href="/produtos/opcoes" className={ghostBtn}>
+              <Icon name="sparkle" size={15} />
+              Cores, tamanhos e opções
+            </Link>
+            {canManage && !noPrincipals ? <NewButton label="Novo produto" fab /> : null}
+          </div>
+        }
       />
 
       {sp.ok ? (

@@ -78,6 +78,9 @@ export async function saveSettings(formData: FormData) {
     fail(PATH, `Não foi possível salvar: ${error.message}`);
   }
 
+  // Tabelas de preço ligadas ou não (migração 022); sem ela, fica como está.
+  await supabase.from("organizations").update({ use_price_tables: formData.get("use_price_tables") === "on" }).eq("id", orgId);
+
   revalidatePath("/", "layout");
   redirect(`${PATH}?ok=${encodeURIComponent("Configurações salvas.")}`);
 }

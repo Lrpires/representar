@@ -13,8 +13,8 @@ export const baseOptions: readonly Option[] = [
 // Quando a comissão passa a ser devida.
 export const triggerOptions: readonly Option[] = [
   ["pedido", "Quando o pedido é fechado"],
-  ["faturamento", "Quando a fábrica fatura (emite a NF)"],
-  ["recebimento_cliente", "Quando o cliente paga a fábrica"],
+  ["faturamento", "No faturamento: valor completo quando a fábrica emite a NF"],
+  ["recebimento_cliente", "Na liquidez: por parcela, conforme os vencimentos da nota"],
 ];
 
 // Como é liberada depois disso.
@@ -50,8 +50,8 @@ const baseText: Record<string, string> = {
 };
 const triggerText: Record<string, string> = {
   pedido: "quando o pedido é fechado",
-  faturamento: "quando a fábrica fatura",
-  recebimento_cliente: "quando o cliente paga a fábrica",
+  faturamento: "no faturamento (valor completo quando a fábrica emite a NF)",
+  recebimento_cliente: "na liquidez (por parcela, conforme os vencimentos da nota)",
 };
 const releaseText: Record<string, string> = {
   integral: "de uma só vez",

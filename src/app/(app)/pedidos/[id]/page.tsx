@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/settings";
 import {
   sendOrder, reopenOrder, cancelOrder, deleteDraft, duplicateOrder,
 } from "./actions";
-import { registerInvoice, deleteInvoice, finalizeOrder, reopenFinalized } from "./invoices";
+import { registerInvoice, finalizeOrder, reopenFinalized } from "./invoices";
 import { orderAging } from "@/lib/aging";
 import { InvoiceFields } from "./invoice-fields";
 import { formatOrderNumber, numText, orderTotals, priceText, statusInfo } from "@/lib/orders";
@@ -254,20 +254,6 @@ export default async function OrderPage({
         ) : null}
       </section>
 
-      {invoices.length > 0 || canInvoice ? (
-        <Billing
-          invoices={invoices}
-          items={items ?? []}
-          invoicedQty={invoicedQty}
-          total={Number(o.total)}
-          invoicedTotal={invoicedTotal}
-          progress={totalQty ? Math.min(doneQty / totalQty, 1) : 0}
-          canInvoice={canInvoice}
-          canDelete={isBackOffice || mine}
-          newHref={`${here}?faturar=1`}
-          deleteAction={(invoiceId: string) => deleteInvoice.bind(null, id, invoiceId)}
-        />
-      ) : null}
 
       {editable && editor ? (
         <OrderEditor
@@ -310,6 +296,20 @@ export default async function OrderPage({
           sellerName={sellerName}
         />
       )}
+
+      {/* Faturamento por último: aqui só se consulta; editar ou excluir a nota é na área de Faturamento. */}
+      {invoices.length > 0 || canInvoice ? (
+        <Billing
+          invoices={invoices}
+          items={items ?? []}
+          invoicedQty={invoicedQty}
+          total={Number(o.total)}
+          invoicedTotal={invoicedTotal}
+          progress={totalQty ? Math.min(doneQty / totalQty, 1) : 0}
+          canInvoice={canInvoice}
+          newHref={`${here}?faturar=1`}
+        />
+      ) : null}
 
       <Sheet
         open={sp.faturar === "1" && canInvoice}
@@ -408,9 +408,7 @@ function Billing({
   invoicedTotal,
   progress,
   canInvoice,
-  canDelete,
   newHref,
-  deleteAction,
 }: {
   invoices: {
     id: string; number: string | null; series: string | null; issued_at: string; value: number;
@@ -424,13 +422,11 @@ function Billing({
   invoicedTotal: number;
   progress: number;
   canInvoice: boolean;
-  canDelete: boolean;
   newHref: string;
-  deleteAction: (invoiceId: string) => () => Promise<void>;
 }) {
   const desc = new Map(items.map((i) => [i.id, i]));
   return (
-    <section className="mb-5 overflow-hidden rounded-xl border border-line bg-surface">
+    <section className="mt-5 overflow-hidden rounded-xl border border-line bg-surface">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">
@@ -460,7 +456,6 @@ function Billing({
       ) : (
         <ul className="divide-y divide-line">
           {invoices.map((inv) => {
-            const c = inv.commissions[0];
             const qty = inv.order_invoice_items.reduce((s, l) => s + Number(l.qty), 0);
             return (
               <li key={inv.id} className="px-4 py-3.5 sm:px-5">
@@ -469,10 +464,10 @@ function Billing({
                     <Icon name="receipt" size={17} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">
+                    <Link href={`/faturamento?nota=${inv.id}`} className="text-sm font-medium hover:text-accent-ink hover:underline">
                       NF {inv.number || "sem número"}
                       {inv.series ? <span className="font-normal text-muted"> · série {inv.series}</span> : null}
-                    </p>
+                    </Link>
                     <p className="text-xs text-muted">
                       {formatDate(inv.issued_at)}
                       {qty ? ` · ${numText(qty, 3)} un. em ${inv.order_invoice_items.length} ${inv.order_invoice_items.length === 1 ? "item" : "itens"}` : ""}
@@ -495,17 +490,10 @@ function Billing({
                     ) : (
                       <span className="px-2 text-[11px] text-faint" title="Nenhum arquivo anexado">sem PDF</span>
                     )}
-                    {canDelete && c?.status !== "recebida" ? (
-                      <form action={deleteAction(inv.id)}>
-                        <ConfirmButton
-                          message={`Excluir a NF ${inv.number ?? ""}?`}
-                          className={`${iconBtn} hover:!text-alert`}
-                        >
-                          <Icon name="trash" size={15} />
-                          <span className="sr-only">Excluir nota</span>
-                        </ConfirmButton>
-                      </form>
-                    ) : null}
+                    <Link href={`/faturamento?nota=${inv.id}`} className={iconBtn} title="Ver detalhes, editar ou excluir no Faturamento">
+                      <Icon name="chevron-right" size={16} />
+                      <span className="sr-only">Abrir no Faturamento</span>
+                    </Link>
                   </div>
                 </div>
                 {inv.order_invoice_items.length ? (

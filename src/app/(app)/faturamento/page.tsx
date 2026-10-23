@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { getContext } from "@/lib/session";
 import { getSettings } from "@/lib/settings";
-import { registerInvoiceFromBilling } from "../pedidos/[id]/invoices";
+import { registerInvoiceFromBilling, deleteInvoice } from "../pedidos/[id]/invoices";
+import { ConfirmButton } from "@/components/confirm-button";
+import { unitLabel } from "@/lib/units";
 import { XmlImport, type OpenOrder } from "./xml-import";
 import { formatOrderNumber, numText, statusInfo, OPEN_STATUSES } from "@/lib/orders";
 import { orderAging, AGING_STYLE } from "@/lib/aging";
@@ -13,7 +15,7 @@ import { UrlSelect } from "@/components/url-select";
 import { Icon } from "@/components/icons";
 import {
   PageHeader, EmptyState, ErrorNote, OkNote, Badge, SheetForm, Tabs, Tab, TableShell, CardList, RowLink, Toolbar,
-  primaryBtn, ghostBtn, iconBtn, th, td, tr,
+  primaryBtn, ghostBtn, iconBtn, dangerBtn, th, td, tr,
 } from "@/components/ui";
 
 const PATH = "/faturamento";
@@ -37,10 +39,10 @@ type Inv = {
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ aba?: string; periodo?: string; rep?: string; q?: string; xml?: string; ok?: string; erro?: string }>;
+  searchParams: Promise<{ aba?: string; periodo?: string; rep?: string; q?: string; xml?: string; nota?: string; ok?: string; erro?: string }>;
 }) {
   const sp = await searchParams;
-  const { supabase, isBackOffice, role } = await getContext();
+  const { supabase, isBackOffice, role, user, canSeeCommissions } = await getContext();
   const settings = await getSettings();
   const today = todayISO();
   const tab = sp.aba === "a-faturar" ? "a-faturar" : "notas";
@@ -71,6 +73,25 @@ export default async function BillingPage({
     openQuery,
     supabase.from("principals").select("id, name").order("name"),
   ]);
+
+  // Nota aberta no painel lateral (?nota=…).
+  type InvDetail = {
+    id: string; number: string | null; series: string | null; issued_at: string; value: number; access_key?: string | null;
+    file_path: string | null; file_name: string | null; notes: string | null; created_at: string; order_id: string;
+    orders: { number: number; status: string; seller_id: string; customers: { name: string } | null; principals: { name: string } | null } | null;
+    order_invoice_items: { qty: number; order_items: { description: string; code: string | null; unit: string; qty: number } | null }[];
+    commissions: { value: number; pct: number; due_date: string; status: string; received_value: number | null; received_at: string | null }[];
+  };
+  let detail: InvDetail | null = null;
+  if (sp.nota) {
+    const base =
+      "id, number, series, issued_at, value, file_path, file_name, notes, created_at, order_id, orders!inner(number, status, seller_id, customers(name), principals(name)), order_invoice_items(qty, order_items(description, code, unit, qty)), commissions(value, pct, due_date, status, received_value, received_at)";
+    let { data, error: e } = await supabase.from("order_invoices").select(`${base}, access_key`).eq("id", sp.nota).maybeSingle();
+    if (e) ({ data } = await supabase.from("order_invoices").select(base).eq("id", sp.nota).maybeSingle()); // sem a migração 017
+    detail = (data as unknown as InvDetail) ?? null;
+  }
+  const canDelete = !!detail && (isBackOffice || detail.orders?.seller_id === user.id);
+  const commission = detail?.commissions?.[0];
 
   const invoices = ((invData ?? []) as unknown as Inv[]).filter((i) =>
     !q
@@ -130,7 +151,7 @@ export default async function BillingPage({
 
   const qs = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
-    const merged = { aba: sp.aba, periodo: sp.periodo, rep: sp.rep, q: sp.q, ...patch };
+    const merged = { aba: sp.aba, periodo: sp.periodo, rep: sp.rep, q: sp.q, nota: sp.nota, ...patch };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `${PATH}?${s}` : PATH;
@@ -143,7 +164,7 @@ export default async function BillingPage({
         hint="As notas fiscais emitidas pelas representadas e os pedidos que ainda esperam nota."
         action={
           canLaunch ? (
-            <Link href={qs({ xml: "1" })} scroll={false} className={primaryBtn}>
+            <Link href={qs({ xml: "1", nota: undefined })} scroll={false} className={primaryBtn}>
               <Icon name="upload" size={15} />
               Lançar nota pelo XML
             </Link>
@@ -152,7 +173,7 @@ export default async function BillingPage({
       />
 
       <div className="mb-4 grid gap-3 empty:hidden">
-        {!sp.xml ? <ErrorNote message={sp.erro} /> : null}
+        {!sp.xml && !sp.nota ? <ErrorNote message={sp.erro} /> : null}
         <OkNote message={sp.ok} />
       </div>
 
@@ -173,14 +194,14 @@ export default async function BillingPage({
               <dd className="mt-1 truncate text-xl font-semibold tabular-nums">{brl(openBalance)}</dd>
               <dd className="text-xs text-muted">{open.length} {open.length === 1 ? "pedido em aberto" : "pedidos em aberto"}</dd>
             </div>
-            <Link href={qs({ aba: "a-faturar" })} className="p-4 transition hover:bg-subtle">
+            <Link href={qs({ aba: "a-faturar", nota: undefined })} className="p-4 transition hover:bg-subtle">
               <dt className="flex items-center gap-1.5 text-[13px] text-muted">
                 <span className="h-1.5 w-1.5 rounded-full bg-warn-dot" />Em atenção
               </dt>
               <dd className={`mt-1 text-xl font-semibold tabular-nums ${warn ? "text-warn" : ""}`}>{warn}</dd>
               <dd className="text-xs text-muted">a partir de {settings.warnDays} dias</dd>
             </Link>
-            <Link href={qs({ aba: "a-faturar" })} className="p-4 transition hover:bg-subtle">
+            <Link href={qs({ aba: "a-faturar", nota: undefined })} className="p-4 transition hover:bg-subtle">
               <dt className="flex items-center gap-1.5 text-[13px] text-muted">
                 <span className="h-1.5 w-1.5 rounded-full bg-alert" />Críticos
               </dt>
@@ -190,10 +211,10 @@ export default async function BillingPage({
           </dl>
 
           <Tabs>
-            <Tab href={qs({ aba: undefined })} active={tab === "notas"} count={invoices.length}>
+            <Tab href={qs({ aba: undefined, nota: undefined })} active={tab === "notas"} count={invoices.length}>
               Notas emitidas
             </Tab>
-            <Tab href={qs({ aba: "a-faturar" })} active={tab === "a-faturar"} count={open.length}>
+            <Tab href={qs({ aba: "a-faturar", nota: undefined })} active={tab === "a-faturar"} count={open.length}>
               A faturar
             </Tab>
           </Tabs>
@@ -222,7 +243,7 @@ export default async function BillingPage({
                   compact
                   action={
                     canLaunch ? (
-                      <Link href={qs({ xml: "1" })} scroll={false} className={ghostBtn}>
+                      <Link href={qs({ xml: "1", nota: undefined })} scroll={false} className={ghostBtn}>
                         <Icon name="upload" size={15} />
                         Lançar nota pelo XML
                       </Link>
@@ -255,7 +276,7 @@ export default async function BillingPage({
                         return (
                           <tr key={i.id} className={tr}>
                             <td className={td}>
-                              <RowLink href={`/pedidos/${i.order_id}`} className="font-medium text-ink">
+                              <RowLink href={qs({ nota: i.id })} className="font-medium text-ink">
                                 NF {i.number || "s/n"}
                               </RowLink>
                               {i.series ? <span className="ml-1 text-xs text-muted">série {i.series}</span> : null}
@@ -306,7 +327,7 @@ export default async function BillingPage({
                       <li key={i.id} className="relative px-4 py-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <Link href={`/pedidos/${i.order_id}`} className="block truncate text-[15px] font-medium after:absolute after:inset-0">
+                            <Link href={qs({ nota: i.id })} scroll={false} className="block truncate text-[15px] font-medium after:absolute after:inset-0">
                               NF {i.number || "s/n"} · {i.orders?.customers?.name}
                             </Link>
                             <p className="truncate text-[13px] text-muted">
@@ -411,6 +432,165 @@ export default async function BillingPage({
           </div>
         </>
       )}
+
+      {/* ---------- Detalhes da nota ---------- */}
+      <Sheet
+        open={!!detail}
+        title={detail ? `NF ${detail.number || "sem número"}` : "Nota fiscal"}
+        description={detail ? `${detail.series ? `Série ${detail.series} · ` : ""}emitida em ${formatDate(detail.issued_at)}` : undefined}
+        closeHref={qs({ nota: undefined })}
+      >
+        {detail ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="scroll-thin grid flex-1 content-start gap-5 overflow-y-auto px-5 py-5">
+              <ErrorNote message={sp.erro} />
+
+              {/* Pedido ligado à nota */}
+              <Link
+                href={`/pedidos/${detail.order_id}`}
+                className="group flex items-center gap-3 rounded-lg border border-line bg-subtle p-3 transition hover:border-line-strong"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface text-muted">
+                  <Icon name="receipt" size={17} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] text-muted">Pedido desta nota</span>
+                  <span className="block truncate text-sm font-medium">
+                    <span className="font-mono">{detail.orders ? formatOrderNumber(detail.orders.number, settings) : "—"}</span>
+                    {" · "}
+                    {detail.orders?.customers?.name}
+                  </span>
+                  <span className="block truncate text-xs text-muted">{detail.orders?.principals?.name}</span>
+                </span>
+                {detail.orders ? <Badge tone={statusInfo(detail.orders.status).tone}>{statusInfo(detail.orders.status).label}</Badge> : null}
+                <Icon name="chevron-right" size={16} className="text-faint group-hover:text-ink" />
+              </Link>
+
+              {/* Dados da nota */}
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
+                <div>
+                  <dt className="text-xs text-muted">Valor</dt>
+                  <dd className="font-mono text-base font-semibold tabular-nums">{brl(Number(detail.value))}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Emissão</dt>
+                  <dd className="tabular-nums">{formatDate(detail.issued_at)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Número / série</dt>
+                  <dd>
+                    {detail.number || "—"}
+                    {detail.series ? ` · série ${detail.series}` : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Lançada em</dt>
+                  <dd className="tabular-nums">{formatDate(String(detail.created_at).slice(0, 10))}</dd>
+                </div>
+                {detail.access_key ? (
+                  <div className="col-span-2">
+                    <dt className="text-xs text-muted">Chave de acesso</dt>
+                    <dd className="break-all font-mono text-xs">{detail.access_key}</dd>
+                  </div>
+                ) : null}
+                {detail.notes ? (
+                  <div className="col-span-2">
+                    <dt className="text-xs text-muted">Observações</dt>
+                    <dd className="whitespace-pre-line">{detail.notes}</dd>
+                  </div>
+                ) : null}
+              </dl>
+
+              {/* Arquivo */}
+              {detail.file_path ? (
+                <div className="flex flex-wrap gap-2">
+                  <a href={`/nf/${detail.id}`} target="_blank" rel="noopener noreferrer" className={ghostBtn}>
+                    <Icon name="file" size={15} />
+                    Ver arquivo
+                  </a>
+                  <a href={`/nf/${detail.id}?baixar=1`} className={ghostBtn}>
+                    <Icon name="download" size={15} />
+                    Baixar {detail.file_name ? "" : "arquivo"}
+                  </a>
+                  {detail.file_name ? <span className="self-center truncate text-xs text-muted">{detail.file_name}</span> : null}
+                </div>
+              ) : (
+                <p className="text-xs text-muted">Nenhum arquivo (PDF ou XML) anexado a esta nota.</p>
+              )}
+
+              {/* Quantidades */}
+              {detail.order_invoice_items.length ? (
+                <section>
+                  <p className="mb-2 text-xs font-medium text-muted">Itens desta nota</p>
+                  <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+                    {detail.order_invoice_items.map((l, n) => (
+                      <li key={n} className="flex items-center gap-3 px-3 py-2.5 text-[13px]">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">
+                            {l.order_items?.code ? <span className="mr-1.5 font-mono text-xs text-muted">{l.order_items.code}</span> : null}
+                            {l.order_items?.description ?? "Item removido do pedido"}
+                          </span>
+                        </span>
+                        <span className="shrink-0 tabular-nums">
+                          {numText(Number(l.qty), 3)}
+                          {l.order_items ? (
+                            <span className="text-muted">
+                              {" "}
+                              de {numText(Number(l.order_items.qty), 3)} {unitLabel(l.order_items.unit).toLowerCase()}
+                            </span>
+                          ) : null}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
+              {/* Comissão (só quem vê comissões) */}
+              {canSeeCommissions && commission ? (
+                <section className="rounded-lg border border-line p-3 text-[13px]">
+                  <p className="mb-2 text-xs font-medium text-muted">Comissão desta nota</p>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="font-mono font-semibold tabular-nums">{brl(Number(commission.value))}</span>
+                    <span className="text-muted">{numText(Number(commission.pct), 2)}%</span>
+                    <span className="text-muted">vence {formatDate(commission.due_date)}</span>
+                    <Badge tone={commission.status === "recebida" ? "ok" : commission.status === "cancelada" ? "neutral" : "info"} dot>
+                      {commission.status === "recebida" ? "Recebida" : commission.status === "cancelada" ? "Cancelada" : "A receber"}
+                    </Badge>
+                  </div>
+                </section>
+              ) : null}
+            </div>
+
+            <footer className="flex flex-col-reverse gap-2 border-t border-line bg-subtle px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:items-center sm:pb-3">
+              {canDelete ? (
+                commission?.status === "recebida" ? (
+                  <span className="text-xs text-muted sm:mr-auto">A comissão já foi recebida: desfaça o recebimento em Comissões para poder excluir.</span>
+                ) : (
+                  <form className="sm:mr-auto">
+                    <ConfirmButton
+                      message={`Excluir a NF ${detail.number ?? ""}? A comissão desta nota também será apagada e o pedido volta a esperar essas quantidades. Não dá para desfazer.`}
+                      formAction={deleteInvoice.bind(null, detail.id)}
+                      className={dangerBtn}
+                    >
+                      <Icon name="trash" size={15} />
+                      Excluir nota
+                    </ConfirmButton>
+                  </form>
+                )
+              ) : (
+                <span className="sm:mr-auto" />
+              )}
+              <Link href={qs({ nota: undefined })} replace scroll={false} className={ghostBtn}>
+                Fechar
+              </Link>
+              <Link href={`/pedidos/${detail.order_id}`} className={primaryBtn}>
+                Ver pedido
+              </Link>
+            </footer>
+          </div>
+        ) : null}
+      </Sheet>
 
       <Sheet
         open={canLaunch && sp.xml === "1"}

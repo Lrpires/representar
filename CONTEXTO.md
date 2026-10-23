@@ -65,6 +65,7 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 
 **Faturamento (notas fiscais)**
 - Um pedido pode ter várias notas (faturamento parcial). Se faltar saldo, o pedido fica `parcial`; o botão **"Finalizar pedido"** encerra mesmo sem o restante (pode reabrir).
+- Na ficha do pedido, as notas aparecem **por último e só para consulta**. Detalhes e **exclusão da nota** (que apaga a comissão dela junto) ficam na área **Faturamento**, ao clicar na nota (`/faturamento?nota=…`).
 - Lançamento manual ou pelo **XML da NF-e**: o sistema lê número, série, data, valor, chave de acesso e itens, sugere o pedido pelo CNPJ do emitente (representada) e do destinatário (cliente) e casa os itens por código/descrição. A mesma chave não entra duas vezes.
 
 **Avisos de atraso**: pedido enviado e não totalmente faturado fica amarelo (atenção) e vermelho (crítico) após X/Y dias, definidos em Configurações. Aparecem no Painel, Pedidos e Faturamento.

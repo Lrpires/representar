@@ -181,31 +181,38 @@ export async function registerInvoice(orderId: string, formData: FormData) {
   redirect(fromBilling ? `/faturamento?ok=${encodeURIComponent(msg)}` : `${here(orderId)}?ok=${encodeURIComponent(msg)}`);
 }
 
-export async function deleteInvoice(orderId: string, invoiceId: string) {
+// Exclui uma nota fiscal (só pela área de Faturamento). As comissões dela são apagadas junto.
+// A nota cuja comissão já foi recebida não pode ser excluída: o recebimento precisa ser desfeito antes.
+export async function deleteInvoice(invoiceId: string) {
   const { supabase, isBackOffice, user } = await getContext();
+  const BILLING = "/faturamento";
+  const detail = `${BILLING}?nota=${invoiceId}`;
   const { data: inv } = await supabase
     .from("order_invoices")
-    .select("id, file_path, orders(seller_id), commissions(status)")
+    .select("id, number, order_id, file_path, orders(seller_id), commissions(status)")
     .eq("id", invoiceId)
     .maybeSingle();
-  if (!inv) fail(here(orderId), "Nota não encontrada.");
+  if (!inv) fail(BILLING, "Nota não encontrada.");
   const sellerId = (inv.orders as unknown as { seller_id: string } | null)?.seller_id;
-  if (!isBackOffice && sellerId !== user.id) fail(here(orderId), "Você não pode excluir esta nota.");
+  if (!isBackOffice && sellerId !== user.id) fail(detail, "Você não pode excluir esta nota.");
   const commission = (inv.commissions as unknown as { status: string }[] | null)?.[0];
   // Quem não vê comissões pergunta ao banco se a desta nota já foi recebida.
   const { data: paidRpc } = await supabase.rpc("invoice_commission_received", { p_invoice: invoiceId });
   if (commission?.status === "recebida" || paidRpc === true) {
-    fail(here(orderId), "A comissão desta nota já foi recebida. Desmarque o recebimento em Comissões antes de excluir.");
+    fail(detail, "A comissão desta nota já foi recebida. Desfaça o recebimento em Comissões antes de excluir a nota.");
   }
 
+  // Apaga a nota; as comissões dela saem junto (ligação "em cascata" no banco).
   const { error } = await supabase.from("order_invoices").delete().eq("id", invoiceId);
-  if (error) fail(here(orderId), `Não foi possível excluir: ${error.message}`);
+  if (error) fail(detail, `Não foi possível excluir: ${error.message}`);
   if (inv.file_path) await supabase.storage.from("invoices").remove([inv.file_path]);
 
-  await syncOrder(supabase, orderId);
-  revalidatePath(here(orderId));
+  await syncOrder(supabase, inv.order_id);
+  revalidatePath(here(inv.order_id));
+  revalidatePath(BILLING);
   revalidatePath("/comissoes");
-  redirect(`${here(orderId)}?ok=${encodeURIComponent("Nota excluída.")}`);
+  revalidatePath("/");
+  redirect(`${BILLING}?ok=${encodeURIComponent(`NF ${inv.number ?? ""} excluída, junto com a comissão dela. O pedido voltou a esperar essa quantidade.`)}`);
 }
 
 // Encerra o pedido com saldo não faturado (ex.: a fábrica não vai mandar o restante).

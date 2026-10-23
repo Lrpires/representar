@@ -14,7 +14,7 @@
 ## 2. Como trabalhar comigo (regras do dono do projeto)
 
 - Responder em **português do Brasil**, de forma **simples** (o dono é empreendedor, não programador).
-- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **020**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
+- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **021**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
 - Visual no nível Linear/Notion, **mobile first**, seguindo o design system da marca (seção 7).
 - Commit e push só quando o dono pedir ("faz o commit e o push").
 
@@ -41,7 +41,7 @@ src/app/imprimir/       pedido para impressão/PDF        src/app/nf/[id]/  abre
 src/components/         ui.tsx (componentes base), nav.tsx, theme.tsx, icons.tsx, pin-map.tsx, cockpit/…
 src/lib/                regras: session (perfis), orders, aging, nfe (XML), goals, cockpit, theme (cor da empresa),
                         payables, commission(-due), geocode, lookup (CNPJ/CEP), settings…
-supabase/migrations/    001 a 019
+supabase/migrations/    001 a 020
 ```
 
 ## 4. Perfis e o que cada um vê
@@ -66,11 +66,11 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 **Faturamento (notas fiscais)**
 - Um pedido pode ter várias notas (faturamento parcial). Se faltar saldo, o pedido fica `parcial`; o botão **"Finalizar pedido"** encerra mesmo sem o restante (pode reabrir).
 - Na ficha do pedido, as notas aparecem **por último e só para consulta**. Detalhes e **exclusão da nota** (que apaga a comissão dela junto) ficam na área **Faturamento**, ao clicar na nota (`/faturamento?nota=…`).
-- Lançamento manual ou pelo **XML da NF-e**: o sistema lê número, série, data, valor, chave de acesso e itens, sugere o pedido pelo CNPJ do emitente (representada) e do destinatário (cliente) e casa os itens por código/descrição. A mesma chave não entra duas vezes.
+- Lançamento **à mão** (escolhendo o pedido) ou pelo **XML da NF-e**, os dois pela área Faturamento: o sistema lê número, série, data, valor, chave de acesso e itens, sugere o pedido pelo CNPJ do emitente (representada) e do destinatário (cliente) e casa os itens por código/descrição. A mesma chave não entra duas vezes.
 
 **Avisos de atraso**: pedido enviado e não totalmente faturado fica amarelo (atenção) e vermelho (crítico) após X/Y dias, definidos em Configurações. Aparecem no Painel, Pedidos e Faturamento.
 
-**Comissões**: nascem de cada nota (valor da nota × % do pedido), com vencimento pela regra da representada. Baixa com valor recebido (pode ser parcial). Cancelar o pedido cancela as comissões a receber (gatilho no banco). Só administrador e financeiro veem.
+**Comissões**: nascem de cada nota (valor da nota × % do pedido), com vencimento pela regra da representada. Recebimento em **várias partes** (cada pagamento é lançado e somado; enquanto faltar, fica em aberto) e **encerramento manual com motivo** (devolução parcial, inadimplência…), que pode ser reaberto. Busca pelo número da NF em todos os meses (migração 020). Cancelar o pedido cancela as comissões a receber (gatilho no banco). Só administrador e financeiro veem.
 
 **Metas**: por vendedor, por representada ou geral. A meta do escritório é sempre a **soma** das metas distribuídas (não existe número solto). Mostra ritmo diário pelos dias úteis restantes.
 
@@ -82,7 +82,7 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 
 **Importar dados** (`/importar`, administrador e gerente): modelos em Excel para Representadas → Clientes → Produtos, com aba de instruções e listas de escolha; ao enviar, prévia linha a linha (novo, atualiza, com erro) antes de gravar. Reconhece cadastros existentes (CNPJ, nome ou código) e atualiza em vez de duplicar; célula vazia não apaga dado. Código em `src/lib/import-*.ts` e `src/app/(app)/importar/`.
 
-**Configurações** (só o administrador altera): logo, **cor da empresa**, numeração de pedidos, prazos de atraso, unidades de venda, listas das contas a pagar, excluir escritório.
+**Configurações** (só o administrador altera): logo, **cor da empresa**, **moeda e formato dos números** (uma moeda por escritório; separadores 1.234,56 ou 1,234.56 e milhar ligado/desligado — vale para mostrar e para ler o que se digita; regra em `src/lib/number-format.ts`, nas telas do navegador via `useNumberFormat()`), numeração de pedidos, prazos de atraso, unidades de venda, listas das contas a pagar, excluir escritório.
 
 ## 6. Banco de dados (migrações)
 
@@ -100,6 +100,7 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 | 017 | Prazos de atraso, finalizar pedido, chave de acesso da NF-e |
 | 018 | Comissões só para administrador/financeiro, gatilho de cancelamento, listas das contas a pagar (`payable_options`) |
 | 019 | Numeração dos pedidos por representada (e renumeração dos pedidos existentes) |
+| 020 | Recebimentos de comissão em partes (`commission_receipts`), comissão encerrada com motivo, moeda e formato dos números do escritório |
 
 Storage: `product-images` (público), `invoices` (privado, link temporário), `avatars`, `logos`.
 
@@ -121,7 +122,7 @@ Storage: `product-images` (público), `invoices` (privado, link temporário), `a
 
 ## 9. Pendências e próximos passos
 
-- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 020 liberando leitura de clientes ao financeiro.
+- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 021 liberando leitura de clientes ao financeiro.
 - **Importação: próxima etapa** — notas fiscais em lote (vários XMLs de uma vez, trazendo o histórico de faturamento e comissões) e pedidos antigos por planilha. Representadas, clientes e produtos já importam.
 - **Cobrança/assinatura, teste grátis e limites por plano** — não existem.
 - Ícones sem versão no design system (lixeira, editar, relógio…) usam o desenho antigo com o traço novo.

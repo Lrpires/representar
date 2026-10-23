@@ -1,12 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { num, numText, priceText, round2 } from "@/lib/orders";
-import { brl } from "@/lib/format";
+import { round2 } from "@/lib/orders";
 import { digits } from "@/lib/br";
 import { parseNfe, matchItems, type Nfe } from "@/lib/nfe";
 import { Field, FormGroup, inputCls } from "@/components/ui";
 import { Icon } from "@/components/icons";
+import { useNumberFormat } from "@/components/number-format";
 
 export type InvoiceItem = {
   id: string;
@@ -31,6 +31,7 @@ export function InvoiceFields({
   today: string;
   expected?: { principalCnpj?: string | null; customerCnpj?: string | null };
 }) {
+  const { brl, num, numText, priceText, symbol } = useNumberFormat();
   const left = (i: InvoiceItem) => Math.max(i.qty - i.invoiced, 0);
   const [qty, setQty] = useState<Record<string, string>>(() =>
     Object.fromEntries(items.map((i) => [i.id, numText(left(i), 3)])),
@@ -136,7 +137,7 @@ export function InvoiceFields({
         <input name="issued_at" type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
       </Field>
       <Field
-        label="Valor faturado (R$)"
+        label={`Valor faturado (${symbol})`}
         hint={nfe ? "Valor total da NF-e." : valueEdited ? "Valor digitado por você." : "Calculado pelas quantidades abaixo."}
       >
         <input

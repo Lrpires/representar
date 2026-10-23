@@ -1,3 +1,4 @@
+import { numberText } from "@/lib/number-format";
 import Link from "next/link";
 import { getContext } from "@/lib/session";
 import { getCounts } from "@/lib/counts";
@@ -220,7 +221,7 @@ export default async function HomePage({
   // Produtos vendidos = quantos produtos DIFERENTES saíram no período (não a soma das quantidades).
   const productUnit = new Map(productRows.map((r) => [r.k, r.u] as const));
   const distinctProducts = productQty.size;
-  const qtyText = (q: number, u: string) => `${q.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} ${unitShort(u)}`;
+  const qtyText = (q: number, u: string) => `${numberText(q, 3)} ${unitShort(u)}`;
 
   /* ---------- Clientes para reativar (sem comprar há 60+ dias) ---------- */
   const lastBuy = new Map<string, { date: string; total: number; name: string; phone: string | null }>();

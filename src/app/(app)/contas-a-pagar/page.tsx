@@ -1,3 +1,4 @@
+import { currencySymbol } from "@/lib/number-format";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getContext } from "@/lib/session";
@@ -454,7 +455,7 @@ function PayableFields({ today, row, lists }: { today: string; row?: Payable; li
           </Field>
         </>
       )}
-      <Field label="Valor (R$)">
+      <Field label={`Valor (${currencySymbol()})`}>
         <input
           name="amount"
           inputMode="decimal"

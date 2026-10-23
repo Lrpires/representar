@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import { parseNfe, matchItems, type Nfe } from "@/lib/nfe";
 import { digits } from "@/lib/br";
-import { brl, formatDate } from "@/lib/format";
-import { numText, priceText } from "@/lib/orders";
+import { formatDate } from "@/lib/format";
 import { Icon } from "@/components/icons";
 import { Badge } from "@/components/ui";
+import { useNumberFormat } from "@/components/number-format";
 
 export type OpenOrder = {
   id: string;
@@ -24,6 +24,7 @@ export type OpenOrder = {
 // Lançar nota pelo XML: lê a NF-e, sugere o pedido (mesmo cliente e representada) e casa os itens.
 // Tudo vai no formulário em volta (SheetForm), que grava a nota no pedido escolhido.
 export function XmlImport({ orders }: { orders: OpenOrder[] }) {
+  const { brl, numText, priceText } = useNumberFormat();
   const [nfe, setNfe] = useState<Nfe | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);

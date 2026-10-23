@@ -9,7 +9,7 @@ type Row = Record<string, string | null>;
 export type PrintableOrder = NonNullable<Awaited<ReturnType<typeof loadPrintableOrder>>>;
 
 export async function loadPrintableOrder(id: string) {
-  const { supabase } = await getContext();
+  const { supabase, numberFormat } = await getContext();
   const settings = await getSettings();
 
   const { data: o } = await supabase.from("orders").select("*, customers(*), principals(*)").eq("id", id).maybeSingle();
@@ -38,6 +38,7 @@ export async function loadPrintableOrder(id: string) {
 
   return {
     settings,
+    fmt: numberFormat,
     label: formatOrderNumber(o.number, settings),
     status: statusInfo(o.status).label,
     orderDate: o.order_date as string,

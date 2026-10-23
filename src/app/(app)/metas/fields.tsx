@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { METRICS, closes, type Dimension } from "@/lib/goals";
-import { num, numText, priceText, round2 } from "@/lib/orders";
-import { brl } from "@/lib/format";
+import { round2 } from "@/lib/orders";
 import { Field, FormGroup, inputCls, textareaCls } from "@/components/ui";
 import { Avatar } from "@/components/ui";
+import { useNumberFormat } from "@/components/number-format";
 
 const PERIODS = [
   { value: "mes", label: "Mês" },
@@ -114,10 +114,11 @@ export function TargetField({
   label: string;
   defaultValue?: number;
 }) {
+  const { priceText, symbol } = useNumberFormat();
   return (
-    <Field label={money ? `${label} (R$)` : `${label} (${metric === "pedidos" ? "pedidos" : "clientes"})`} className="sm:col-span-2">
+    <Field label={money ? `${label} (${symbol})` : `${label} (${metric === "pedidos" ? "pedidos" : "clientes"})`} className="sm:col-span-2">
       <span className="relative block">
-        {money ? <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span> : null}
+        {money ? <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">{symbol}</span> : null}
         <input
           name="target"
           inputMode="decimal"
@@ -156,6 +157,7 @@ export function DistributionEditor({
   referenceLabel: string;
   sellerGoals: Record<string, number>; // meta de cada vendedor (para conferir a matriz)
 }) {
+  const { brl, num, numText, priceText, symbol } = useNumberFormat();
   const matrix = dimension === "vendedor_representada";
   const keyOf = (r: DistEntity, c?: DistEntity) =>
     dimension === "vendedor" ? `${r.id}__` : dimension === "representada" ? `__${r.id}` : `${r.id}__${c!.id}`;
@@ -203,7 +205,7 @@ export function DistributionEditor({
 
   const input = (k: string, label: string) => (
     <span className="relative block">
-      {money ? <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-faint">R$</span> : null}
+      {money ? <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-faint">{symbol}</span> : null}
       <input
         name={`t__${k}`}
         inputMode="decimal"

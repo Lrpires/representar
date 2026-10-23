@@ -1,3 +1,5 @@
+import { money, numberText, parseAmount, type NumFmt } from "@/lib/number-format";
+
 export function text(fd: FormData, key: string): string {
   const v = fd.get(key);
   return typeof v === "string" ? v.trim() : "";
@@ -7,20 +9,14 @@ export function optional(fd: FormData, key: string): string | null {
   return text(fd, key) || null;
 }
 
-// Aceita "1.234,56" (padrão brasileiro) e "12.5" (ponto decimal).
-export function parseNumber(raw: string): number {
-  const s = raw.trim();
-  const normalized = s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s;
-  return Number(normalized);
+// Lê o número digitado no formato do escritório ("1.234,56" ou "1,234.56").
+export function parseNumber(raw: string, f?: NumFmt): number {
+  return parseAmount(raw, f);
 }
 
-const brlFormat = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
-
-export function brl(value: number | string): string {
-  return brlFormat.format(Number(value));
+// Valor em dinheiro na moeda e no formato do escritório (o nome ficou "brl" por histórico).
+export function brl(value: number | string, f?: NumFmt): string {
+  return money(value, f);
 }
 
 // "2026-10-03" -> "03/10/2026" (sem passar por fuso horário)
@@ -40,7 +36,7 @@ export function safeQ(raw: string | undefined): string {
   return (raw ?? "").replace(/[,()*%\\]/g, " ").trim();
 }
 
-export function pct(value: number | string | null): string {
+export function pct(value: number | string | null, f?: NumFmt): string {
   if (value == null) return "";
-  return `${String(value).replace(".", ",")}%`;
+  return `${numberText(Number(value), 2, f)}%`;
 }

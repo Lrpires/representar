@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { flushSync } from "react-dom";
 import { saveOrder, type OrderInput, type ItemInput } from "./save";
-import { lineTotals, orderTotals, num, numText, priceText, PAYMENT_TERMS } from "@/lib/orders";
-import { brl } from "@/lib/format";
+import { lineTotals, orderTotals, PAYMENT_TERMS } from "@/lib/orders";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { Icon } from "@/components/icons";
 import { ErrorNote, Field, SaveBar, ghostBtn, iconBtn, inputCls, primaryBtn, textareaCls } from "@/components/ui";
+import { useNumberFormat } from "@/components/number-format";
 
 export type EditorCustomer = { id: string; name: string; city: string | null; state: string | null; cnpj: string | null; last_principal_id: string | null };
 export type EditorPrincipal = { id: string; name: string; commission: number | null };
@@ -49,6 +49,7 @@ export function OrderEditor({
   defaultUnit: string;
   showCommission?: boolean; // vendedor e gerente não veem a comissão (o % segue o padrão da representada)
 }) {
+  const { brl, num, numText, priceText } = useNumberFormat();
   const [f, setF] = useState(initial);
   const [rows, setRows] = useState<Row[]>(() =>
     // Chaves fixas nas linhas iniciais: iguais no servidor e no navegador.

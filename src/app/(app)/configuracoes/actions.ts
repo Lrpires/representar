@@ -6,6 +6,7 @@ import { getContext } from "@/lib/session";
 import { fail } from "@/lib/flash";
 import { text } from "@/lib/format";
 import { UNITS } from "@/lib/units";
+import { CURRENCIES } from "@/lib/number-format";
 
 const PATH = "/configuracoes";
 
@@ -40,6 +41,13 @@ export async function saveSettings(formData: FormData) {
     fail(PATH, "O prazo crítico precisa ser maior que o prazo de aviso.");
   }
 
+  // Moeda e formato dos números (migração 020).
+  const currency = text(formData, "currency") || "BRL";
+  if (!CURRENCIES.some((c) => c.code === currency)) fail(PATH, "Escolha uma moeda da lista.");
+  const numberStyle = text(formData, "number_style") === "us" ? "us" : "br";
+  const numberGroup = formData.get("number_group") === "on";
+  const numbers = { currency, number_style: numberStyle, number_group: numberGroup };
+
   const base = {
       name,
       brand_color: color,
@@ -51,8 +59,15 @@ export async function saveSettings(formData: FormData) {
   // Os prazos dependem da migração 017; sem ela, salva o resto normalmente.
   let { error } = await supabase
     .from("organizations")
-    .update({ ...base, order_warn_days: warn, order_critical_days: critical })
+    .update({ ...base, ...numbers, order_warn_days: warn, order_critical_days: critical })
     .eq("id", orgId);
+  // Sem a migração 020 (moeda e números), salva o resto.
+  if (error && /currency|number_style|number_group/.test(error.message)) {
+    ({ error } = await supabase
+      .from("organizations")
+      .update({ ...base, order_warn_days: warn, order_critical_days: critical })
+      .eq("id", orgId));
+  }
   if (error?.message.includes("order_warn_days") || error?.message.includes("order_critical_days")) {
     ({ error } = await supabase.from("organizations").update(base).eq("id", orgId));
   }

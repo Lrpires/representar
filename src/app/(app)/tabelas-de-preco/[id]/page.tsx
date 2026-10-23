@@ -1,3 +1,4 @@
+import { currencySymbol } from "@/lib/number-format";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getContext } from "@/lib/session";
@@ -193,7 +194,7 @@ export default async function PriceTablePage({
             </Field>
           </div>
           <div className="sm:col-span-2">
-            <Field label="Preço (R$)">
+            <Field label={`Preço (${currencySymbol()})`}>
               <input name="price" inputMode="decimal" required placeholder="12,50" className={inputCls} />
             </Field>
           </div>

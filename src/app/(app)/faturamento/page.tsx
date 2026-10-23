@@ -5,6 +5,7 @@ import { registerInvoiceFromBilling, deleteInvoice } from "../pedidos/[id]/invoi
 import { ConfirmButton } from "@/components/confirm-button";
 import { unitLabel } from "@/lib/units";
 import { XmlImport, type OpenOrder } from "./xml-import";
+import { ManualInvoice, type ManualOrder } from "./manual-invoice";
 import { formatOrderNumber, numText, statusInfo, OPEN_STATUSES } from "@/lib/orders";
 import { orderAging, AGING_STYLE } from "@/lib/aging";
 import { resolvePeriod } from "@/lib/cockpit";
@@ -39,7 +40,9 @@ type Inv = {
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ aba?: string; periodo?: string; rep?: string; q?: string; xml?: string; nota?: string; ok?: string; erro?: string }>;
+  searchParams: Promise<{
+    aba?: string; periodo?: string; rep?: string; q?: string; xml?: string; manual?: string; pedido?: string; nota?: string; ok?: string; erro?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const { supabase, isBackOffice, role, user, canSeeCommissions } = await getContext();
@@ -62,7 +65,7 @@ export default async function BillingPage({
   /* ---------- A faturar ---------- */
   let openQuery = supabase
     .from("orders")
-    .select("id, number, status, order_date, sent_at, total, discount_pct, principal_id, customers(name, cnpj), principals(name, cnpj), order_items(id, code, description, qty)")
+    .select("id, number, status, order_date, sent_at, total, discount_pct, principal_id, customers(name, cnpj), principals(name, cnpj), order_items(id, code, description, qty, unit, unit_price, position)")
     .in("status", OPEN_STATUSES)
     .order("order_date")
     .limit(1000);
@@ -95,6 +98,8 @@ export default async function BillingPage({
   }
   const canDelete = !!detail && (isBackOffice || detail.orders?.seller_id === user.id);
   const commission = detail?.commissions?.[0];
+  // Comissão com dinheiro já recebido (no todo ou em parte) trava a exclusão da nota.
+  const commissionPaid = !!commission && (commission.status === "recebida" || Number(commission.received_value ?? 0) > 0);
 
   const invoices = ((invData ?? []) as unknown as Inv[]).filter((i) =>
     !q
@@ -125,7 +130,8 @@ export default async function BillingPage({
   type OpenRow = {
     id: string; number: number; status: string; order_date: string; sent_at: string | null; total: number;
     customers: { name: string; cnpj: string | null } | null; principals: { name: string; cnpj: string | null } | null;
-    order_items: { id: string; code: string | null; description: string; qty: number }[];
+    discount_pct: number;
+    order_items: { id: string; code: string | null; description: string; qty: number; unit: string; unit_price: number; position: number }[];
   };
   const open = ((openData ?? []) as unknown as OpenRow[])
     .map((o) => ({
@@ -152,6 +158,30 @@ export default async function BillingPage({
     items: o.order_items.map((i) => ({ id: i.id, code: i.code ?? "", description: i.description, qty: Number(i.qty), invoiced: doneQty.get(i.id) ?? 0 })),
   }));
 
+  const manualOrders: ManualOrder[] = ((openData ?? []) as unknown as OpenRow[]).map((o) => ({
+    id: o.id,
+    label: formatOrderNumber(o.number, settings),
+    date: o.order_date,
+    status: o.status,
+    total: Number(o.total),
+    discountPct: Number(o.discount_pct ?? 0),
+    customerName: o.customers?.name ?? "",
+    customerCnpj: o.customers?.cnpj ?? null,
+    principalName: o.principals?.name ?? "",
+    principalCnpj: o.principals?.cnpj ?? null,
+    items: [...o.order_items]
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+      .map((i) => ({
+        id: i.id,
+        code: i.code ?? "",
+        description: i.description,
+        unit: i.unit,
+        qty: Number(i.qty),
+        unitPrice: Number(i.unit_price),
+        invoiced: doneQty.get(i.id) ?? 0,
+      })),
+  }));
+
   const qs = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
     const merged = { aba: sp.aba, periodo: sp.periodo, rep: sp.rep, q: sp.q, nota: sp.nota, ...patch };
@@ -167,16 +197,22 @@ export default async function BillingPage({
         hint="As notas fiscais emitidas pelas representadas e os pedidos que ainda esperam nota."
         action={
           canLaunch ? (
-            <Link href={qs({ xml: "1", nota: undefined })} scroll={false} className={primaryBtn}>
-              <Icon name="upload" size={15} />
-              Lançar nota pelo XML
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href={qs({ manual: "1", nota: undefined, pedido: undefined })} scroll={false} className={ghostBtn}>
+                <Icon name="edit" size={15} />
+                Lançar nota à mão
+              </Link>
+              <Link href={qs({ xml: "1", nota: undefined })} scroll={false} className={primaryBtn}>
+                <Icon name="upload" size={15} />
+                Lançar nota pelo XML
+              </Link>
+            </div>
           ) : null
         }
       />
 
       <div className="mb-4 grid gap-3 empty:hidden">
-        {!sp.xml && !sp.nota ? <ErrorNote message={sp.erro} /> : null}
+        {!sp.xml && !sp.nota && !sp.manual ? <ErrorNote message={sp.erro} /> : null}
         <OkNote message={sp.ok} />
       </div>
 
@@ -253,7 +289,7 @@ export default async function BillingPage({
                     ) : null
                   }
                 >
-                  Lance as notas pelo XML da NF-e ou, à mão, pela aba “A faturar”.
+                  Lance as notas pelo XML da NF-e ou à mão, pelos botões acima.
                 </EmptyState>
               ) : (
                 <>
@@ -398,7 +434,7 @@ export default async function BillingPage({
                         <td className={`${td} text-right font-medium tabular-nums`}>{brl(Math.max(Number(o.total) - invoiced, 0))}</td>
                         <td className={`${td} text-right`}>
                           {canLaunch ? (
-                            <Link href={`/pedidos/${o.id}?faturar=1`} className={`${ghostBtn} relative z-10`}>
+                            <Link href={qs({ manual: "1", pedido: o.id, nota: undefined })} scroll={false} className={`${ghostBtn} relative z-10`}>
                               Lançar nota
                             </Link>
                           ) : null}
@@ -434,6 +470,19 @@ export default async function BillingPage({
           </div>
         </>
       )}
+
+      {/* ---------- Lançar nota à mão ---------- */}
+      <Sheet
+        open={canLaunch && sp.manual === "1"}
+        title="Lançar nota à mão"
+        description="Escolha o pedido e preencha os dados da nota. Se tiver o XML, solte no campo do arquivo que ele preenche tudo."
+        closeHref={qs({ manual: undefined, pedido: undefined })}
+      >
+        <SheetForm action={registerInvoiceFromBilling} closeHref={qs({ manual: undefined, pedido: undefined })} submitLabel="Lançar nota">
+          <ErrorNote message={sp.erro} />
+          <ManualInvoice orders={manualOrders} today={today} initialOrderId={sp.pedido} />
+        </SheetForm>
+      </Sheet>
 
       {/* ---------- Detalhes da nota ---------- */}
       <Sheet
@@ -564,8 +613,16 @@ export default async function BillingPage({
                     <span className="font-mono font-semibold tabular-nums">{brl(Number(commission.value))}</span>
                     <span className="text-muted">{numText(Number(commission.pct), 2)}%</span>
                     <span className="text-muted">vence {formatDate(commission.due_date)}</span>
-                    <Badge tone={commission.status === "recebida" ? "ok" : commission.status === "cancelada" ? "neutral" : "info"} dot>
-                      {commission.status === "recebida" ? "Recebida" : commission.status === "cancelada" ? "Cancelada" : "A receber"}
+                    <Badge tone={commission.status === "recebida" ? "ok" : commission.status === "a_receber" ? "info" : "neutral"} dot>
+                      {commission.status === "recebida"
+                        ? "Recebida"
+                        : commission.status === "cancelada"
+                          ? "Cancelada"
+                          : commission.status === "encerrada"
+                            ? "Encerrada"
+                            : Number(commission.received_value ?? 0) > 0
+                              ? `Recebido ${brl(Number(commission.received_value))}`
+                              : "A receber"}
                     </Badge>
                   </div>
                 </section>
@@ -575,8 +632,8 @@ export default async function BillingPage({
             <p className="border-t border-line px-5 py-2 text-[11px] text-faint">Lançada no sistema em {formatDate(String(detail.created_at).slice(0, 10))}</p>
             <footer className="flex flex-col-reverse gap-2 border-t border-line bg-subtle px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:items-center sm:pb-3">
               {canDelete ? (
-                commission?.status === "recebida" ? (
-                  <span className="text-xs text-muted sm:mr-auto">A comissão já foi recebida: desfaça o recebimento em Comissões para poder excluir.</span>
+                commissionPaid ? (
+                  <span className="text-xs text-muted sm:mr-auto">A comissão já teve recebimento: apague os recebimentos em Comissões para poder excluir.</span>
                 ) : (
                   <form className="sm:mr-auto">
                     <ConfirmButton

@@ -2,22 +2,35 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getContext } from "@/lib/session";
 import { getSettings } from "@/lib/settings";
-import { CommissionRow, expected, nfValue, type Row } from "./row";
+import { CommissionRow, expected, missingOf, nfValue, receivedOf, type Row } from "./row";
+import { closeCommission } from "./actions";
+import { Sheet } from "@/components/sheet";
+import { SearchBox } from "@/components/search";
 import { formatOrderNumber } from "@/lib/orders";
-import { brl, formatDate, todayISO } from "@/lib/format";
+import { brl, formatDate, safeQ, todayISO } from "@/lib/format";
 import { monthInfo } from "@/lib/month";
 import { Icon } from "@/components/icons";
 import { UrlSelect } from "@/components/url-select";
 import {
-  PageHeader, EmptyState, OkNote, ErrorNote, FilterPill, Segmented, iconBtn,
+  PageHeader, EmptyState, OkNote, ErrorNote, FilterPill, Segmented, SheetForm, Field, iconBtn, inputCls, textareaCls,
 } from "@/components/ui";
+
+// Motivos para encerrar uma comissão sem receber tudo.
+const CLOSE_REASONS = [
+  "Devolução parcial da nota fiscal",
+  "Devolução total da nota fiscal",
+  "Cliente não pagou (inadimplência)",
+  "Acordo ou desconto com a representada",
+  "Diferença de cálculo da representada",
+  "Outro motivo",
+];
 
 const PATH = "/comissoes";
 
 export default async function CommissionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string; rep?: string; status?: string; ok?: string; erro?: string }>;
+  searchParams: Promise<{ mes?: string; rep?: string; status?: string; q?: string; encerrar?: string; ok?: string; erro?: string }>;
 }) {
   const sp = await searchParams;
   const { supabase, canSeeCommissions } = await getContext();
@@ -26,22 +39,31 @@ export default async function CommissionsPage({
   const month = monthInfo(sp.mes);
   const today = todayISO();
 
-  let query = supabase
-    .from("commissions")
-    .select(
-      "id, order_id, value, due_date, status, received_at, received_value, principal_id, orders(number, commission_pct, customers(name)), order_invoices(id, number, series, issued_at, value, file_path), principals(name)",
-    )
-    .order("due_date");
-  // "Atrasadas" mostra as de qualquer mês; os outros filtros, só o mês escolhido (pelo vencimento).
-  query =
-    sp.status === "atrasadas"
-      ? query.eq("status", "a_receber").lt("due_date", today)
-      : query.gte("due_date", month.start).lte("due_date", month.end);
-  if (sp.rep) query = query.eq("principal_id", sp.rep);
+  // Busca pelo número da NF: procura em todos os meses.
+  const q = safeQ(sp.q).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  const baseCols =
+    "id, order_id, value, due_date, status, received_at, received_value, principal_id, orders(number, commission_pct, customers(name)), principals(name)";
+  const build = (withReceipts: boolean) => {
+    const nfCols = `${q ? "order_invoices!inner" : "order_invoices"}(id, number, series, issued_at, value, file_path)`;
+    let qy = supabase
+      .from("commissions")
+      .select(`${baseCols}, ${nfCols}${withReceipts ? ", closed_at, close_reason, commission_receipts(id, amount, received_at, notes)" : ""}`)
+      .order("due_date");
+    if (q) qy = qy.ilike("order_invoices.number", `%${q}%`).limit(300);
+    // "Atrasadas" mostra as de qualquer mês; os outros filtros, só o mês escolhido (pelo vencimento).
+    else if (sp.status === "atrasadas") qy = qy.eq("status", "a_receber").lt("due_date", today);
+    else qy = qy.gte("due_date", month.start).lte("due_date", month.end);
+    if (sp.rep) qy = qy.eq("principal_id", sp.rep);
+    return qy;
+  };
+  const first = await build(true);
+  // Sem a migração 020 (recebimentos), carrega do jeito antigo.
+  const listResult = first.error ? await build(false) : first;
 
+  const needs020 = !!first.error && !listResult.error;
   const [{ data, error }, { data: lateData }, { data: principals }, { data: pipeline }] = await Promise.all([
-    query,
-    supabase.from("commissions").select("value").eq("status", "a_receber").lt("due_date", today),
+    Promise.resolve(listResult),
+    supabase.from("commissions").select("value, received_value").eq("status", "a_receber").lt("due_date", today),
     supabase.from("principals").select("id, name").order("name"),
     supabase.from("orders").select("subtotal, discount_pct, commission_pct").eq("status", "enviado"),
   ]);
@@ -52,10 +74,10 @@ export default async function CommissionsPage({
 
   const live = rows.filter((r) => r.status !== "cancelada");
   const previsto = live.reduce((s, r) => s + expected(r), 0);
-  const aReceber = live.filter((r) => r.status === "a_receber").reduce((s, r) => s + expected(r), 0);
-  const recebido = live.filter((r) => r.status === "recebida").reduce((s, r) => s + Number(r.received_value ?? r.value), 0);
+  const aReceber = live.filter((r) => r.status === "a_receber").reduce((s, r) => s + missingOf(r), 0);
+  const recebido = live.reduce((s, r) => s + receivedOf(r), 0);
   const faturado = live.reduce((s, r) => s + nfValue(r), 0);
-  const lateTotal = (lateData ?? []).reduce((s, r) => s + Number(r.value), 0);
+  const lateTotal = (lateData ?? []).reduce((s, r) => s + Math.max(Number(r.value) - Number(r.received_value ?? 0), 0), 0);
   const pipelineTotal = (pipeline ?? []).reduce(
     (s, o) => s + (Number(o.subtotal) * (1 - Number(o.discount_pct) / 100) * Number(o.commission_pct ?? 0)) / 100,
     0,
@@ -66,19 +88,20 @@ export default async function CommissionsPage({
     const cur = byPrincipal.get(r.principal_id) ?? { name: r.principals?.name ?? "—", nf: 0, previsto: 0, aReceber: 0, recebido: 0 };
     cur.nf += nfValue(r);
     cur.previsto += expected(r);
-    if (r.status === "a_receber") cur.aReceber += expected(r);
-    if (r.status === "recebida") cur.recebido += Number(r.received_value ?? r.value);
+    if (r.status === "a_receber") cur.aReceber += missingOf(r);
+    cur.recebido += receivedOf(r);
     byPrincipal.set(r.principal_id, cur);
   }
 
   const qs = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
-    const merged = { mes: sp.mes, rep: sp.rep, status: sp.status, ...patch };
+    const merged = { mes: sp.mes, rep: sp.rep, status: sp.status, q: sp.q, ...patch };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `?${s}` : "";
   };
   const backQs = qs({}) || "?";
+  const closing = rows.find((r) => r.id === sp.encerrar && r.status === "a_receber") ?? null;
   const count = (s?: string) => rows.filter((r) => (!s ? true : s === "atrasadas" ? isLate(r) : r.status === s)).length;
 
   return (
@@ -100,8 +123,11 @@ export default async function CommissionsPage({
       />
 
       <div className="mb-4 grid gap-3 empty:hidden">
-        <ErrorNote message={sp.erro} />
+        {!sp.encerrar ? <ErrorNote message={sp.erro} /> : null}
         <OkNote message={sp.ok} />
+        {needs020 ? (
+          <ErrorNote message="Para lançar recebimentos em partes e encerrar comissões, rode a migração 020 no Supabase." />
+        ) : null}
       </div>
 
       {error ? (
@@ -209,10 +235,16 @@ export default async function CommissionsPage({
               <FilterPill href={`${PATH}${qs({ status: "recebida" })}`} active={sp.status === "recebida"} count={count("recebida")}>
                 Recebidas
               </FilterPill>
+              <FilterPill href={`${PATH}${qs({ status: "encerrada" })}`} active={sp.status === "encerrada"} count={count("encerrada")}>
+                Encerradas
+              </FilterPill>
               <FilterPill href={`${PATH}${qs({ status: "cancelada" })}`} active={sp.status === "cancelada"} count={count("cancelada")}>
                 Canceladas
               </FilterPill>
             </Segmented>
+            <div className="w-full sm:w-56">
+              <SearchBox placeholder="Nº da NF" />
+            </div>
             <div className="ml-auto w-full sm:w-auto">
               <UrlSelect
                 param="rep"
@@ -224,8 +256,10 @@ export default async function CommissionsPage({
           </div>
 
           {filtered.length === 0 ? (
-            <EmptyState icon="percent" title="Sem comissões no mês" compact>
-              Cada nota fiscal registrada num pedido gera uma comissão aqui. O mês é o do vencimento da comissão.
+            <EmptyState icon="percent" title={q ? `Nenhuma comissão da NF ${q}` : "Sem comissões no mês"} compact>
+              {q
+                ? "A busca procura em todos os meses. Confira o número da nota."
+                : "Cada nota fiscal registrada num pedido gera uma comissão aqui. O mês é o do vencimento da comissão."}
             </EmptyState>
           ) : (
             <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
@@ -235,15 +269,60 @@ export default async function CommissionsPage({
                 <span>Pedido e cliente</span>
                 <span className="text-right">Valor da NF</span>
                 <span>Vencimento</span>
-                <span className="text-right">Comissão recebida</span>
+                <span className="text-right">Recebimento</span>
               </li>
               {filtered.map((r) => (
-                <CommissionRow key={r.id} r={r} late={isLate(r)} backQs={backQs} label={r.orders ? formatOrderNumber(r.orders.number, settings) : "—"} today={today} />
+                <CommissionRow
+                  key={r.id}
+                  r={r}
+                  late={isLate(r)}
+                  backQs={backQs}
+                  label={r.orders ? formatOrderNumber(r.orders.number, settings) : "—"}
+                  today={today}
+                  closeHref={`${PATH}${qs({ encerrar: r.id })}`}
+                />
               ))}
             </ul>
           )}
         </>
       )}
+
+      {/* Encerrar comissão com motivo */}
+      <Sheet
+        open={!!closing}
+        title="Encerrar comissão"
+        description={
+          closing
+            ? `NF ${closing.order_invoices?.number ?? ""} · recebido ${brl(receivedOf(closing))} de ${brl(expected(closing))}. O restante (${brl(missingOf(closing))}) deixa de ser esperado.`
+            : undefined
+        }
+        closeHref={`${PATH}${qs({ encerrar: undefined })}`}
+      >
+        {closing ? (
+          <SheetForm action={closeCommission.bind(null, closing.id)} closeHref={`${PATH}${qs({ encerrar: undefined })}`} submitLabel="Encerrar comissão">
+            <input type="hidden" name="back" value={qs({ encerrar: undefined }) || "?"} />
+            <ErrorNote message={sp.erro} />
+            <Field label="Motivo" className="sm:col-span-2">
+              <select name="reason" required defaultValue="" className={inputCls}>
+                <option value="" disabled>
+                  Escolha…
+                </option>
+                {CLOSE_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Detalhes" hint="Opcional. Ex.: devolução de 20 peças, boleto 2/3 não pago." className="sm:col-span-2">
+              <textarea name="details" rows={3} className={textareaCls} />
+            </Field>
+            <p className="text-xs text-muted sm:col-span-2">
+              Dá para reabrir depois, se o valor acabar entrando.
+            </p>
+          </SheetForm>
+        ) : null}
+      </Sheet>
     </>
   );
 }

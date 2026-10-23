@@ -3,6 +3,7 @@ import { getContext } from "@/lib/session";
 import { getCounts } from "@/lib/counts";
 import { getSettings, themeCss } from "@/lib/settings";
 import { appThemeScript } from "@/components/theme";
+import { NumberFormatProvider } from "@/components/number-format";
 import { getProfile } from "@/lib/profile";
 import { UserMenu } from "@/components/user-menu";
 import { setupSteps } from "@/lib/setup";
@@ -12,7 +13,7 @@ import { Logo, Progress } from "@/components/ui";
 import { signOut } from "./actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { orgName, role, canManage, canSeeCommissions } = await getContext();
+  const { orgName, role, canManage, canSeeCommissions, numberFormat } = await getContext();
   const showTeam = role === "owner" || role === "manager";
   const showFinance = role !== "seller";
   const canOrder = role !== "finance";
@@ -31,6 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   };
 
   return (
+    <NumberFormatProvider value={numberFormat}>
     <div className="min-h-dvh">
       {/* Cor escolhida nas configurações do escritório */}
       <style>{themeCss(settings.color)}</style>
@@ -134,5 +136,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         signOut={signOut}
       />
     </div>
+    </NumberFormatProvider>
   );
 }

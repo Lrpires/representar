@@ -7,7 +7,7 @@ import { addPayableOption, deletePayableOption, togglePayableOption, restorePaya
 import { OPTION_KINDS, type PayableOption } from "@/lib/payables";
 import { Icon } from "@/components/icons";
 import { ConfirmButton } from "@/components/confirm-button";
-import { ColorPicker, DelaySettings, LogoUploader, OrderNumbering, UnitPicker } from "./controls";
+import { ColorPicker, DelaySettings, LogoUploader, NumberSettings, OrderNumbering, UnitPicker } from "./controls";
 import { SubmitButton } from "@/components/submit";
 import {
   PageHeader, FormSection, Field, ErrorNote, OkNote, SaveBar, Notice, inputCls, primaryBtn, dangerBtn, ghostBtn, quietBtn,
@@ -19,7 +19,7 @@ export default async function SettingsPage({
   searchParams: Promise<{ erro?: string; ok?: string }>;
 }) {
   const sp = await searchParams;
-  const { supabase, orgId, role, isOwner } = await getContext();
+  const { supabase, orgId, role, isOwner, numberFormat } = await getContext();
   if (role !== "owner" && role !== "manager") redirect("/");
 
   const [settings, { data: last }, { data: optionData, error: optionError }] = await Promise.all([
@@ -73,6 +73,13 @@ export default async function SettingsPage({
             hint="A cor da sua empresa no sistema: botão principal, destaques, barras de meta e menu. Vale para todos da equipe. A prévia muda na hora; salve para manter."
           >
             <ColorPicker value={settings.color} disabled={locked} />
+          </FormSection>
+
+          <FormSection
+            title="Moeda e números"
+            hint="A moeda do escritório e como os números aparecem e são digitados em todo o sistema."
+          >
+            <NumberSettings value={numberFormat} disabled={locked} />
           </FormSection>
 
           <FormSection

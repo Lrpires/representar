@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { setActiveFormat, toFmt } from "@/lib/number-format";
 
 export type Role = "owner" | "manager" | "seller" | "finance";
 
@@ -31,14 +32,14 @@ export const getContext = cache(async () => {
   if (!claims?.sub) redirect("/login");
   const user = { id: claims.sub as string, email: (claims.email as string | undefined) ?? "" };
 
-  const findMembership = () =>
-    supabase
-      .from("members")
-      .select("org_id, role, organizations(name)")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+  // Traz também a moeda e o formato dos números do escritório (migração 020); sem eles, só o nome.
+  const findMembership = async () => {
+    const q = (cols: string) =>
+      supabase.from("members").select(cols).eq("user_id", user.id).order("created_at", { ascending: true }).limit(1).maybeSingle();
+    const full = await q("org_id, role, organizations(name, currency, number_style, number_group)");
+    const res = full.error ? await q("org_id, role, organizations(name)") : full;
+    return res as unknown as { data: { org_id: string; role: string; organizations: unknown } | null };
+  };
 
   let { data: membership } = await findMembership();
 
@@ -50,14 +51,17 @@ export const getContext = cache(async () => {
 
   if (!membership) redirect("/onboarding");
 
-  const org = membership.organizations as unknown as { name: string } | null;
+  const org = membership.organizations as unknown as { name: string; currency?: string; number_style?: string; number_group?: boolean } | null;
   const role = membership.role as Role;
+  const numberFormat = toFmt(org);
+  setActiveFormat(numberFormat);
 
   return {
     supabase,
     user,
     orgId: membership.org_id as string,
     orgName: org?.name ?? "Meu escritório",
+    numberFormat,
     role,
     canManage: role === "owner" || role === "manager",
     isOwner: role === "owner",

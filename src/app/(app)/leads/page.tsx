@@ -1,3 +1,4 @@
+import { currencySymbol } from "@/lib/number-format";
 import Link from "next/link";
 import { getContext } from "@/lib/session";
 import {
@@ -434,7 +435,7 @@ function LeadFields({ today, lead }: { today: string; lead?: Lead }) {
       <Field label="Próximo contato">
         <input name="next_contact" type="date" defaultValue={lead ? v(lead.next_contact) : addDays(today, 2)} className={inputCls} />
       </Field>
-      <Field label="Valor estimado (R$)">
+      <Field label={`Valor estimado (${currencySymbol()})`}>
         <input
           name="estimated_value"
           inputMode="decimal"

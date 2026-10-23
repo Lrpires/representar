@@ -2,15 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Point } from "@/lib/cockpit";
+import { useNumberFormat } from "@/components/number-format";
 
-const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-// Eixo: valores redondos e curtos (R$ 12 mil, R$ 1,5 mi).
-const compact = (n: number) =>
-  n >= 1_000_000
-    ? `${(n / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`
-    : n >= 1000
-      ? `${(n / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`
-      : n.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+// Eixo: valores redondos e curtos (12 mil, 1,5 mi), no formato de números do escritório.
+const compact = (n: number, numberText: (n: number, d?: number) => string) =>
+  n >= 1_000_000 ? `${numberText(n / 1_000_000, 1)} mi` : n >= 1000 ? `${numberText(n / 1000, 1)} mil` : numberText(n, 0);
 
 function niceMax(v: number) {
   if (v <= 0) return 1;
@@ -23,6 +19,7 @@ function niceMax(v: number) {
 const PREV = "var(--color-faint)"; // período anterior: cinza de apoio (validado contra a cor principal)
 
 export function SalesChart({ points, unit, compareLabel }: { points: Point[]; unit: string; compareLabel: string }) {
+  const { brl, numberText } = useNumberFormat();
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(640);
   const [hover, setHover] = useState<number | null>(null);
@@ -96,7 +93,7 @@ export function SalesChart({ points, unit, compareLabel }: { points: Point[]; un
               <g key={t}>
                 <line x1={pad.l} x2={w - pad.r} y1={y(t)} y2={y(t)} stroke="var(--color-line)" strokeWidth={1} />
                 <text x={pad.l - 8} y={y(t)} dy="0.32em" textAnchor="end" className="fill-muted text-[11px] tabular-nums">
-                  {compact(t)}
+                  {compact(t, numberText)}
                 </text>
               </g>
             ))}

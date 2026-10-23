@@ -1,5 +1,6 @@
 "use client";
 
+import { CURRENCIES, currencySymbol, money, numberText, type NumFmt, type NumberStyle } from "@/lib/number-format";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -364,6 +365,67 @@ export function DelaySettings({ warn, critical, disabled }: { warn: number; crit
         </div>
       </div>
       {invalid ? <p className="text-xs text-alert">O prazo crítico precisa ser maior que o de aviso.</p> : null}
+    </div>
+  );
+}
+
+/* ---------- Moeda e números ---------- */
+
+export function NumberSettings({ value, disabled }: { value: NumFmt; disabled?: boolean }) {
+  const [currency, setCurrency] = useState(value.currency);
+  const [style, setStyle] = useState<NumberStyle>(value.style);
+  const [group, setGroup] = useState(value.group);
+  const f: NumFmt = { currency, style, group };
+
+  return (
+    <div className="grid gap-4">
+      <Field label="Moeda do escritório" hint="Todos os valores do sistema (pedidos, notas, comissões, metas, contas) ficam nesta moeda.">
+        <select name="currency" value={currency} disabled={disabled} onChange={(e) => setCurrency(e.target.value)} className={inputCls}>
+          {CURRENCIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.label} ({currencySymbol({ ...f, currency: c.code })})
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <div>
+        <p className="mb-1.5 text-[13px] font-medium text-ink-2">Separadores</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(
+            [
+              { v: "br", t: "Padrão brasileiro", ex: "1.234,56" },
+              { v: "us", t: "Padrão americano", ex: "1,234.56" },
+            ] as const
+          ).map((o) => (
+            <label
+              key={o.v}
+              className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition ${
+                style === o.v ? "border-accent bg-accent-soft/40" : "border-line hover:border-line-strong"
+              }`}
+            >
+              <input type="radio" name="number_style" value={o.v} checked={style === o.v} disabled={disabled} onChange={() => setStyle(o.v)} className="accent-[var(--color-accent)]" />
+              <span className="flex-1">{o.t}</span>
+              <span className="font-mono text-[13px] text-muted">{o.ex}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <label className="flex cursor-pointer items-center gap-3 text-sm">
+        <input type="checkbox" name="number_group" checked={group} disabled={disabled} onChange={(e) => setGroup(e.target.checked)} className="h-4 w-4" />
+        Mostrar o separador de milhar ({style === "us" ? "1,234.56" : "1.234,56"} em vez de {style === "us" ? "1234.56" : "1234,56"})
+      </label>
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-subtle px-4 py-3 text-[13px]">
+        <span className="text-muted">Exemplo:</span>
+        <span className="font-mono font-medium">{money(1234567.89, f)}</span>
+        <span className="font-mono">{numberText(1250.5, 3, f)} kg</span>
+        <span className="font-mono">{numberText(12.5, 2, f)}%</span>
+      </div>
+      <p className="text-xs text-muted">
+        Ao digitar valores no sistema, use o mesmo formato: {style === "us" ? "ponto para os centavos (12.50)" : "vírgula para os centavos (12,50)"}.
+      </p>
     </div>
   );
 }

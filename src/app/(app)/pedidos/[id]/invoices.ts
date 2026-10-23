@@ -50,14 +50,22 @@ export async function syncOrder(supabase: Awaited<ReturnType<typeof getContext>>
 // Lançamento feito pela área de Faturamento (XML): o pedido escolhido vem no formulário.
 export async function registerInvoiceFromBilling(formData: FormData) {
   const orderId = text(formData, "order_id");
-  if (!orderId) fail("/faturamento?xml=1", "Escolha o pedido desta nota.");
+  const manual = text(formData, "back") === "faturamento-manual";
+  if (!orderId) fail(manual ? "/faturamento?manual=1" : "/faturamento?xml=1", "Escolha o pedido desta nota.");
   return registerInvoice(orderId, formData);
 }
 
 export async function registerInvoice(orderId: string, formData: FormData) {
   const ctx = await getContext();
   const { supabase, orgId, user, isBackOffice } = ctx;
-  const back = text(formData, "back") === "faturamento" ? "/faturamento?xml=1" : `${here(orderId)}?faturar=1`;
+  // De onde veio o lançamento: XML ou à mão na área de Faturamento, ou a ficha do pedido.
+  const from = text(formData, "back");
+  const back =
+    from === "faturamento"
+      ? "/faturamento?xml=1"
+      : from === "faturamento-manual"
+        ? `/faturamento?manual=1&pedido=${orderId}`
+        : `${here(orderId)}?faturar=1`;
 
   const { data: o } = await supabase
     .from("orders")
@@ -199,7 +207,7 @@ export async function deleteInvoice(invoiceId: string) {
   // Quem não vê comissões pergunta ao banco se a desta nota já foi recebida.
   const { data: paidRpc } = await supabase.rpc("invoice_commission_received", { p_invoice: invoiceId });
   if (commission?.status === "recebida" || paidRpc === true) {
-    fail(detail, "A comissão desta nota já foi recebida. Desfaça o recebimento em Comissões antes de excluir a nota.");
+    fail(detail, "A comissão desta nota já teve recebimento. Apague os recebimentos em Comissões antes de excluir a nota.");
   }
 
   // Apaga a nota; as comissões dela saem junto (ligação "em cascata" no banco).

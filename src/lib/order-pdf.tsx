@@ -1,7 +1,7 @@
 // PDF do pedido (A4), gerado no servidor para baixar com um clique. Mesmo conteúdo da tela de impressão.
 import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
-import { brl, formatDate } from "@/lib/format";
-import { numText } from "@/lib/orders";
+import { formatDate } from "@/lib/format";
+import { inputText, money } from "@/lib/number-format";
 import { unitLabel } from "@/lib/units";
 import type { PrintableOrder } from "@/lib/order-print";
 
@@ -69,6 +69,8 @@ function Info({ label, value }: { label: string; value: string | null }) {
 }
 
 function OrderDocument({ o, logos }: { o: PrintableOrder; logos: { org: Img; customer: Img; principal: Img } }) {
+  const brl = (v: number) => money(v, o.fmt);
+  const numText = (n: number, d = 4) => inputText(n, d, o.fmt);
   const accent = /^#[0-9a-f]{6}$/i.test(o.settings.color) ? o.settings.color : "#FF5B22";
   return (
     <Document title={`Pedido ${o.label}`} author={o.settings.name} creator="Representar">

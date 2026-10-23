@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { moveLead } from "./actions";
 import { LEAD_STAGES, type LeadStage } from "@/lib/leads";
-import { brl, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { Icon } from "@/components/icons";
+import { useNumberFormat } from "@/components/number-format";
 
 export type BoardLead = {
   id: string;
@@ -21,6 +22,7 @@ export type BoardLead = {
 
 // Quadro do funil. No computador, arraste o cartão para outra coluna.
 export function LeadBoard({ leads, today, qs }: { leads: BoardLead[]; today: string; qs: string }) {
+  const { brl } = useNumberFormat();
   const [items, setItems] = useState(leads);
   const [over, setOver] = useState<LeadStage | null>(null);
   const [error, setError] = useState<string | null>(null);

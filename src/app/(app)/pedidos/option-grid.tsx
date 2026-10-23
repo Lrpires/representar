@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Icon } from "@/components/icons";
 import { useNumberFormat } from "@/components/number-format";
 import { ghostBtn, iconBtn, primaryBtn } from "@/components/ui";
@@ -14,16 +14,68 @@ const cellCls =
 // Grade do produto no pedido: quantidade por opção (ex.: por cor) ou por cor × tamanho.
 // O preço de cada linha vem sugerido (último preço do cliente naquela opção, ou o preço base com o acréscimo
 // da opção) e pode ser alterado. Ao confirmar, cada opção com quantidade vira uma linha do pedido.
+// Escolha das listas (quando a representada tem mais de uma) + a grade.
 export function OptionGrid({
+  available,
+  initial,
+  ...rest
+}: {
+  available: OptionList[]; // listas que podem ser usadas (as do produto ou as da representada)
+  initial: OptionList[]; // as que já abrem escolhidas
+  productName: string;
+  suggest: (options: Record<string, string>) => number | null;
+  basePrice: number | null;
+  onConfirm: (lines: GridLine[]) => void;
+  onPlain: () => void;
+  onClose: () => void;
+}) {
+  const [rowsId, setRowsId] = useState(initial[0]?.id ?? available[0]?.id ?? "");
+  const [colsId, setColsId] = useState(initial[1]?.id ?? "");
+  const rows = available.find((l) => l.id === rowsId) ?? available[0];
+  const cols = available.find((l) => l.id === colsId && l.id !== rows?.id);
+  const sel = "h-9 rounded-md border border-line-strong bg-surface px-2 text-[13px] outline-none focus:border-accent";
+  const chooser =
+    available.length > 1 ? (
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-3 text-[13px]">
+        <span className="text-muted">Lista</span>
+        <select value={rows?.id} onChange={(e) => setRowsId(e.target.value)} className={sel} aria-label="Lista das linhas">
+          {available.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.kind}: {l.name}
+            </option>
+          ))}
+        </select>
+        <span className="ml-2 text-muted">Cruzar com</span>
+        <select value={cols?.id ?? ""} onChange={(e) => setColsId(e.target.value)} className={sel} aria-label="Lista das colunas">
+          <option value="">Nada (só quantidade)</option>
+          {available
+            .filter((l) => l.id !== rows?.id)
+            .map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.kind}: {l.name}
+              </option>
+            ))}
+        </select>
+      </div>
+    ) : null;
+  if (!rows) return null;
+  return <GridTable key={`${rows.id}:${cols?.id ?? ""}`} {...rest} lists={cols ? [rows, cols] : [rows]} chooser={chooser} />;
+}
+
+function GridTable({
   productName,
   lists,
   suggest,
   basePrice,
   onConfirm,
+  onPlain,
   onClose,
+  chooser,
 }: {
   productName: string;
   lists: OptionList[];
+  onPlain: () => void;
+  chooser: ReactNode;
   suggest: (options: Record<string, string>) => number | null; // último preço do cliente nessa combinação
   basePrice: number | null; // preço base (tabela ou último preço do cliente numa opção sem acréscimo)
   onConfirm: (lines: GridLine[]) => void;
@@ -130,6 +182,8 @@ export function OptionGrid({
           </button>
         </header>
 
+        {chooser}
+
         <div className="flex flex-wrap items-center gap-3 border-b border-line bg-subtle px-5 py-3 text-[13px]">
           <label className="flex items-center gap-2">
             <span className="whitespace-nowrap text-muted">Preço base</span>
@@ -218,9 +272,9 @@ export function OptionGrid({
             <span className="font-semibold tabular-nums text-ink">{numText(totals.q, 3) || "0"}</span> un. ·{" "}
             <span className="font-semibold tabular-nums text-ink">{brl(totals.v)}</span>
           </span>
-          <div className="ml-auto flex gap-2">
-            <button type="button" onClick={onClose} className={ghostBtn}>
-              Cancelar
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button type="button" onClick={onPlain} className={ghostBtn}>
+              Sem {rowsList.kind.toLowerCase()}
             </button>
             <button type="button" onClick={confirm} disabled={totals.q <= 0} className={primaryBtn}>
               Adicionar ao pedido

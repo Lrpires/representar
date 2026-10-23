@@ -74,7 +74,9 @@ export default async function OptionListsPage({
                   <div className="flex-1 p-5 pb-4">
                     <div className="flex items-center justify-between gap-3">
                       <Badge>{l.kind}</Badge>
-                      <span className="truncate text-xs text-muted">{l.principals?.name ?? "Todas as representadas"}</span>
+                      <span className={`truncate text-xs ${l.principals ? "text-muted" : "font-medium text-warn"}`}>
+                        {l.principals?.name ?? "Sem representada: escolha uma"}
+                      </span>
                     </div>
                     <p className="mt-3 text-base font-semibold leading-snug">{l.name}</p>
                     <p className="mt-1 line-clamp-2 text-[13px] text-muted">
@@ -112,9 +114,11 @@ export default async function OptionListsPage({
               ))}
             </datalist>
           </Field>
-          <Field label="Representada" hint="Vazio: serve para todas.">
-            <select name="principal_id" defaultValue="" className={inputCls}>
-              <option value="">Todas as representadas</option>
+          <Field label="Representada" hint="A lista é da cartela dessa fábrica.">
+            <select name="principal_id" required defaultValue="" className={inputCls}>
+              <option value="" disabled>
+                Escolha
+              </option>
               {(principals ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}

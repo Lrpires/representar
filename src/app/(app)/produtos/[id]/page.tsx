@@ -62,7 +62,7 @@ export default async function ProductPage({
   ]);
   if (!p) notFound();
 
-  // Listas de opções que este produto pode usar (de todas as representadas ou da dele) — migração 022.
+  // Listas de opções da representada deste produto — migração 022.
   type RawList = {
     id: string; kind: string; name: string; principal_id: string | null;
     option_values: { id: string; name: string; position: number; active: boolean }[] | null;
@@ -71,7 +71,7 @@ export default async function ProductPage({
     supabase
       .from("option_lists")
       .select("id, kind, name, principal_id, option_values(id, name, position, active)")
-      .or(`principal_id.is.null,principal_id.eq.${p.principal_id}`)
+      .eq("principal_id", p.principal_id)
       .order("kind")
       .order("name"),
     supabase.from("product_option_lists").select("list_id, position").eq("product_id", id),
@@ -306,7 +306,7 @@ export default async function ProductPage({
         <Section
           icon="sparkle"
           title="Opções no pedido"
-          hint="Cor, tamanho, voltagem… Marque as listas que este produto usa (até 2). No pedido, ele abre uma grade com essas opções. Desmarque as opções que este produto não tem."
+          hint="No pedido, todas as listas da representada já aparecem para este produto. Marque aqui as que ele usa (até 2) para a grade abrir direto nelas, e desmarque as opções que ele não tem."
         >
           {listError ? (
             <p className="text-sm text-muted">Para usar listas de opções, rode a migração 022 no Supabase.</p>

@@ -58,6 +58,7 @@ export default async function NewOrderPage({
           principals={data.principals}
           products={data.products}
           priceHistory={data.priceHistory}
+          principalLists={data.principalLists}
           units={data.units}
           defaultUnit={data.defaultUnit}
         />

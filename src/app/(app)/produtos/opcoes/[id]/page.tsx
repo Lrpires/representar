@@ -84,7 +84,7 @@ export default async function OptionListPage({
         meta={
           <>
             <Badge>{list.kind}</Badge>
-            <span>{principal?.name ?? "Todas as representadas"}</span>
+            <span className={principal ? "" : "font-medium text-warn"}>{principal?.name ?? "Sem representada"}</span>
             <span className="tabular-nums">
               {values.length} {values.length === 1 ? "opção" : "opções"} · {nUsing} {nUsing === 1 ? "produto" : "produtos"}
             </span>
@@ -195,11 +195,11 @@ export default async function OptionListPage({
 
         <FormSection
           title="Produtos que usam"
-          hint={`Marque os produtos que saem nessas opções. Cada produto pode usar até ${MAX_LISTS_PER_PRODUCT} listas (ex.: Cor e Tamanho).${
-            list.principal_id ? "" : " A lista vale para todas as representadas, então aparecem todos os produtos."
-          }`}
+          hint={`Opcional: no pedido, todo produto da representada já pode usar esta lista. Marque aqui para a grade abrir direto nela (até ${MAX_LISTS_PER_PRODUCT} listas por produto, ex.: Cor e Tamanho).`}
         >
-          {products.length ? (
+          {!list.principal_id ? (
+            <p className="text-sm text-warn">Escolha a representada da lista em &quot;Dados da lista&quot;, logo abaixo.</p>
+          ) : products.length ? (
             <form action={setListProducts.bind(null, id)} className="grid gap-4">
               <ProductPicker products={products} disabled={!canManage} />
               {canManage ? (
@@ -227,8 +227,10 @@ export default async function OptionListPage({
                 </datalist>
               </Field>
               <Field label="Representada">
-                <select name="principal_id" defaultValue={list.principal_id ?? ""} className={inputCls}>
-                  <option value="">Todas as representadas</option>
+                <select name="principal_id" required defaultValue={list.principal_id ?? ""} className={inputCls}>
+                  <option value="" disabled>
+                    Escolha
+                  </option>
                   {(principals ?? []).map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}

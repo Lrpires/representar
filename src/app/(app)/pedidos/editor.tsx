@@ -51,6 +51,7 @@ export function OrderEditor({
   principals,
   products,
   priceHistory = {},
+  principalLists = {},
   units,
   defaultUnit,
   showCommission = true,
@@ -60,6 +61,7 @@ export function OrderEditor({
   principals: EditorPrincipal[];
   products: EditorProduct[];
   priceHistory?: PriceHistory;
+  principalLists?: Record<string, OptionList[]>; // listas de cada representada (cor, tamanho…)
   units: EditorUnit[];
   defaultUnit: string;
   showCommission?: boolean; // vendedor e gerente não veem a comissão (o % segue o padrão da representada)
@@ -139,12 +141,13 @@ export function OrderEditor({
           sub: [p.code, units.find((u) => u.value === p.unit)?.label ?? p.unit].filter(Boolean).join(" · "),
           right: (() => {
             const price = p.tablePrice ?? lastPaid(p.id);
-            return price != null ? brl(price) : p.lists.length ? p.lists.map((l) => l.kind).join(" × ") : undefined;
+            const kinds = [...new Set(listsFor(p).map((l) => l.kind))];
+            return price != null ? brl(price) : kinds.length ? kinds.join(" · ") : undefined;
           })(),
           search: `${p.name} ${p.code}`,
         })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [products, f.principal_id, f.customer_id, units],
+    [products, f.principal_id, f.customer_id, units, principalLists],
   );
 
   const lines = rows.map((r) => ({ qty: num(r.qty), price: num(r.price), discount: num(r.discount) }));
@@ -186,12 +189,25 @@ export function OrderEditor({
   function pickProduct(row: Row, id: string) {
     const p = products.find((x) => x.id === id);
     if (!p) return;
-    if (p.lists.length) {
+    if (listsFor(p).length) {
       setGrid({ rowKey: row.key, product: p });
       return;
     }
+    addPlain(row.key, p);
+  }
+
+  // Listas que o produto pode usar no pedido: as ligadas a ele e as da representada dele.
+  function listsFor(p: EditorProduct): OptionList[] {
+    const own = new Set(p.lists.map((l) => l.id));
+    return [...p.lists, ...(principalLists[p.principal_id] ?? []).filter((l) => !own.has(l.id))];
+  }
+
+  // Produto sem cor/tamanho: uma linha comum.
+  function addPlain(rowKey: string, p: EditorProduct) {
+    const row = rows.find((r) => r.key === rowKey);
+    if (!row) return;
     const suggested = p.tablePrice ?? lastPaid(p.id, null) ?? lastPaid(p.id);
-    setRow(row.key, {
+    setRow(rowKey, {
       variant_id: p.id,
       options: null,
       code: p.code,
@@ -273,6 +289,24 @@ export function OrderEditor({
       className={className}
     />
   );
+
+  // Botão para abrir a grade de cores/tamanhos da linha (produto do catálogo com listas).
+  const gridButton = (row: Row, className: string) => {
+    const p = row.variant_id ? products.find((x) => x.id === row.variant_id) : null;
+    if (!p || !listsFor(p).length) return null;
+    const kind = listsFor(p)[0].kind;
+    return (
+      <button
+        type="button"
+        onClick={() => setGrid({ rowKey: row.key, product: p })}
+        title={`Escolher ${kind.toLowerCase()} na grade`}
+        className={className}
+      >
+        <Icon name="grid" size={14} />
+        <span>{row.options ? "Trocar" : kind}</span>
+      </button>
+    );
+  };
 
   const lastKeyEnter = (row: Row, e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -441,7 +475,13 @@ export function OrderEditor({
                         />
                       </td>
                       <td className="px-1 py-1.5" data-row={row.key}>
-                        {productField(row, cell)}
+                        <div className="flex items-center gap-1">
+                          <div className="min-w-0 flex-1">{productField(row, cell)}</div>
+                          {gridButton(
+                            row,
+                            "inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-line px-2 text-xs font-medium text-ink-2 hover:bg-hover hover:text-ink",
+                          )}
+                        </div>
                       </td>
                       <td className="px-1 py-1.5">{unitSelect(row, `${cell} pr-6`)}</td>
                       <td className="px-1 py-1.5">
@@ -515,6 +555,7 @@ export function OrderEditor({
                     </button>
                   </div>
                   {productField(row, inputCls)}
+                  {gridButton(row, `${ghostBtn} w-full`)}
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Código">
                       <input value={row.code} onChange={(e) => setRow(row.key, { code: e.target.value })} className={`${inputCls} font-mono`} />
@@ -620,10 +661,15 @@ export function OrderEditor({
       {grid ? (
         <OptionGrid
           productName={grid.product.name}
-          lists={grid.product.lists}
+          available={listsFor(grid.product)}
+          initial={grid.product.lists}
           suggest={(o) => (grid.product.tablePrice != null ? null : lastPaid(grid.product.id, o))}
           basePrice={basePriceOf(grid.product)}
           onConfirm={addFromGrid}
+          onPlain={() => {
+            addPlain(grid.rowKey, grid.product);
+            setGrid(null);
+          }}
           onClose={() => setGrid(null)}
         />
       ) : null}

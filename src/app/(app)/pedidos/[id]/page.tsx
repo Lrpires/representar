@@ -285,6 +285,7 @@ export default async function OrderPage({
           principals={editor.principals}
           products={editor.products}
           priceHistory={editor.priceHistory}
+          principalLists={editor.principalLists}
           units={editor.units}
           defaultUnit={editor.defaultUnit}
         />

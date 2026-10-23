@@ -44,6 +44,7 @@ export async function loadEditorData() {
     { data: optionLinks },
     { data: hiddenRows },
     { data: tables },
+    { data: allLists },
   ] = await Promise.all([
     supabase.from("customers").select("*").order("name"),
     supabase.from("principals").select("id, name, default_commission_pct").eq("active", true).order("name"),
@@ -76,6 +77,12 @@ export async function loadEditorData() {
           .or(`valid_to.is.null,valid_to.gte.${today}`)
           .order("valid_from", { ascending: true })
       : Promise.resolve({ data: [] as TableRow[] }),
+    // Todas as listas, por representada: no pedido, qualquer produto dela pode usar.
+    supabase
+      .from("option_lists")
+      .select("id, kind, name, principal_id, option_values(id, name, code, position, price_adjust, adjust_type, active)")
+      .order("kind")
+      .order("name"),
   ]);
   const lastPrincipal = new Map<string, string>();
   for (const o of lastOrders ?? []) if (!lastPrincipal.has(o.customer_id)) lastPrincipal.set(o.customer_id, o.principal_id);
@@ -106,6 +113,13 @@ export async function loadEditorData() {
     if (!list.values.length) continue;
     if (!listsOf.has(l.product_id)) listsOf.set(l.product_id, []);
     listsOf.get(l.product_id)!.push({ position: l.position, list });
+  }
+
+  const principalLists: Record<string, OptionList[]> = {};
+  for (const l of (allLists ?? []) as unknown as (Parameters<typeof toOptionList>[0] & { principal_id: string | null })[]) {
+    if (!l.principal_id) continue;
+    const list = toOptionList(l);
+    if (list.values.length) (principalLists[l.principal_id] ??= []).push(list);
   }
 
   const products: EditorProduct[] = (variants ?? []).map((v) => {
@@ -143,5 +157,5 @@ export async function loadEditorData() {
   const units: EditorUnit[] = UNITS.filter((u) => settings.units.includes(u.value));
   const defaultUnit = settings.units.includes("unidade") ? "unidade" : settings.units[0] ?? "unidade";
 
-  return { customers: editorCustomers, principals: editorPrincipals, products, priceHistory, units, defaultUnit, settings };
+  return { customers: editorCustomers, principals: editorPrincipals, products, priceHistory, principalLists, units, defaultUnit, settings };
 }

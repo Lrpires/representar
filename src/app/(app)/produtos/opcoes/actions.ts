@@ -40,7 +40,8 @@ export async function createOptionList(formData: FormData) {
   const { supabase, orgId } = await manager(PATH);
   const kind = text(formData, "kind");
   const name = text(formData, "name");
-  const principalId = text(formData, "principal_id") || null;
+  const principalId = text(formData, "principal_id");
+  if (!principalId) fail(PATH, "Escolha a representada da lista.");
   if (!kind) fail(PATH, "Diga o tipo da lista (ex.: Cor, Tamanho).");
   if (!name) fail(PATH, "Dê um nome para a lista (ex.: Cartela Verão 26).");
 
@@ -67,10 +68,12 @@ export async function updateOptionList(id: string, formData: FormData) {
   const { supabase } = await manager(here(id));
   const kind = text(formData, "kind");
   const name = text(formData, "name");
+  const principalId = text(formData, "principal_id");
   if (!kind || !name) fail(here(id), "Informe o tipo e o nome da lista.");
+  if (!principalId) fail(here(id), "Escolha a representada da lista.");
   const { error } = await supabase
     .from("option_lists")
-    .update({ kind, name, principal_id: text(formData, "principal_id") || null })
+    .update({ kind, name, principal_id: principalId })
     .eq("id", id);
   if (error) fail(here(id), `Não foi possível salvar: ${error.message}`);
   done(here(id), "Lista salva.");

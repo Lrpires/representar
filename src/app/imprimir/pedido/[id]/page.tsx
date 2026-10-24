@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getContext } from "@/lib/session";
 import { getSettings, themeVars } from "@/lib/settings";
-import { formatOrderNumber, numText, statusInfo } from "@/lib/orders";
+import { formatOrderNumber, numText, qtyText, statusInfo } from "@/lib/orders";
 import { brl, formatDate } from "@/lib/format";
 import { unitLabel } from "@/lib/units";
 import { logoUrl } from "@/lib/storage";
@@ -142,7 +142,7 @@ export default async function PrintOrderPage({ params }: { params: Promise<{ id:
                 <td className="py-2 font-mono text-xs">{i.code}</td>
                 <td className="py-2 pr-2">{i.description}</td>
                 <td className="py-2">{unitLabel(i.unit)}</td>
-                <td className="py-2 text-right tabular-nums">{numText(Number(i.qty), 3)}</td>
+                <td className="py-2 text-right tabular-nums">{qtyText(Number(i.qty))}</td>
                 <td className="py-2 text-right tabular-nums">{brl(Number(i.list_price))}</td>
                 <td className="py-2 text-right tabular-nums">{Number(i.discount_pct) ? `${numText(Number(i.discount_pct), 2)}%` : "—"}</td>
                 <td className="py-2 text-right font-medium tabular-nums">{brl(Number(i.line_total))}</td>

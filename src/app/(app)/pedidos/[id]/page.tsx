@@ -9,7 +9,7 @@ import {
 import { registerInvoice, finalizeOrder, reopenFinalized } from "./invoices";
 import { orderAging } from "@/lib/aging";
 import { InvoiceFields } from "./invoice-fields";
-import { formatOrderNumber, numText, orderTotals, priceText, statusInfo } from "@/lib/orders";
+import { formatOrderNumber, numText, qtyText, orderTotals, priceText, statusInfo } from "@/lib/orders";
 import { brl, formatDate, todayISO } from "@/lib/format";
 import { unitLabel } from "@/lib/units";
 import { loadEditorData } from "../data";
@@ -269,7 +269,7 @@ export default async function OrderPage({
             <Icon name="info" size={15} className="text-muted" />
             <span className="min-w-0 flex-1">
               Finalizado manualmente em {formatDate(String(o.closed_at).slice(0, 10))}
-              {leftQty > 0 ? ` com saldo de ${numText(leftQty, 3)} un. não faturado` : ""}
+              {leftQty > 0 ? ` com saldo de ${qtyText(leftQty)} un. não faturado` : ""}
               {o.close_note ? ` · ${o.close_note}` : "."}
             </span>
             {isBackOffice || mine ? (
@@ -460,7 +460,7 @@ export default async function OrderPage({
       <Sheet
         open={sp.finalizar === "1" && o.status === "parcial"}
         title="Finalizar pedido"
-        description={`O saldo de ${numText(leftQty, 3)} un. não será mais faturado e o pedido passa a "Faturado".`}
+        description={`O saldo de ${qtyText(leftQty)} un. não será mais faturado e o pedido passa a "Faturado".`}
         closeHref={here}
       >
         <SheetForm action={finalizeOrder.bind(null, id)} closeHref={here} submitLabel="Finalizar pedido">
@@ -591,7 +591,7 @@ function Billing({
             <div>
               <dt className="text-xs text-muted">Quantidade nas notas</dt>
               <dd className="mt-0.5 text-base font-semibold tabular-nums">
-                {numText(totalQty, 3) || "0"} <span className="text-xs font-normal text-muted">{u}</span>
+                {qtyText(totalQty) || "0"} <span className="text-xs font-normal text-muted">{u}</span>
               </dd>
             </div>
             <div className="col-span-2 sm:col-span-4 !pt-0">
@@ -629,7 +629,7 @@ function Billing({
                       {inv.notes ? <span className="block max-w-[16rem] truncate text-xs text-muted">{inv.notes}</span> : null}
                     </td>
                     <td className="px-3 py-2.5 tabular-nums text-ink-2">{formatDate(inv.issued_at)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{q ? `${numText(q, 3)} ${u}` : <span className="text-faint">—</span>}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{q ? `${qtyText(q)} ${u}` : <span className="text-faint">—</span>}</td>
                     <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{brl(Number(inv.value))}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums text-ink-2">{d.length ? d.join(" · ") : <span className="text-faint">—</span>}</td>
                     <td className="relative z-10 pr-5 text-right">
@@ -652,7 +652,7 @@ function Billing({
                 <td className="py-2.5 pl-5 font-medium" colSpan={2}>
                   Total
                 </td>
-                <td className="px-3 py-2.5 text-right font-medium tabular-nums">{numText(totalQty, 3)} {u}</td>
+                <td className="px-3 py-2.5 text-right font-medium tabular-nums">{qtyText(totalQty)} {u}</td>
                 <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{brl(invoicedTotal)}</td>
                 <td colSpan={2} />
               </tr>
@@ -674,7 +674,7 @@ function Billing({
                       </span>
                       <span className="mt-0.5 block text-xs text-muted">
                         {formatDate(inv.issued_at)}
-                        {q ? ` · ${numText(q, 3)} ${u}` : ""}
+                        {q ? ` · ${qtyText(q)} ${u}` : ""}
                         {d.length ? ` · vence ${d.join(", ")}` : ""}
                       </span>
                     </span>
@@ -743,6 +743,11 @@ function OrderView({
               {o.freight_mode ? `${o.freight_mode.toUpperCase()}${Number(o.freight_value) ? ` · ${brl(Number(o.freight_value))}` : ""}` : null}
             </Property>
             <Property label="Nota fiscal">{o.invoice_number}</Property>
+            {commission ? (
+              <Property label="Comissão">
+                {numText(commission.pct, 2)}% · {brl(commission.expected)}
+              </Property>
+            ) : null}
           </Properties>
         </div>
       </section>
@@ -759,8 +764,8 @@ function OrderView({
               <th className="w-10 py-2 pl-5 text-left font-medium">#</th>
               <th className="w-28 px-2 py-2 text-left font-medium">Código</th>
               <th className="px-2 py-2 text-left font-medium">Produto</th>
-              <th className="w-24 px-2 py-2 text-left font-medium">Unid.</th>
               <th className="w-24 px-2 py-2 text-right font-medium">Qtd.</th>
+              <th className="w-24 px-2 py-2 text-left font-medium">Unid.</th>
               <th className="w-28 px-2 py-2 text-right font-medium">Preço unit.</th>
               <th className="w-32 py-2 pl-2 pr-5 text-right font-medium">Total</th>
             </tr>
@@ -771,8 +776,8 @@ function OrderView({
                 <td className="py-3 pl-5 text-xs tabular-nums text-faint">{n + 1}</td>
                 <td className="px-2 py-3 font-mono text-[13px] text-muted">{i.code || "—"}</td>
                 <td className="px-2 py-3 font-medium">{i.description}</td>
+                <td className="px-2 py-3 text-right tabular-nums">{qtyText(Number(i.qty))}</td>
                 <td className="px-2 py-3 text-ink-2">{unitLabel(i.unit)}</td>
-                <td className="px-2 py-3 text-right tabular-nums">{numText(Number(i.qty), 3)}</td>
                 <td className="px-2 py-3 text-right tabular-nums">
                   {brl(Number(i.list_price))}
                   {/* Desconto do item, quando houver, junto do preço */}
@@ -789,7 +794,7 @@ function OrderView({
               <div className="min-w-0">
                 <p className="font-medium leading-snug">{i.description}</p>
                 <p className="mt-0.5 text-[13px] text-muted">
-                  {numText(Number(i.qty), 3)} {unitLabel(i.unit).toLowerCase()} × {brl(Number(i.list_price))}
+                  {qtyText(Number(i.qty))} {unitLabel(i.unit).toLowerCase()} × {brl(Number(i.list_price))}
                   {Number(i.discount_pct) ? ` · −${numText(Number(i.discount_pct), 2)}%` : ""}
                 </p>
               </div>

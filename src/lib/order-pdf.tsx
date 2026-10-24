@@ -1,7 +1,7 @@
 // PDF do pedido (A4), gerado no servidor para baixar com um clique. Mesmo conteúdo da tela de impressão.
 import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { formatDate } from "@/lib/format";
-import { inputText, money } from "@/lib/number-format";
+import { inputText, money, numberText } from "@/lib/number-format";
 import { unitLabel } from "@/lib/units";
 import type { PrintableOrder } from "@/lib/order-print";
 
@@ -71,6 +71,7 @@ function Info({ label, value }: { label: string; value: string | null }) {
 function OrderDocument({ o, logos }: { o: PrintableOrder; logos: { org: Img; customer: Img; principal: Img } }) {
   const brl = (v: number) => money(v, o.fmt);
   const numText = (n: number, d = 4) => inputText(n, d, o.fmt);
+  const qtyText = (n: number) => numberText(n, 3, o.fmt, 2);
   const accent = /^#[0-9a-f]{6}$/i.test(o.settings.color) ? o.settings.color : "#FF5B22";
   return (
     <Document title={`Pedido ${o.label}`} author={o.settings.name} creator="Representar">
@@ -137,7 +138,7 @@ function OrderDocument({ o, logos }: { o: PrintableOrder; logos: { org: Img; cus
             <Text style={[cell(W.code), { fontFamily: "Courier", fontSize: 8 }]}>{i.code}</Text>
             <Text style={cell(W.desc)}>{i.description}</Text>
             <Text style={cell(W.unit)}>{unitLabel(i.unit)}</Text>
-            <Text style={cell(W.qty, "right")}>{numText(i.qty, 3)}</Text>
+            <Text style={cell(W.qty, "right")}>{qtyText(i.qty)}</Text>
             <Text style={cell(W.price, "right")}>{brl(i.listPrice)}</Text>
             <Text style={cell(W.disc, "right")}>{i.discountPct ? `${numText(i.discountPct, 2)}%` : "—"}</Text>
             <Text style={[cell(W.total, "right"), s.bold]}>{brl(i.total)}</Text>

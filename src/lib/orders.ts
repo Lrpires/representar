@@ -1,4 +1,4 @@
-import { inputText, parseAmount, type NumFmt } from "@/lib/number-format";
+import { inputText, numberText, parseAmount, type NumFmt } from "@/lib/number-format";
 export type OrderStatus = "rascunho" | "enviado" | "parcial" | "faturado" | "entregue" | "cancelado";
 
 export const STATUS_LIST: { value: OrderStatus; label: string; tone: "neutral" | "info" | "pen" | "warn" | "ok" | "alert" }[] = [
@@ -68,6 +68,12 @@ export const PAYMENT_TERMS = [
   "À vista", "Antecipado", "7 dias", "14 dias", "21 dias", "28 dias", "30 dias", "28/56 dias",
   "30/60 dias", "30/60/90 dias", "28/35/42 dias", "Boleto 15 dias",
 ];
+
+// Quantidade para MOSTRAR (não para campo): no padrão do escritório, com milhar e 2 casas (até 3). 11000 -> "11.000,00"
+export function qtyText(n: number | null | undefined, f?: NumFmt): string {
+  if (n == null || !Number.isFinite(Number(n))) return "";
+  return numberText(Number(n), 3, f, 2);
+}
 
 // Preço para campo de edição: sempre com 2 casas (até 4 se precisar). 24.9 -> "24,90"
 export function priceText(n: number | null | undefined, f?: NumFmt): string {

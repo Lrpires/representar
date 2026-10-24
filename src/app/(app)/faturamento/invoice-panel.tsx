@@ -5,7 +5,7 @@ import { deleteInvoice } from "../pedidos/[id]/invoices";
 import { ConfirmButton } from "@/components/confirm-button";
 import { unitLabel } from "@/lib/units";
 import { NfeMirror } from "./nfe-mirror";
-import { formatOrderNumber, numText, statusInfo } from "@/lib/orders";
+import { formatOrderNumber, numText, qtyText, statusInfo } from "@/lib/orders";
 import { brl, formatDate } from "@/lib/format";
 import { Sheet } from "@/components/sheet";
 import { Icon } from "@/components/icons";
@@ -187,7 +187,7 @@ export async function InvoicePanel({
                             {!l.order_item_id ? <span className="mt-0.5 block text-[11px] text-warn">Sem item do pedido</span> : null}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
-                            {numText(Number(l.qty), 3)} {(l.unit ?? "").toLowerCase()}
+                            {qtyText(Number(l.qty))} {(l.unit ?? "").toLowerCase()}
                           </td>
                           <td className="hidden whitespace-nowrap px-3 py-2.5 text-right font-mono tabular-nums sm:table-cell">{brl(Number(l.unit_price))}</td>
                           <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono tabular-nums">{brl(Number(l.total))}</td>
@@ -223,7 +223,7 @@ export async function InvoicePanel({
                               {l.order_items?.description ?? "Item removido do pedido"}
                             </td>
                             <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
-                              {numText(Number(l.qty), 3)} {l.order_items ? unitLabel(l.order_items.unit).toLowerCase() : ""}
+                              {qtyText(Number(l.qty))} {l.order_items ? unitLabel(l.order_items.unit).toLowerCase() : ""}
                             </td>
                             <td className="hidden whitespace-nowrap px-3 py-2.5 text-right font-mono tabular-nums sm:table-cell">{brl(price)}</td>
                             <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono tabular-nums">{brl(price * Number(l.qty))}</td>

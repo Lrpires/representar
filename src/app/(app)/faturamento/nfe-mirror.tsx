@@ -75,7 +75,7 @@ function Party({ title, p }: { title: string; p: NfeParty }) {
 }
 
 export function Mirror({ nfe }: { nfe: Nfe }) {
-  const { brl, numText, priceText } = useNumberFormat();
+  const { brl, numText, qtyText, priceText } = useNumberFormat();
   const t = nfe.totals;
   const totals: [string, number, boolean?][] = [
     ["Produtos", t.products],
@@ -152,7 +152,7 @@ export function Mirror({ nfe }: { nfe: Nfe }) {
                   <td className="px-2 py-2 font-mono text-[11.5px] text-muted">{it.ncm}</td>
                   <td className="px-2 py-2 font-mono text-[11.5px] text-muted">{it.cfop}</td>
                   <td className="px-2 py-2 text-muted">{it.unit}</td>
-                  <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">{numText(it.qty, 3)}</td>
+                  <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">{qtyText(it.qty)}</td>
                   <td className="whitespace-nowrap px-2 py-2 text-right font-mono tabular-nums">{priceText(it.unitPrice)}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums">{brl(it.total)}</td>
                 </tr>
@@ -212,8 +212,8 @@ export function Mirror({ nfe }: { nfe: Nfe }) {
             <Info label="Transportadora">{tr.carrier}</Info>
             <Info label="CNPJ da transportadora">{tr.carrierDoc ? doc(tr.carrierDoc) : ""}</Info>
             <Info label="Volumes">{tr.volumes ? `${numText(tr.volumes, 0)}${tr.kind ? ` ${tr.kind.toLowerCase()}` : ""}` : ""}</Info>
-            <Info label="Peso líquido">{tr.netWeight ? `${numText(tr.netWeight, 3)} kg` : ""}</Info>
-            <Info label="Peso bruto">{tr.grossWeight ? `${numText(tr.grossWeight, 3)} kg` : ""}</Info>
+            <Info label="Peso líquido">{tr.netWeight ? `${qtyText(tr.netWeight)} kg` : ""}</Info>
+            <Info label="Peso bruto">{tr.grossWeight ? `${qtyText(tr.grossWeight)} kg` : ""}</Info>
           </dl>
         </Block>
       ) : null}

@@ -102,7 +102,7 @@ function GridTable({
   onClose: () => void;
   chooser: ReactNode;
 }) {
-  const { brl, num, priceText, numText } = useNumberFormat();
+  const { brl, num, priceText, numText, qtyText } = useNumberFormat();
   const [rowsList, colsList] = lists;
   const cols: (OptionValue | null)[] = colsList ? colsList.values : [null];
   const key = (r: OptionValue, c: OptionValue | null) => `${r.id}:${c?.id ?? "-"}`;
@@ -397,7 +397,7 @@ function GridTable({
 
         <footer className="flex flex-wrap items-center gap-3 border-t border-line bg-subtle px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
           <span className="text-[13px] text-muted">
-            <span className="font-semibold tabular-nums text-ink">{numText(totalQty, 3) || "0"}</span> un. ·{" "}
+            <span className="font-semibold tabular-nums text-ink">{qtyText(totalQty) || "0"}</span> un. ·{" "}
             <span className="font-semibold tabular-nums text-ink">{brl(totalValue)}</span>
           </span>
           <div className="ml-auto flex flex-wrap gap-2">

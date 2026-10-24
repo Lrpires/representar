@@ -5,7 +5,7 @@ import { registerInvoiceFromBilling } from "../pedidos/[id]/invoices";
 import { InvoicePanel } from "./invoice-panel";
 import { XmlImport, type OpenOrder } from "./xml-import";
 import { ManualInvoice, type ManualOrder } from "./manual-invoice";
-import { formatOrderNumber, numText, statusInfo, OPEN_STATUSES } from "@/lib/orders";
+import { formatOrderNumber, numText, qtyText, statusInfo, OPEN_STATUSES } from "@/lib/orders";
 import { orderAging, AGING_STYLE } from "@/lib/aging";
 import { resolvePeriod } from "@/lib/cockpit";
 import { brl, formatDate, safeQ, todayISO } from "@/lib/format";
@@ -311,7 +311,7 @@ export default async function BillingPage({
                             </td>
                             <td className={`${td} max-w-[14rem] truncate`}>{i.orders?.customers?.name}</td>
                             <td className={`${td} text-ink-2`}>{i.orders?.principals?.name}</td>
-                            <td className={`${td} text-right tabular-nums text-ink-2`}>{qty ? numText(qty, 3) : "—"}</td>
+                            <td className={`${td} text-right tabular-nums text-ink-2`}>{qty ? qtyText(qty) : "—"}</td>
                             <td className={`${td} text-right font-medium tabular-nums`}>{brl(Number(i.value))}</td>
                             <td className={`${td} text-right`}>
                               {i.file_path ? (

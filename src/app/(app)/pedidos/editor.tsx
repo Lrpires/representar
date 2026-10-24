@@ -78,7 +78,7 @@ export function OrderEditor({
   showCommission?: boolean; // vendedor e gerente não veem a comissão (o % segue o padrão da representada)
   sentEdit?: { cancelHref: string }; // alterando pedido já enviado: só "Salvar alterações" (o pedido segue enviado)
 }) {
-  const { brl, num, numText, priceText } = useNumberFormat();
+  const { brl, num, numText, qtyText, priceText } = useNumberFormat();
   const [f, setF] = useState(initial);
   const [rows, setRows] = useState<Row[]>(() =>
     // Chaves fixas nas linhas iniciais: iguais no servidor e no navegador.
@@ -506,8 +506,8 @@ export function OrderEditor({
                   <th className="w-10 py-2 pl-5 text-left font-medium">#</th>
                   <th className="w-28 px-1 py-2 text-left font-medium">Código</th>
                   <th className="px-1 py-2 text-left font-medium">Produto</th>
-                  <th className="w-28 px-1 py-2 text-left font-medium">Unid.</th>
                   <th className="w-24 px-1 py-2 text-right font-medium">Qtd.</th>
+                  <th className="w-28 px-1 py-2 text-left font-medium">Unid.</th>
                   <th className="w-28 px-1 py-2 text-right font-medium">Preço unit.</th>
                   <th className="w-20 px-1 py-2 text-right font-medium">Desc. %</th>
                   <th className="w-32 px-3 py-2 text-right font-medium">Total</th>
@@ -537,7 +537,6 @@ export function OrderEditor({
                           )}
                         </div>
                       </td>
-                      <td className="px-1 py-1.5">{unitSelect(row, `${cell} pr-6`)}</td>
                       <td className="px-1 py-1.5">
                         <input
                           inputMode="decimal"
@@ -547,6 +546,7 @@ export function OrderEditor({
                           className={`${cell} text-right tabular-nums`}
                         />
                       </td>
+                      <td className="px-1 py-1.5">{unitSelect(row, `${cell} pr-6`)}</td>
                       <td className="px-1 py-1.5">
                         <input
                           inputMode="decimal"
@@ -657,7 +657,7 @@ export function OrderEditor({
             <dl className="grid gap-2.5 text-sm">
               <div className="flex justify-between">
                 <dt className="text-muted">
-                  {filledRows} {filledRows === 1 ? "item" : "itens"} · {numText(t.qty, 3)} un.
+                  {filledRows} {filledRows === 1 ? "item" : "itens"} · {qtyText(t.qty)} un.
                 </dt>
                 <dd className="tabular-nums">{brl(t.subtotal)}</dd>
               </div>

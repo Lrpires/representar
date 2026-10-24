@@ -16,7 +16,7 @@ import Link from "next/link";
 import { ConfirmButton } from "@/components/confirm-button";
 import { productImageUrl } from "@/lib/storage";
 import { brl, formatDate } from "@/lib/format";
-import { formatOrderNumber, numText } from "@/lib/orders";
+import { formatOrderNumber, numText, qtyText } from "@/lib/orders";
 import SpecsEditor from "./SpecsEditor";
 import type { ReactNode } from "react";
 
@@ -151,7 +151,7 @@ export default async function ProductPage({
         </div>
         <div className="p-4">
           <dt className="text-[13px] text-muted">Quantidade vendida</dt>
-          <dd className="mt-1 text-lg font-semibold tabular-nums">{numText(soldQty, 3) || "0"}</dd>
+          <dd className="mt-1 text-lg font-semibold tabular-nums">{qtyText(soldQty) || "0"}</dd>
         </div>
         <div className="p-4">
           <dt className="text-[13px] text-muted">Valor vendido</dt>
@@ -430,7 +430,7 @@ export default async function ProductPage({
                       <span className="block text-xs text-muted">{formatDate(r.orders.order_date)}</span>
                     </span>
                     <span className="shrink-0 text-right text-sm tabular-nums">
-                      {numText(Number(r.qty), 3)} × {brl(Number(r.list_price))}
+                      {qtyText(Number(r.qty))} × {brl(Number(r.list_price))}
                     </span>
                   </Link>
                 </li>

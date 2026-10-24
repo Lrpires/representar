@@ -27,7 +27,7 @@ export type OpenOrder = {
 // Lançar nota pelo XML: lê a NF-e, sugere o pedido (mesmo cliente e representada) e casa os itens.
 // Tudo vai no formulário em volta (SheetForm), que grava a nota no pedido escolhido.
 export function XmlImport({ orders }: { orders: OpenOrder[] }) {
-  const { brl, numText, priceText } = useNumberFormat();
+  const { brl, numText, qtyText, priceText } = useNumberFormat();
   const [nfe, setNfe] = useState<Nfe | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -228,7 +228,7 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
                           {it.description}
                         </p>
                         <p className="text-xs tabular-nums text-muted">
-                          {numText(it.qty, 3)} {it.unit} × {brl(it.unitPrice)}
+                          {qtyText(it.qty)} {it.unit} × {brl(it.unitPrice)}
                         </p>
                       </div>
                       <span className="shrink-0 text-sm font-medium tabular-nums">{brl(it.total)}</span>
@@ -247,12 +247,12 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
                           {chosen.items.map((i) => (
                             <option key={i.id} value={i.id}>
                               {i.code ? `${i.code} · ` : ""}
-                              {i.description} — falta {numText(Math.max(i.qty - i.invoiced, 0), 3)}
+                              {i.description} — falta {qtyText(Math.max(i.qty - i.invoiced, 0))}
                             </option>
                           ))}
                         </select>
                         {over > 0.0005 ? (
-                          <span className="text-xs text-warn">passa {numText(over, 3)} do que faltava</span>
+                          <span className="text-xs text-warn">passa {qtyText(over)} do que faltava</span>
                         ) : null}
                       </div>
                     ) : null}

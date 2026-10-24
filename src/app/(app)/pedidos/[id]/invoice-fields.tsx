@@ -35,7 +35,7 @@ export function InvoiceFields({
   expected?: { principalCnpj?: string | null; customerCnpj?: string | null };
   paymentTerms?: string | null; // prazo do pedido ("30/60/90 dias"), para sugerir as parcelas
 }) {
-  const { brl, num, numText, priceText, symbol } = useNumberFormat();
+  const { brl, num, numText, qtyText, priceText, symbol } = useNumberFormat();
   const left = (i: InvoiceItem) => Math.max(i.qty - i.invoiced, 0);
   const [qty, setQty] = useState<Record<string, string>>(() =>
     Object.fromEntries(items.map((i) => [i.id, numText(left(i), 3)])),
@@ -194,8 +194,8 @@ export function InvoiceFields({
                     {i.description}
                   </p>
                   <p className="text-xs text-muted">
-                    Pedido {numText(i.qty, 3)} · já faturado {numText(i.invoiced, 3)} · falta{" "}
-                    <span className={l ? "font-medium text-ink-2" : ""}>{numText(l, 3)}</span>
+                    Pedido {qtyText(i.qty)} · já faturado {qtyText(i.invoiced)} · falta{" "}
+                    <span className={l ? "font-medium text-ink-2" : ""}>{qtyText(l)}</span>
                   </p>
                 </div>
                 <input

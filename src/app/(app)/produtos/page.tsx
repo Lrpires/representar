@@ -4,7 +4,7 @@ import { createProduct } from "./actions";
 import { unitGroupsFor, unitLabel } from "@/lib/units";
 import { getSettings } from "@/lib/settings";
 import { productImageUrl } from "@/lib/storage";
-import { numText } from "@/lib/orders";
+import { numText, qtyText } from "@/lib/orders";
 import { brl, safeQ } from "@/lib/format";
 import { Icon } from "@/components/icons";
 import { Sheet } from "@/components/sheet";
@@ -290,7 +290,7 @@ export default async function ProductsPage({
                           {st ? brl(st.last) : <span className="font-normal text-faint">—</span>}
                         </td>
                         <td className={`${td} text-right tabular-nums text-ink-2`}>
-                          {st ? numText(st.qty, 3) : <span className="text-faint">—</span>}
+                          {st ? qtyText(st.qty) : <span className="text-faint">—</span>}
                         </td>
                       </tr>
                     );

@@ -24,6 +24,8 @@ export function useNumberFormat() {
       numText: (n: number | null | undefined, decimals = 4) => (n == null || !Number.isFinite(Number(n)) ? "" : inputText(Number(n), decimals, f)),
       priceText: (n: number | null | undefined) => (n == null || !Number.isFinite(Number(n)) ? "" : inputText(Number(n), 4, f, 2)),
       numberText: (n: number, maxDecimals = 3) => numberText(n, maxDecimals, f),
+      // Quantidade para mostrar: milhar e 2 casas (até 3), no padrão do escritório. 11000 -> "11.000,00"
+      qtyText: (n: number | null | undefined) => (n == null || !Number.isFinite(Number(n)) ? "" : numberText(Number(n), 3, f, 2)),
       num: (raw: string | number | null | undefined) => {
         if (typeof raw === "number") return Number.isFinite(raw) ? raw : 0;
         const n = parseAmount(raw ?? "", f);

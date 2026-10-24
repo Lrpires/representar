@@ -150,13 +150,8 @@ export default async function OrderPage({
         >
           <Icon name="alert" size={18} />
           <span className="min-w-0 flex-1">
-            <span className="font-semibold">{aging.level === "critico" ? "Pedido em atraso crítico" : "Pedido pedindo atenção"}</span>
-            {": "}
-            {o.status === "parcial" ? "faturado só em parte" : "enviado e ainda sem nota"} há{" "}
-            <span className="font-semibold">{aging.days} dias</span>
-            {aging.level === "critico"
-              ? ` (crítico a partir de ${settings.criticalDays}). Cobre a representada.`
-              : ` (aviso a partir de ${settings.warnDays}).`}
+            <span className="font-semibold">Pedido atrasado:</span> a entrega estava prevista para{" "}
+            {formatDate(o.expected_delivery)}, há <span className="font-semibold">{aging.days} dias</span>.
           </span>
         </div>
       ) : null}

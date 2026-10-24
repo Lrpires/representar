@@ -97,7 +97,7 @@ export default async function SettingsPage({
 
           <FormSection
             title="Prazos dos pedidos"
-            hint="Quando um pedido enviado ainda não foi todo faturado, ele aparece em amarelo (atenção) e depois em vermelho (crítico) nos Pedidos, no Faturamento e no Painel."
+            hint="Conta a partir da previsão de entrega do pedido. Passou da previsão e ainda não foi todo faturado: aparece em amarelo (atenção) e depois em vermelho (crítico) nos Pedidos, no Faturamento e no Painel. Pedido sem previsão de entrega não entra nessa conta."
           >
             <DelaySettings warn={settings.warnDays} critical={settings.criticalDays} disabled={locked} />
           </FormSection>

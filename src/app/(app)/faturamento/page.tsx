@@ -65,7 +65,7 @@ export default async function BillingPage({
   /* ---------- A faturar ---------- */
   let openQuery = supabase
     .from("orders")
-    .select("id, number, status, order_date, sent_at, total, discount_pct, payment_terms, principal_id, customers(name, cnpj), principals(name, cnpj), order_items(id, code, description, qty, unit, unit_price, position)")
+    .select("id, number, status, order_date, sent_at, expected_delivery, total, discount_pct, payment_terms, principal_id, customers(name, cnpj), principals(name, cnpj), order_items(id, code, description, qty, unit, unit_price, position)")
     .in("status", OPEN_STATUSES)
     .order("order_date")
     .limit(1000);
@@ -137,7 +137,7 @@ export default async function BillingPage({
     }
   }
   type OpenRow = {
-    id: string; number: number; status: string; order_date: string; sent_at: string | null; total: number;
+    id: string; number: number; status: string; order_date: string; sent_at: string | null; expected_delivery: string | null; total: number;
     customers: { name: string; cnpj: string | null } | null; principals: { name: string; cnpj: string | null } | null;
     discount_pct: number;
     payment_terms: string | null;

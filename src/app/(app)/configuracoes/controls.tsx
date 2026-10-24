@@ -324,7 +324,7 @@ export function DelaySettings({ warn, critical, disabled }: { warn: number; crit
   return (
     <div className="grid gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Aviso (amarelo) a partir de" hint="Dias desde o envio sem faturar tudo.">
+        <Field label="Aviso (amarelo) a partir de" hint="Dias depois da previsão de entrega sem faturar tudo.">
           <span className="relative block">
             <input
               name="order_warn_days"
@@ -359,7 +359,7 @@ export function DelaySettings({ warn, critical, disabled }: { warn: number; crit
           <span className="bg-alert" style={{ flex: Math.max(Math.round(cn * 0.4), 2) }} />
         </div>
         <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-muted">
-          <span>0 a {Math.max(wn - 1, 0)} dias: no prazo</span>
+          <span>Até {Math.max(wn - 1, 0)} dias após a previsão: no prazo</span>
           <span className="text-warn">{wn} a {Math.max(cn - 1, wn)} dias: atenção</span>
           <span className="text-right text-alert">{cn}+ dias: crítico</span>
         </div>

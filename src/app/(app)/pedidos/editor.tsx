@@ -81,7 +81,7 @@ export function OrderEditor({
   const [principalAuto, setPrincipalAuto] = useState(false);
   const [pending, start] = useTransition();
   // Produto com cores/tamanhos: a grade aberta para a linha em que ele foi escolhido.
-  const [grid, setGrid] = useState<{ rowKey: string; product: EditorProduct } | null>(null);
+  const [grid, setGrid] = useState<{ rowKey: string; product: EditorProduct; prefill?: GridLine | null } | null>(null);
   const top = useRef<HTMLDivElement>(null);
 
   const set = <K extends keyof OrderInput>(k: K, v: OrderInput[K]) => {
@@ -155,8 +155,25 @@ export function OrderEditor({
   const filledRows = rows.filter((r) => r.description.trim()).length;
   const principal = principals.find((p) => p.id === f.principal_id);
 
+  // Um pedido é de uma representada só: ao trocar, saem os produtos do catálogo da outra.
   function pickPrincipal(id: string) {
     const p = principals.find((x) => x.id === id);
+    const others = rows.filter((r) => {
+      if (!r.variant_id) return false;
+      const prod = products.find((x) => x.id === r.variant_id);
+      return !!prod && prod.principal_id !== id;
+    });
+    if (others.length) {
+      const ok = window.confirm(
+        `Trocar para ${p?.name ?? "outra representada"}? ${others.length === 1 ? "O item da representada anterior sai" : `Os ${others.length} itens da representada anterior saem`} do pedido.`,
+      );
+      if (!ok) return;
+      const out = new Set(others.map((r) => r.key));
+      setRows((rs) => {
+        const left = rs.filter((r) => !out.has(r.key));
+        return left.length ? left : [newRow(defaultUnit)];
+      });
+    }
     setF((prev) => ({
       ...prev,
       principal_id: id,
@@ -298,7 +315,13 @@ export function OrderEditor({
     return (
       <button
         type="button"
-        onClick={() => setGrid({ rowKey: row.key, product: p })}
+        onClick={() =>
+          setGrid({
+            rowKey: row.key,
+            product: p,
+            prefill: row.options ? { options: row.options, qty: row.qty, price: row.price } : null,
+          })
+        }
         title={`Escolher ${kind.toLowerCase()} na grade`}
         className={className}
       >
@@ -427,7 +450,13 @@ export function OrderEditor({
           </div>
         </section>
 
-        {/* ---------- Itens ---------- */}
+        {/* ---------- Itens (só depois de escolher a representada) ---------- */}
+        {!f.principal_id ? (
+          <section className="flex items-center gap-3 rounded-xl border border-dashed border-line-strong bg-surface px-5 py-6 text-sm text-muted">
+            <Icon name="factory" size={18} />
+            Escolha a representada para lançar os itens. Um pedido tem produtos de uma representada só.
+          </section>
+        ) : (
         <section className="rounded-xl border border-line bg-surface">
           <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
             <div>
@@ -588,6 +617,7 @@ export function OrderEditor({
             </li>
           </ul>
         </section>
+        )}
 
         {/* ---------- Observações e resumo ---------- */}
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -663,6 +693,7 @@ export function OrderEditor({
           productName={grid.product.name}
           available={listsFor(grid.product)}
           initial={grid.product.lists}
+          prefill={grid.prefill}
           suggest={(o) => (grid.product.tablePrice != null ? null : lastPaid(grid.product.id, o))}
           basePrice={basePriceOf(grid.product)}
           onConfirm={addFromGrid}

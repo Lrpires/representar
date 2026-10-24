@@ -155,7 +155,7 @@ export default async function HomePage({
     scoped(
       supabase
         .from("orders")
-        .select("id, number, status, order_date, sent_at, total, customers(name), principals(name)")
+        .select("id, number, status, order_date, sent_at, expected_delivery, total, customers(name), principals(name)")
         .in("status", OPEN_STATUSES),
     ).limit(5000),
   ]);

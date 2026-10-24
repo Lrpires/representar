@@ -69,10 +69,15 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
   if (variantIds.length) {
     const { data: rules } = await supabase
       .from("product_variants")
-      .select("id, products(name, min_order_qty, order_multiple)")
+      .select("id, products(name, principal_id, min_order_qty, order_multiple)")
       .in("id", variantIds);
     for (const r of rules ?? []) {
-      const p = r.products as unknown as { name: string; min_order_qty: number | null; order_multiple: number | null };
+      const p = r.products as unknown as {
+        name: string; principal_id: string; min_order_qty: number | null; order_multiple: number | null;
+      };
+      if (p.principal_id !== input.principal_id) {
+        return { error: `${p.name} é de outra representada. Um pedido tem produtos de uma representada só.` };
+      }
       const qty = items.filter((i) => i.variant_id === r.id).reduce((s, i) => s + num(i.qty), 0);
       const min = Number(p?.min_order_qty ?? 0);
       const mult = Number(p?.order_multiple ?? 0);

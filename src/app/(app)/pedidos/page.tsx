@@ -49,7 +49,7 @@ export default async function OrdersPage({
 
   let query = supabase
     .from("orders")
-    .select("id, number, status, order_date, sent_at, total, seller_id, principal_id, customers(name), principals(name)")
+    .select("id, number, status, order_date, sent_at, expected_delivery, total, seller_id, principal_id, customers(name), principals(name)")
     .order("number", { ascending: false })
     .limit(500);
   if (sp.rep) query = query.eq("principal_id", sp.rep);
@@ -74,7 +74,7 @@ export default async function OrdersPage({
       label: formatOrderNumber(o.number, settings),
       status: o.status as string,
       order_date: o.order_date as string,
-      aging: orderAging({ status: o.status, sent_at: o.sent_at, order_date: o.order_date }, settings.warnDays, settings.criticalDays, todayISO()),
+      aging: orderAging({ status: o.status, expected_delivery: o.expected_delivery }, settings.warnDays, settings.criticalDays, todayISO()),
       total: Number(o.total),
       seller_id: o.seller_id as string,
       customer: (o.customers as unknown as { name: string } | null)?.name ?? "",
@@ -331,7 +331,7 @@ function AgingChip({ aging }: { aging: ReturnType<typeof orderAging> }) {
   if (!aging || aging.level === "ok") return null;
   const st = AGING_STYLE[aging.level];
   return (
-    <span className={`inline-flex h-[1.375rem] items-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium ${st.badge}`} title={`${st.label}: ${aging.days} dias sem faturar`}>
+    <span className={`inline-flex h-[1.375rem] items-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium ${st.badge}`} title={`${st.label}: ${aging.days} dias depois da previsão de entrega`}>
       <Icon name="clock" size={12} />
       {aging.days}d
     </span>

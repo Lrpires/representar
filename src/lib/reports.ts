@@ -291,3 +291,125 @@ export async function loadSales(P: Pick<Period, "start" | "end">, by: SalesBy, r
   const avgPct = canSeeCommissions && total ? (totalCommission / total) * 100 : 0;
   return { rows, total: r2(total), avgPct, showWeight: canSeeCommissions, error };
 }
+
+// Ordenação da tabela de vendas pelo título da coluna clicado.
+export const SALES_SORT_KEYS = ["nome", "pedidos", "qtd", "valor", "participacao", "peso", "medio"] as const;
+export type SalesSortKey = (typeof SALES_SORT_KEYS)[number];
+export function parseSalesSort(ordem?: string | null, dir?: string | null): { key: SalesSortKey; dir: "asc" | "desc" } {
+  const key = (SALES_SORT_KEYS as readonly string[]).includes(ordem ?? "") ? (ordem as SalesSortKey) : "valor";
+  return { key, dir: dir === "asc" ? "asc" : key === "nome" && dir !== "desc" ? "asc" : "desc" };
+}
+export function sortSalesRows(rows: SalesRow[], key: SalesSortKey, dir: "asc" | "desc"): SalesRow[] {
+  const v = (r: SalesRow): number | string =>
+    key === "nome" ? r.name.toLocaleLowerCase("pt-BR")
+    : key === "pedidos" ? r.orders
+    : key === "qtd" ? r.qty ?? 0
+    : key === "peso" ? r.weight
+    : key === "medio" ? r.avgPct
+    : r.value; // valor e participação dão a mesma ordem
+  const sign = dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = v(a), y = v(b);
+    return (typeof x === "string" ? x.localeCompare(String(y), "pt-BR") : x - (y as number)) * sign || b.value - a.value;
+  });
+}
+
+/* ---------------------------------------------------------------- Detalhe de uma linha (painel ao clicar) */
+
+export type SalesDetail = {
+  orderId: string; number: number; date: string; status: string; customer: string; principal: string; seller: string;
+  orderTotal: number; product?: string; qty?: number; unit?: string; unitPrice?: number; lineTotal?: number;
+};
+
+// Pedidos por trás de uma linha do relatório de vendas (mesmo período e filtro de representada).
+export async function loadSalesDetail(P: Pick<Period, "start" | "end">, by: SalesBy, key: string, rep?: string) {
+  const { supabase, orgId } = await getContext();
+  const names = await memberNames(supabase, orgId);
+  type O = {
+    id: string; number: number; order_date: string; status: string; total: number; seller_id: string; seller_name?: string | null;
+    customer_id: string; principal_id: string; customers: { name: string } | null; principals: { name: string } | null;
+  };
+  const sellerOf = (o: O) => sellerLabel(sellerKey(o), names) ?? (o.seller_name ?? "").trim();
+  const base = (o: O): SalesDetail => ({
+    orderId: o.id,
+    number: o.number,
+    date: o.order_date,
+    status: o.status,
+    customer: one(o.customers)?.name ?? "",
+    principal: one(o.principals)?.name ?? "",
+    seller: sellerOf(o),
+    orderTotal: Number(o.total),
+  });
+  const cols = "id, number, order_date, status, total, seller_id, seller_name, customer_id, principal_id, customers(name), principals(name)";
+
+  if (by === "produto") {
+    type I = { variant_id: string | null; code: string | null; description: string; qty: number; unit: string; list_price: number; unit_price: number; line_total: number; orders: O | null };
+    const { data } = await fetchAll<I>((a, b) => {
+      let q = supabase
+        .from("order_items")
+        .select(`variant_id, code, description, qty, unit, list_price, unit_price, line_total, orders!inner(${cols})`)
+        .in("orders.status", SOLD_STATUSES)
+        .gte("orders.order_date", P.start)
+        .lte("orders.order_date", P.end);
+      if (rep) q = q.eq("orders.principal_id", rep);
+      if (key.startsWith("v:")) q = q.eq("variant_id", key.slice(2));
+      else q = q.is("variant_id", null);
+      return q.order("id").range(a, b) as unknown as PromiseLike<{ data: I[] | null; error: unknown }>;
+    });
+    const want = key.startsWith("d:") ? key.slice(2) : null;
+    return data
+      .filter((i) => !want || `${(i.code ?? "").toLowerCase()}|${i.description.toLowerCase()}` === want)
+      .map((i) => {
+        const o = one(i.orders)!;
+        return { ...base(o), product: i.description, qty: Number(i.qty), unit: i.unit, unitPrice: Number(i.unit_price), lineTotal: Number(i.line_total) };
+      })
+      .sort((a, b) => b.date.localeCompare(a.date) || b.number - a.number);
+  }
+
+  const { data } = await fetchAll<O>((a, b) => {
+    let q = supabase.from("orders").select(cols).in("status", SOLD_STATUSES).gte("order_date", P.start).lte("order_date", P.end);
+    if (rep) q = q.eq("principal_id", rep);
+    if (by === "cliente") q = q.eq("customer_id", key);
+    if (by === "representada") q = q.eq("principal_id", key);
+    if (by === "vendedor") q = key.startsWith("nome:") ? q.ilike("seller_name", key.slice(5)) : q.eq("seller_id", key.slice(3)).is("seller_name", null);
+    return q.order("order_date", { ascending: false }).order("number", { ascending: false }).range(a, b) as unknown as PromiseLike<{ data: O[] | null; error: unknown }>;
+  });
+  return data.map(base);
+}
+
+export type CommissionDetail = {
+  orderId: string; number: number | null; invoice: string | null; customer: string; dueDate: string; value: number; received: number; status: string;
+};
+
+// Comissões de uma representada que vencem no período (painel do relatório de comissões).
+export async function loadCommissionDetail(P: Pick<Period, "start" | "end">, principalId: string) {
+  const { supabase } = await getContext();
+  type C = {
+    order_id: string; value: number; received_value: number | null; status: string; due_date: string;
+    orders: { number: number; customers: { name: string } | null } | null; order_invoices: { number: string | null } | null;
+  };
+  const { data } = await fetchAll<C>((a, b) =>
+    supabase
+      .from("commissions")
+      .select("order_id, value, received_value, status, due_date, orders(number, customers(name)), order_invoices(number)")
+      .eq("principal_id", principalId)
+      .neq("status", "cancelada")
+      .gte("due_date", P.start)
+      .lte("due_date", P.end)
+      .order("due_date")
+      .range(a, b) as unknown as PromiseLike<{ data: C[] | null; error: unknown }>,
+  );
+  return data.map((c): CommissionDetail => {
+    const o = one(c.orders);
+    return {
+      orderId: c.order_id,
+      number: o?.number ?? null,
+      invoice: one(c.order_invoices)?.number ?? null,
+      customer: o ? one(o.customers)?.name ?? "" : "",
+      dueDate: c.due_date,
+      value: Number(c.value),
+      received: Number(c.received_value ?? 0),
+      status: c.status,
+    };
+  });
+}

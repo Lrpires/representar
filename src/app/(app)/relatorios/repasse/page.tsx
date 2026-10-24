@@ -5,12 +5,12 @@ import { resolvePeriod } from "@/lib/cockpit";
 import { loadPayouts } from "@/lib/reports";
 import { ruleText } from "@/lib/seller-payout";
 import { registerPayout, undoPayout } from "../actions";
-import { brl, formatDate, pct, todayISO } from "@/lib/format";
+import { brl, formatDate, pct, todayISO, rangeText } from "@/lib/format";
 import { CockpitShell } from "@/components/cockpit/filters";
 import { Icon } from "@/components/icons";
 import { ConfirmButton } from "@/components/confirm-button";
 import { SubmitButton } from "@/components/submit";
-import { PageHeader, ErrorNote, OkNote, Notice, Badge, ghostBtn, primaryBtn, iconBtn } from "@/components/ui";
+import { PageHeader, ErrorNote, OkNote, Notice, Badge, ghostBtn, primaryBtn, iconBtn, quietBtn } from "@/components/ui";
 
 const PATH = "/relatorios/repasse";
 
@@ -51,10 +51,16 @@ export default async function PayoutReport({
         back={{ href: "/relatorios", label: "Relatórios" }}
         hint="Do que o escritório recebeu das fábricas no período, quanto vai para cada vendedor (regra em Equipe → Comissão dos vendedores)."
         action={
-          <a href={`/relatorios/planilha?r=repasse&${params}`} className={ghostBtn}>
-            <Icon name="download" size={15} />
-            Baixar planilha
-          </a>
+          <div className="flex items-center gap-2">
+            <a href={`/relatorios/planilha?r=repasse&${params}`} className={quietBtn} title="Baixar em Excel">
+              <Icon name="download" size={15} />
+              Planilha
+            </a>
+            <a href={`/imprimir/relatorio?r=repasse&${params}&auto=1`} target="_blank" rel="noopener noreferrer" className={primaryBtn}>
+              <Icon name="printer" size={15} />
+              Imprimir / PDF
+            </a>
+          </div>
         }
       />
       <div className="mb-4 empty:hidden [&>*]:mb-3">
@@ -62,7 +68,7 @@ export default async function PayoutReport({
         <OkNote message={sp.ok} />
       </div>
 
-      <CockpitShell principals={(principals ?? []).map((p) => ({ value: p.id, label: p.name }))} sellers={null} periodLabel={P.label} compareLabel="Pelo dia em que o escritório recebeu">
+      <CockpitShell principals={(principals ?? []).map((p) => ({ value: p.id, label: p.name }))} sellers={null} periodLabel={rangeText(P.start, P.end)} compareLabel="Pelo dia em que o escritório recebeu">
         {error ? (
           <Notice>Para usar o repasse, rode a migração 029 no Supabase.</Notice>
         ) : (

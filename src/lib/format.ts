@@ -26,6 +26,11 @@ export function formatDate(iso: string | null): string {
   return `${d}/${m}/${y}`;
 }
 
+// Período por extenso nos relatórios: "de 01/10/2026 a 24/10/2026".
+export function rangeText(start: string, end: string): string {
+  return start === end ? `em ${formatDate(start)}` : `de ${formatDate(start)} a ${formatDate(end)}`;
+}
+
 // Data de hoje (AAAA-MM-DD) no fuso do Brasil, para comparar com vigências.
 export function todayISO(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });

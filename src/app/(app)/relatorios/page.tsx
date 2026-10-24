@@ -55,7 +55,7 @@ export default async function ReportsPage() {
 
   return (
     <>
-      <PageHeader title="Relatórios" hint="Escolha o relatório. Todos têm filtro de período e de representada, e baixam em planilha." />
+      <PageHeader title="Relatórios" hint="Escolha o relatório. Todos têm filtro de período e de representada, imprimem (ou salvam em PDF) e baixam em planilha." />
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:gap-4 xl:grid-cols-3">
         {list.map((r) => (
           <li key={r.href}>

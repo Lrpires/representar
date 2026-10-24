@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { parseNfe, matchItems, type Nfe } from "@/lib/nfe";
+import { parseNfe, matchItems, matchLines, type Nfe } from "@/lib/nfe";
 import { samePrincipal, sameCustomer } from "@/lib/nfe-match";
 import { digits } from "@/lib/br";
 import { formatDate } from "@/lib/format";
@@ -32,7 +32,8 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [orderId, setOrderId] = useState("");
-  const [qty, setQty] = useState<Record<string, string>>({});
+  // Item do pedido ligado a cada item da nota (pela posição na nota); "" = não ligado.
+  const [link, setLink] = useState<string[]>([]);
   const [search, setSearch] = useState("");
 
   // Só entram os pedidos em aberto do cliente e da representada da nota.
@@ -65,8 +66,7 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
     setOrderId(id);
     const o = orders.find((x) => x.id === id);
     if (!o || !nfe) return;
-    const m = matchItems(nfe.items, o.items);
-    setQty(Object.fromEntries(o.items.map((i) => [i.id, m.qty.has(i.id) ? numText(m.qty.get(i.id)!, 3) : ""])));
+    setLink(matchLines(nfe.items, o.items).map((x) => x ?? ""));
   }
 
   async function onFile(file?: File) {
@@ -86,8 +86,7 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
       const best = byRef.length === 1 ? byRef : mine.length === 1 ? mine : [];
       if (best.length === 1) {
         setOrderId(best[0].id);
-        const m = matchItems(n.items, best[0].items);
-        setQty(Object.fromEntries(best[0].items.map((i) => [i.id, m.qty.has(i.id) ? numText(m.qty.get(i.id)!, 3) : ""])));
+        setLink(matchLines(n.items, best[0].items).map((x) => x ?? ""));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível ler o XML.");
@@ -203,40 +202,65 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
             )}
           </div>
 
-          {/* Quantidades casadas (editáveis) */}
-          {chosen ? (
-            <div className="overflow-hidden rounded-lg border border-line sm:col-span-2">
-              <p className="border-b border-line bg-subtle px-3 py-2 text-xs font-medium text-muted">Quantidades desta nota no pedido {chosen.label}</p>
-              <ul className="divide-y divide-line">
-                {chosen.items.map((i) => {
-                  const left = Math.max(i.qty - i.invoiced, 0);
-                  return (
-                    <li key={i.id} className="flex items-center gap-3 px-3 py-2.5">
+          {/* Todos os itens da nota, como vieram; cada um ligado (ou não) a um item do pedido */}
+          <div className="overflow-hidden rounded-lg border border-line sm:col-span-2">
+            <p className="border-b border-line bg-subtle px-3 py-2 text-xs font-medium text-muted">
+              Itens da nota ({nfe.items.length}){chosen ? ` · ligue cada um ao item do pedido ${chosen.label}` : ""}
+            </p>
+            <ul className="divide-y divide-line">
+              {nfe.items.map((it, n) => {
+                const linked = chosen?.items.find((i) => i.id === link[n]);
+                const linkedQty = linked ? nfe.items.reduce((s, x, k) => s + (link[k] === linked.id ? x.qty : 0), 0) : 0;
+                const over = linked ? linkedQty - Math.max(linked.qty - linked.invoiced, 0) : 0;
+                return (
+                  <li key={n} className="grid gap-2 px-3 py-2.5">
+                    <input type="hidden" name="nf_code" value={it.code} />
+                    <input type="hidden" name="nf_desc" value={it.description} />
+                    <input type="hidden" name="nf_unit" value={it.unit} />
+                    <input type="hidden" name="nf_qty" value={numText(it.qty, 3)} />
+                    <input type="hidden" name="nf_price" value={priceText(it.unitPrice)} />
+                    <input type="hidden" name="nf_total" value={priceText(it.total)} />
+                    <input type="hidden" name="nf_item" value={chosen ? (link[n] ?? "") : ""} />
+                    <div className="flex items-start gap-3">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">
-                          {i.code ? <span className="mr-1.5 font-mono text-xs text-muted">{i.code}</span> : null}
-                          {i.description}
+                        <p className="text-sm font-medium leading-snug">
+                          {it.code ? <span className="mr-1.5 font-mono text-xs text-muted">{it.code}</span> : null}
+                          {it.description}
                         </p>
-                        <p className="text-xs text-muted">
-                          Pedido {numText(i.qty, 3)} · falta {numText(left, 3)}
+                        <p className="text-xs tabular-nums text-muted">
+                          {numText(it.qty, 3)} {it.unit} × {brl(it.unitPrice)}
                         </p>
                       </div>
-                      <input
-                        name={`qty_${i.id}`}
-                        inputMode="decimal"
-                        aria-label={`Quantidade de ${i.description}`}
-                        value={qty[i.id] ?? ""}
-                        disabled={left === 0}
-                        placeholder="0"
-                        onChange={(e) => setQty((q) => ({ ...q, [i.id]: e.target.value }))}
-                        className="h-10 w-24 shrink-0 rounded-md border border-line-strong bg-surface px-2 text-right text-sm tabular-nums outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/25 disabled:bg-subtle sm:h-8"
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : null}
+                      <span className="shrink-0 text-sm font-medium tabular-nums">{brl(it.total)}</span>
+                    </div>
+                    {chosen ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={link[n] ?? ""}
+                          onChange={(e) => setLink((l) => Object.assign([...l], { [n]: e.target.value }))}
+                          aria-label={`Item do pedido para ${it.description}`}
+                          className={`h-10 min-w-0 flex-1 rounded-md border bg-surface px-2 text-[13px] outline-none focus:border-accent sm:h-8 ${
+                            link[n] ? "border-line-strong" : "border-warn-dot/60"
+                          }`}
+                        >
+                          <option value="">Sem item do pedido (fica só na nota)</option>
+                          {chosen.items.map((i) => (
+                            <option key={i.id} value={i.id}>
+                              {i.code ? `${i.code} · ` : ""}
+                              {i.description} — falta {numText(Math.max(i.qty - i.invoiced, 0), 3)}
+                            </option>
+                          ))}
+                        </select>
+                        {over > 0.0005 ? (
+                          <span className="text-xs text-warn">passa {numText(over, 3)} do que faltava</span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </>
       ) : null}
     </>

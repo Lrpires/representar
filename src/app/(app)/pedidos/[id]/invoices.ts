@@ -91,13 +91,39 @@ export async function registerInvoice(orderId: string, formData: FormData) {
 
   // Quantidades por item (não pode passar do que falta faturar).
   const [{ data: items }, { data: done }] = await Promise.all([
-    supabase.from("order_items").select("id, description, qty").eq("order_id", orderId),
+    supabase.from("order_items").select("id, code, description, unit, qty, unit_price").eq("order_id", orderId),
     supabase.from("order_invoice_items").select("order_item_id, qty, order_invoices!inner(order_id)").eq("order_invoices.order_id", orderId),
   ]);
   const already = new Map<string, number>();
   for (const d of done ?? []) already.set(d.order_item_id, (already.get(d.order_item_id) ?? 0) + Number(d.qty));
   const lines: { order_item_id: string; qty: number }[] = [];
-  for (const it of items ?? []) {
+  // Itens da nota como vieram na NF (do XML: nf_*). Cada um pode estar ligado a um item do pedido (nf_item).
+  const nfDesc = formData.getAll("nf_desc").map(String);
+  const nfItem = formData.getAll("nf_item").map(String);
+  const nfCode = formData.getAll("nf_code").map(String);
+  const nfUnit = formData.getAll("nf_unit").map(String);
+  const nfQty = formData.getAll("nf_qty").map(String);
+  const nfPrice = formData.getAll("nf_price").map(String);
+  const nfTotal = formData.getAll("nf_total").map(String);
+  const orderItemIds = new Set((items ?? []).map((i) => i.id));
+  const nfLines = nfDesc.map((d, i) => ({
+    position: i,
+    code: nfCode[i]?.trim() || null,
+    description: d.trim() || "Item",
+    unit: nfUnit[i]?.trim() || null,
+    qty: Math.max(parseNumber(nfQty[i] ?? "") || 0, 0),
+    unit_price: Math.max(parseNumber(nfPrice[i] ?? "") || 0, 0),
+    total: round2(Math.max(parseNumber(nfTotal[i] ?? "") || 0, 0)),
+    order_item_id: orderItemIds.has(nfItem[i]) ? nfItem[i] : null,
+  }));
+  if (nfLines.length) {
+    // Do XML: a quantidade faturada de cada item do pedido é a soma dos itens da nota ligados a ele.
+    // A nota manda: pode passar do que faltava (a fábrica às vezes entrega a mais).
+    const sum = new Map<string, number>();
+    for (const l of nfLines) if (l.order_item_id && l.qty > 0) sum.set(l.order_item_id, (sum.get(l.order_item_id) ?? 0) + l.qty);
+    for (const [order_item_id, qty] of sum) lines.push({ order_item_id, qty: Math.round(qty * 1000) / 1000 });
+  }
+  for (const it of nfLines.length ? [] : items ?? []) {
     const raw = text(formData, `qty_${it.id}`);
     if (!raw) continue;
     const q = parseNumber(raw);
@@ -106,6 +132,17 @@ export async function registerInvoice(orderId: string, formData: FormData) {
     const left = Number(it.qty) - (already.get(it.id) ?? 0);
     if (q > left + 1e-9) fail(back, `${it.description}: só faltam ${String(left).replace(".", ",")} para faturar.`);
     lines.push({ order_item_id: it.id, qty: q });
+    // Lançada à mão: os itens da nota são os do pedido, com a quantidade informada.
+    nfLines.push({
+      position: nfLines.length,
+      code: it.code ?? null,
+      description: it.description,
+      unit: it.unit ?? null,
+      qty: q,
+      unit_price: Number(it.unit_price ?? 0),
+      total: round2(q * Number(it.unit_price ?? 0)),
+      order_item_id: it.id,
+    });
   }
 
   // Parcelas (duplicatas): vencimento e valor de cada uma (do XML ou digitadas).
@@ -176,6 +213,10 @@ export async function registerInvoice(orderId: string, formData: FormData) {
 
   if (lines.length) {
     await supabase.from("order_invoice_items").insert(lines.map((l) => ({ invoice_id: invoice.id, ...l })));
+  }
+  // Itens da nota (migração 025). Sem a tabela, a nota fica só com as quantidades ligadas ao pedido.
+  if (nfLines.length) {
+    await supabase.from("order_invoice_lines").insert(nfLines.map((l) => ({ org_id: orgId, invoice_id: invoice.id, ...l })));
   }
 
   // Parcelas da nota (migração 021). Sem a tabela, a nota fica sem parcelas e a comissão sai inteira.

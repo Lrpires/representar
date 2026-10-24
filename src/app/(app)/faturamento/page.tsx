@@ -103,6 +103,11 @@ export default async function BillingPage({
     if (e) ({ data } = await supabase.from("order_invoices").select(base).eq("id", sp.nota).maybeSingle());
     detail = (data as unknown as InvDetail) ?? null;
   }
+  // Itens da nota como vieram na NF (migração 025); sem eles, mostra os itens do pedido faturados.
+  type NfLine = { code: string | null; description: string; unit: string | null; qty: number; unit_price: number; total: number; order_item_id: string | null };
+  const nfLines: NfLine[] = sp.nota
+    ? (((await supabase.from("order_invoice_lines").select("code, description, unit, qty, unit_price, total, order_item_id").eq("invoice_id", sp.nota).order("position")).data ?? []) as NfLine[])
+    : [];
   const canDelete = !!detail && (isBackOffice || detail.orders?.seller_id === user.id);
   const commission = detail?.commissions?.[0];
   const commissionsOfNote = [...(detail?.commissions ?? [])].sort((a, b) => a.due_date.localeCompare(b.due_date));
@@ -597,8 +602,43 @@ export default async function BillingPage({
                 <p className="text-xs text-muted">Nenhum arquivo (PDF ou XML) anexado a esta nota.</p>
               )}
 
-              {/* Itens faturados nesta nota (preço do pedido, com o desconto geral) */}
-              {detail.order_invoice_items.length ? (
+              {/* Itens da nota, exatamente como vieram na NF */}
+              {nfLines.length ? (
+                <section>
+                  <p className="mb-2 text-xs font-medium text-muted">Itens da nota ({nfLines.length})</p>
+                  <div className="overflow-hidden rounded-lg border border-line">
+                    <table className="w-full text-[13px]">
+                      <thead className="bg-subtle text-[11px] text-muted">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">Produto</th>
+                          <th className="px-3 py-2 text-right font-medium">Qtd.</th>
+                          <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">Valor un.</th>
+                          <th className="px-3 py-2 text-right font-medium">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line">
+                        {nfLines.map((l, n) => (
+                          <tr key={n}>
+                            <td className="px-3 py-2.5">
+                              {l.code ? <span className="block font-mono text-[11px] text-muted">{l.code}</span> : null}
+                              {l.description}
+                              {!l.order_item_id ? <span className="mt-0.5 block text-[11px] text-warn">Sem item do pedido</span> : null}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
+                              {numText(Number(l.qty), 3)} {(l.unit ?? "").toLowerCase()}
+                            </td>
+                            <td className="hidden whitespace-nowrap px-3 py-2.5 text-right font-mono tabular-nums sm:table-cell">{brl(Number(l.unit_price))}</td>
+                            <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono tabular-nums">{brl(Number(l.total))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ) : null}
+
+              {/* Notas antigas (sem os itens da NF): itens do pedido faturados, com o preço do pedido e o desconto geral */}
+              {!nfLines.length && detail.order_invoice_items.length ? (
                 <section>
                   <p className="mb-2 text-xs font-medium text-muted">Itens da nota</p>
                   <div className="overflow-hidden rounded-lg border border-line">

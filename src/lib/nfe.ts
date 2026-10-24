@@ -125,3 +125,18 @@ export function matchItems<T extends { id: string; code: string; description: st
   }
   return { qty: result, unmatched };
 }
+
+// Para cada item da nota, o item do pedido que combina (ou null). Mesma regra de matchItems.
+export function matchLines<T extends { id: string; code: string; description: string }>(nfe: NfeItem[], order: T[]): (string | null)[] {
+  const used = new Set<string>();
+  return nfe.map((it) => {
+    const free = order.filter((o) => !used.has(o.id));
+    const hit =
+      (it.code ? free.find((o) => o.code && norm(o.code) === norm(it.code)) : undefined) ??
+      free.find((o) => norm(o.description) === norm(it.description)) ??
+      free.find((o) => norm(o.description).includes(norm(it.description)) || norm(it.description).includes(norm(o.description)));
+    if (!hit) return null;
+    used.add(hit.id);
+    return hit.id;
+  });
+}

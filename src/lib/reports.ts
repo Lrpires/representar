@@ -166,16 +166,15 @@ export type SalesBy = "vendedor" | "cliente" | "representada" | "produto";
 export type SalesSort = "valor" | "comissao";
 export type SalesRow = {
   key: string; name: string; sub?: string; orders: number; value: number; qty?: number;
-  // Resultado (só para quem vê comissões): comissão que as vendas geram para o escritório e o % médio ponderado.
-  commission: number; avgPct: number;
-  // Por vendedor: repasse estimado pela regra dele e o que fica para o escritório.
-  payout?: number; office?: number; rule?: SellerRule | null;
+  // Só para quem vê comissões, e sem valor em reais: o peso (% do resultado, levando em conta o % de comissão de
+  // cada venda) e o % médio ponderado. Ex.: 100 mil a 3% e 100 mil a 5% → pesos de 37,5% e 62,5%.
+  weight: number; avgPct: number;
   share: number; cumulative: number; abc: "A" | "B" | "C";
 };
 
 // Vendido no período (pedidos enviados ou faturados), agrupado. Curva ABC (A = 80%, B = até 95%) pelo critério da ordem:
-// valor vendido ou comissão gerada (o resultado: um pedido de 5% pesa mais que um de 3%).
-// A comissão é calculada pelo % de cada pedido e só aparece para quem vê comissões.
+// valor vendido ou peso (o resultado: um pedido de 5% pesa mais que um de 3%).
+// O peso usa o % de cada pedido, só para quem vê comissões, e nunca mostra valor de comissão.
 export async function loadSales(P: Pick<Period, "start" | "end">, by: SalesBy, rep?: string, sort: SalesSort = "valor") {
   const { supabase, orgId, canSeeCommissions } = await getContext();
   const names = by === "vendedor" ? await memberNames(supabase, orgId) : new Map<string, string>();
@@ -262,14 +261,6 @@ export async function loadSales(P: Pick<Period, "start" | "end">, by: SalesBy, r
     }
   }
 
-  // Repasse estimado por vendedor (regra dele) e o que fica para o escritório.
-  const rules =
-    by === "vendedor" && canSeeCommissions
-      ? (((await supabase.from("seller_commission_rules").select("id, seller_id, seller_name, mode, value").eq("org_id", orgId)).data ?? []) as SellerRule[]).map(
-          (r) => ({ ...r, value: Number(r.value) }),
-        )
-      : [];
-
   const bySort = sort === "comissao" && canSeeCommissions;
   const metric = (g: { value: number; commission: number }) => (bySort ? g.commission : g.value);
   const total = [...groups.values()].reduce((s, g) => s + g.value, 0);
@@ -288,20 +279,15 @@ export async function loadSales(P: Pick<Period, "start" | "end">, by: SalesBy, r
         orders: g.orders.size,
         value: r2(g.value),
         qty: by === "produto" ? g.qty : undefined,
-        commission: canSeeCommissions ? r2(g.commission) : 0,
+        weight: canSeeCommissions && totalCommission ? g.commission / totalCommission : 0,
         avgPct: canSeeCommissions && g.value ? (g.commission / g.value) * 100 : 0,
         share,
         cumulative: acc,
         abc: acc - share < 0.8 ? "A" : acc - share < 0.95 ? "B" : "C",
       };
-      if (by === "vendedor" && canSeeCommissions) {
-        const rule = ruleFor(rules, key, sellerLabel(key, names));
-        const payout = !rule ? 0 : rule.mode === "share" ? (g.commission * rule.value) / 100 : (g.value * rule.value) / 100;
-        row.rule = rule;
-        row.payout = r2(payout);
-        row.office = r2(g.commission - payout);
-      }
       return row;
     });
-  return { rows, total: r2(total), totalCommission: canSeeCommissions ? r2(totalCommission) : 0, showCommission: canSeeCommissions, error };
+  // % médio ponderado do período (sem valor de comissão).
+  const avgPct = canSeeCommissions && total ? (totalCommission / total) * 100 : 0;
+  return { rows, total: r2(total), avgPct, showWeight: canSeeCommissions, error };
 }

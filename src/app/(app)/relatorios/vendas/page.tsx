@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { getContext } from "@/lib/session";
 import { resolvePeriod } from "@/lib/cockpit";
 import { loadSales, type SalesBy, type SalesSort } from "@/lib/reports";
-import { ruleText } from "@/lib/seller-payout";
 import { qtyText } from "@/lib/orders";
 import { brl, pct, todayISO } from "@/lib/format";
 import { CockpitShell } from "@/components/cockpit/filters";
@@ -37,7 +36,7 @@ export default async function SalesReport({
   const sortHref = (o: SalesSort) =>
     `/relatorios/vendas?${new URLSearchParams([...base, ["por", by], ...(o === "comissao" ? [["ordem", "comissao"] as [string, string]] : [])])}`;
 
-  const [{ rows, total, totalCommission, showCommission }, { data: principals }] = await Promise.all([
+  const [{ rows, total, avgPct, showWeight }, { data: principals }] = await Promise.all([
     loadSales(P, by, sp.rep, sort),
     supabase.from("principals").select("id, name").order("name"),
   ]);
@@ -66,7 +65,7 @@ export default async function SalesReport({
           </Link>
         ))}
       </nav>
-      {showCommission ? (
+      {showWeight ? (
         <div className="-mt-1 mb-4 flex flex-wrap items-center gap-2 text-[13px]">
           <span className="text-muted">Ordenar e calcular a curva por</span>
           {(["valor", "comissao"] as SalesSort[]).map((o) => (
@@ -75,7 +74,7 @@ export default async function SalesReport({
               href={sortHref(o)}
               className={`rounded-md border px-2.5 py-1 font-medium transition ${o === sort ? "border-ink bg-ink text-on-ink" : "border-line-strong text-ink-2 hover:bg-hover"}`}
             >
-              {o === "valor" ? "Valor vendido" : "Comissão (resultado)"}
+              {o === "valor" ? "Valor vendido" : "Peso"}
             </Link>
           ))}
         </div>
@@ -90,12 +89,10 @@ export default async function SalesReport({
             <dt className="text-[13px] text-muted">{def.col === "Produto" ? "Produtos diferentes" : `${def.col}s`}</dt>
             <dd className="mt-1 text-lg font-semibold tabular-nums">{rows.length}</dd>
           </div>
-          {showCommission ? (
+          {showWeight ? (
             <div>
-              <dt className="text-[13px] text-muted">Comissão gerada</dt>
-              <dd className="mt-1 text-lg font-semibold tabular-nums">
-                {brl(totalCommission)} <span className="text-xs font-normal text-muted">{pct(total ? (totalCommission / total) * 100 : 0)} médio</span>
-              </dd>
+              <dt className="text-[13px] text-muted">% médio de comissão</dt>
+              <dd className="mt-1 text-lg font-semibold tabular-nums">{pct(avgPct)}</dd>
             </div>
           ) : null}
           {orders != null ? (
@@ -116,19 +113,15 @@ export default async function SalesReport({
                   {by === "cliente" ? <th className="px-3 py-2 text-center font-medium">Curva</th> : null}
                   {by === "produto" ? <th className="px-3 py-2 text-right font-medium">Quantidade</th> : <th className="px-3 py-2 text-right font-medium">Pedidos</th>}
                   <th className="px-3 py-2 text-right font-medium">Valor</th>
-                  {showCommission ? (
+                  <th className="px-3 py-2 text-right font-medium">Participação</th>
+                  {showWeight ? (
                     <>
-                      <th className="px-3 py-2 text-right font-medium">Comissão</th>
-                      <th className="px-3 py-2 text-right font-medium">% médio</th>
+                      <th className="px-3 py-2 text-right font-medium" title="Quanto pesa no resultado, levando em conta o % de comissão de cada venda">
+                        Peso
+                      </th>
+                      <th className="py-2 pl-3 pr-5 text-right font-medium">% médio</th>
                     </>
                   ) : null}
-                  {showCommission && by === "vendedor" ? (
-                    <>
-                      <th className="px-3 py-2 text-right font-medium">Repasse estimado</th>
-                      <th className="px-3 py-2 text-right font-medium">Fica no escritório</th>
-                    </>
-                  ) : null}
-                  <th className="py-2 pl-3 pr-5 text-right font-medium">Participação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -146,24 +139,13 @@ export default async function SalesReport({
                     ) : null}
                     <td className="px-3 py-2.5 text-right tabular-nums">{by === "produto" ? qtyText(r.qty ?? 0) : r.orders}</td>
                     <td className="px-3 py-2.5 text-right font-medium tabular-nums">{brl(r.value)}</td>
-                    {showCommission ? (
+                    <td className="px-3 py-2.5 text-right tabular-nums text-ink-2">{pct((r.value / (total || 1)) * 100)}</td>
+                    {showWeight ? (
                       <>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{brl(r.commission)}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-ink-2">{pct(r.avgPct)}</td>
+                        <td className="px-3 py-2.5 text-right font-medium tabular-nums">{pct(r.weight * 100)}</td>
+                        <td className="py-2.5 pl-3 pr-5 text-right tabular-nums text-ink-2">{pct(r.avgPct)}</td>
                       </>
                     ) : null}
-                    {showCommission && by === "vendedor" ? (
-                      <>
-                        <td className="px-3 py-2.5 text-right tabular-nums" title={ruleText(r.rule ?? null, (n) => pct(n))}>
-                          {r.rule ? brl(r.payout ?? 0) : <span className="text-xs text-warn">sem regra</span>}
-                        </td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">
-                          {brl(r.office ?? 0)}
-                          {r.commission ? <span className="block text-[11px] text-muted">{pct(((r.office ?? 0) / r.commission) * 100)} da comissão</span> : null}
-                        </td>
-                      </>
-                    ) : null}
-                    <td className="py-2.5 pl-3 pr-5 text-right tabular-nums text-ink-2">{pct(r.share * 100)}</td>
                   </tr>
                 ))}
                 {rows.length === 0 ? (

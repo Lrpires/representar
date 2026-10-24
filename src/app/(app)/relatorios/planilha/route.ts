@@ -51,19 +51,16 @@ export async function GET(req: Request) {
     const label = { vendedor: "Vendedor", cliente: "Cliente", representada: "Representada", produto: "Produto" }[by];
     title = by === "produto" ? "Produtos mais vendidos" : `Vendas por ${label.toLowerCase()}`;
     const sort = url.searchParams.get("ordem") === "comissao" ? "comissao" : "valor";
-    const { rows: data, showCommission } = await loadSales(P, by, rep, sort);
+    const { rows: data, total, showWeight } = await loadSales(P, by, rep, sort);
     cols = [
       { header: label, width: 40 },
       { header: by === "produto" ? "Código / representada" : by === "cliente" ? "Cidade / UF" : "", width: 24 },
       ...(by === "cliente" ? [{ header: "Curva ABC", width: 10 }] : []),
       by === "produto" ? { header: "Quantidade", width: 14, qty: true } : { header: "Pedidos", width: 10 },
       { header: "Valor vendido", width: 16, money: true },
-      ...(showCommission ? [{ header: "Comissão", width: 14, money: true }, { header: "% médio", width: 10, pct: true }] : []),
-      ...(showCommission && by === "vendedor"
-        ? [{ header: "Repasse estimado", width: 16, money: true }, { header: "Fica no escritório", width: 16, money: true }]
-        : []),
-      { header: sort === "comissao" ? "Participação na comissão" : "Participação", width: 14, pct: true },
-      { header: "Acumulado", width: 12, pct: true },
+      { header: "Participação", width: 12, pct: true },
+      ...(showWeight ? [{ header: "Peso", width: 10, pct: true }, { header: "% médio", width: 10, pct: true }] : []),
+      { header: sort === "comissao" ? "Acumulado (peso)" : "Acumulado", width: 16, pct: true },
     ];
     rows = data.map((x) => [
       x.name,
@@ -71,9 +68,8 @@ export async function GET(req: Request) {
       ...(by === "cliente" ? [x.abc] : []),
       by === "produto" ? x.qty ?? 0 : x.orders,
       x.value,
-      ...(showCommission ? [x.commission, x.avgPct / 100] : []),
-      ...(showCommission && by === "vendedor" ? [x.rule ? x.payout ?? 0 : null, x.office ?? 0] : []),
-      x.share,
+      total ? x.value / total : 0,
+      ...(showWeight ? [x.weight, x.avgPct / 100] : []),
       x.cumulative,
     ]);
   } else {

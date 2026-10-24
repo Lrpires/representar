@@ -48,7 +48,8 @@ export async function loadEditorData() {
     { data: allLists },
   ] = await Promise.all([
     supabase.from("customers").select("*").order("name"),
-    supabase.from("principals").select("id, name, default_commission_pct").eq("active", true).order("name"),
+    // O % padrão vem da tabela protegida (migração 027): para o vendedor, vem vazio.
+    supabase.from("principals").select("id, name, principal_commission_terms(default_commission_pct)").eq("active", true).order("name"),
     supabase
       .from("product_variants")
       .select("id, code, attributes, product_id, products!inner(name, unit, principal_id, active)")
@@ -150,11 +151,15 @@ export async function loadEditorData() {
     seller_id: c.seller_id,
   }));
 
+  const pctOf = (p: { principal_commission_terms: unknown }) => {
+    const t = p.principal_commission_terms as { default_commission_pct: number | null } | { default_commission_pct: number | null }[] | null;
+    return Array.isArray(t) ? t[0]?.default_commission_pct : t?.default_commission_pct;
+  };
   const editorPrincipals: EditorPrincipal[] = (principals ?? []).map((p) => ({
     id: p.id,
     name: p.name,
     // O % padrão só vai para o navegador de quem vê comissões.
-    commission: !canSeeCommissions || p.default_commission_pct == null ? null : Number(p.default_commission_pct),
+    commission: !canSeeCommissions || pctOf(p) == null ? null : Number(pctOf(p)),
   }));
 
   const units: EditorUnit[] = UNITS.filter((u) => settings.units.includes(u.value));

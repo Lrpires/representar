@@ -16,13 +16,14 @@ export type Row = {
   closed_at?: string | null; close_reason?: string | null;
   commission_receipts?: Receipt[];
   order_invoice_installments?: { number: string | null; due_date: string; position: number } | null;
-  orders: { number: number; commission_pct: number | null; customers: { name: string } | null } | null;
+  pct?: number | null; // % gravado na comissão (o do pedido quando a nota foi lançada)
+  orders: { number: number; customers: { name: string } | null } | null;
   order_invoices: { id: string; number: string | null; series: string | null; issued_at: string; value: number; file_path: string | null } | null;
   principals: { name: string } | null;
 };
 
-// A comissão é sobre a nota: valor da NF × % de comissão do pedido daquela nota.
-export const pctOf = (r: Row) => Number(r.orders?.commission_pct ?? 0);
+// A comissão é sobre a nota: valor da NF × % de comissão do pedido daquela nota (gravado na própria comissão).
+export const pctOf = (r: Row) => Number(r.pct ?? 0);
 export const nfValue = (r: Row) => Number(r.order_invoices?.value ?? 0);
 export const expected = (r: Row) => round2(Number(r.value));
 // Recebido = soma dos recebimentos lançados (antes da migração 020, o valor único gravado).

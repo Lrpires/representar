@@ -232,6 +232,11 @@ export async function runImport(kind: ImportKind, _prev: PreviewResult | null, f
   const { ctx, result, planned } = await plan(kind, formData);
   if (!result.ok) return result;
   const table = TABLE[kind];
+  // Representadas: a regra de comissão vai para a tabela protegida (migração 027), não para a representada.
+  const TERM_KEYS = ["default_commission_pct", "commission_trigger", "commission_close_mode", "commission_days_after"];
+  const termsOf = (p: Planned) => Object.fromEntries(Object.entries(p.payload ?? {}).filter(([k]) => TERM_KEYS.includes(k)));
+  const withoutTerms = (payload: Record<string, unknown> | undefined) =>
+    kind === "representadas" ? Object.fromEntries(Object.entries(payload ?? {}).filter(([k]) => !TERM_KEYS.includes(k))) : payload;
   let created = 0;
   let updated = 0;
   let failed = 0;
@@ -245,7 +250,7 @@ export async function runImport(kind: ImportKind, _prev: PreviewResult | null, f
       org_id: ctx.orgId,
       ...(kind === "clientes" ? { seller_id: ctx.user.id } : {}),
       ...(kind === "produtos" && !p.payload?.unit ? { unit: "unidade" } : {}),
-      ...p.payload,
+      ...withoutTerms(p.payload),
     }));
     const { error } = await ctx.supabase.from(table).insert(rowsToInsert);
     if (!error) {
@@ -268,7 +273,7 @@ export async function runImport(kind: ImportKind, _prev: PreviewResult | null, f
     const chunk = ups.slice(i, i + 20);
     const res = await Promise.all(
       chunk.map((p) => {
-        const payload: Record<string, unknown> = { ...p.payload };
+        const payload: Record<string, unknown> = { ...withoutTerms(p.payload) };
         if (kind === "produtos") delete payload.principal_id;
         // Endereço novo: a posição no mapa é recalculada.
         if (kind !== "produtos" && ["zip", "street", "street_number", "district", "city", "state"].some((k) => k in payload)) {
@@ -283,6 +288,22 @@ export async function runImport(kind: ImportKind, _prev: PreviewResult | null, f
         failures.set(chunk[j].line, error.message);
       } else updated++;
     });
+  }
+
+  // Regra de comissão das representadas importadas (só quem vê comissões grava).
+  if (kind === "representadas" && ctx.canSeeCommissions) {
+    const { data: saved } = await ctx.supabase.from("principals").select("id, name, cnpj");
+    const byCnpj = new Map((saved ?? []).filter((x) => x.cnpj).map((x) => [onlyDigits(x.cnpj!), x.id] as const));
+    const byName = new Map((saved ?? []).map((x) => [lower(x.name), x.id] as const));
+    const terms = planned
+      .filter((p) => (p.status === "novo" || p.status === "atualizar") && !failures.has(p.line) && Object.keys(termsOf(p)).length)
+      .map((p) => {
+        const cnpj = typeof p.payload?.cnpj === "string" ? onlyDigits(p.payload.cnpj) : "";
+        const id = p.id ?? (cnpj && byCnpj.get(cnpj)) ?? byName.get(lower(String(p.payload?.name ?? "")));
+        return id ? { principal_id: id, org_id: ctx.orgId, ...termsOf(p) } : null;
+      })
+      .filter((x): x is NonNullable<typeof x> => !!x);
+    for (const t of terms) await ctx.supabase.from("principal_commission_terms").upsert(t, { onConflict: "principal_id" });
   }
 
   revalidatePath(PATHS[kind]);

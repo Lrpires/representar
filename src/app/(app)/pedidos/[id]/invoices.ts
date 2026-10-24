@@ -6,7 +6,7 @@ import { getContext } from "@/lib/session";
 import { fail } from "@/lib/flash";
 import { text, optional, parseNumber } from "@/lib/format";
 import { round2 } from "@/lib/orders";
-import { planCommissions, type InstallmentIn, type PlanRule } from "@/lib/commission-plan";
+import type { InstallmentIn } from "@/lib/commission-plan";
 
 const here = (id: string) => `/pedidos/${id}`;
 
@@ -69,7 +69,7 @@ export async function registerInvoice(orderId: string, formData: FormData) {
 
   const { data: o } = await supabase
     .from("orders")
-    .select("id, status, seller_id, principal_id, commission_pct, principals(commission_trigger, commission_release, commission_close_mode, commission_close_day, commission_days_after)")
+    .select("id, status, seller_id, principal_id")
     .eq("id", orderId)
     .maybeSingle();
   if (!o) fail("/pedidos", "Pedido não encontrado.");
@@ -238,42 +238,12 @@ export async function registerInvoice(orderId: string, formData: FormData) {
     if (!instErr && inst) instIds = [...inst].sort((a, b) => a.position - b.position).map((x) => x.id);
   }
 
-  // Comissões desta nota: no faturamento, o valor completo; na liquidez, uma por parcela,
-  // vencendo pela regra da representada aplicada ao vencimento de cada parcela.
-  const pct = Number(o.commission_pct ?? 0);
-  const rule = (o.principals ?? {}) as unknown as PlanRule;
-  const plan = planCommissions({
-    issuedAt,
-    invoiceValue: round2(value),
-    pct,
-    installments: instIds.length ? installments : [],
-    rule,
-  });
-  const rows = plan.map((c) => ({
-    org_id: orgId,
-    order_id: orderId,
-    invoice_id: invoice.id,
-    installment_id: c.installmentIndex != null ? instIds[c.installmentIndex] : null,
-    principal_id: o.principal_id,
-    seller_id: o.seller_id,
-    base_value: c.base,
-    pct,
-    value: c.value,
-    due_date: c.dueDate,
-  }));
-  const { error: commErr } = await supabase.from("commissions").insert(rows);
-  // Sem a migração 021 (comissão por parcela), grava a comissão do jeito antigo: uma por nota.
-  if (commErr && /installment_id/.test(commErr.message)) {
-    const total = plan.reduce((t, c) => t + c.value, 0);
-    const { installment_id: _drop, ...first } = rows[0];
-    void _drop;
-    await supabase.from("commissions").insert({
-      ...first,
-      base_value: round2(value),
-      value: round2(total),
-      due_date: plan[0].dueDate,
-    });
-  }
+  // Comissões desta nota: calculadas pelo banco (migração 027), com o % do pedido e a regra da representada.
+  // No faturamento, o valor completo; na liquidez, uma por parcela, pelo vencimento de cada uma.
+  // Quem lança a nota (inclusive o vendedor) não precisa enxergar o %: ele não volta para cá.
+  void instIds;
+  const { error: commErr } = await supabase.rpc("create_invoice_commissions", { p_invoice: invoice.id });
+  if (commErr) console.error("Comissões da nota", invoice.id, commErr.message);
 
   await syncOrder(supabase, orderId);
   revalidatePath(here(orderId));

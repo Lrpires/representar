@@ -19,18 +19,19 @@ const products: Item = { href: "/produtos", label: "Produtos", short: "Produtos"
 const priceTables: Item = { href: "/tabelas-de-preco", label: "Tabelas de preço", short: "Preços", icon: "tag" };
 const billing: Item = { href: "/faturamento", label: "Faturamento", short: "Faturamento", icon: "file" };
 const goals: Item = { href: "/metas", label: "Metas", short: "Metas", icon: "target" };
+const reports: Item = { href: "/relatorios", label: "Relatórios", short: "Relatórios", icon: "layers" };
 const commissions: Item = { href: "/comissoes", label: "Comissões", short: "Comissões", icon: "percent" };
 const payables: Item = { href: "/contas-a-pagar", label: "Contas a pagar", short: "Contas", icon: "wallet" };
 const team: Item = { href: "/equipe", label: "Equipe", short: "Equipe", icon: "shield" };
 const importer: Item = { href: "/importar", label: "Importar dados", short: "Importar", icon: "upload" };
 const settings: Item = { href: "/configuracoes", label: "Configurações", short: "Ajustes", icon: "settings" };
 
-type Access = { showTeam?: boolean; showFinance?: boolean; showCommissions?: boolean; showPriceTables?: boolean };
+type Access = { showTeam?: boolean; showFinance?: boolean; showCommissions?: boolean; showPriceTables?: boolean; showReports?: boolean };
 
 // Grupos do menu conforme o perfil (financeiro e escritório só para quem pode ver).
-function groupsFor({ showTeam, showFinance, showCommissions, showPriceTables }: Access): { title?: string; items: Item[] }[] {
+function groupsFor({ showTeam, showFinance, showCommissions, showPriceTables, showReports }: Access): { title?: string; items: Item[] }[] {
   return [
-    { items: [home, orders, billing, goals] },
+    { items: [home, orders, billing, goals, ...(showReports ? [reports] : [])] },
     { title: "Carteira", items: [customers, leads] },
     { title: "Financeiro", items: [...(showCommissions ? [commissions] : []), ...(showFinance ? [payables] : [])] },
     { title: "Catálogo", items: [principals, products, ...(showPriceTables ? [priceTables] : [])] },
@@ -51,9 +52,10 @@ export function SideNav({
   showFinance = false,
   showCommissions = false,
   showPriceTables = false,
+  showReports = false,
 }: { counts?: Record<string, number> } & Access) {
   const isActive = useActive();
-  const all = groupsFor({ showTeam, showFinance, showCommissions, showPriceTables });
+  const all = groupsFor({ showTeam, showFinance, showCommissions, showPriceTables, showReports });
 
   return (
     <nav aria-label="Principal" className="mt-4 flex flex-col gap-5">
@@ -102,6 +104,7 @@ export function MobileTabs({
   showFinance = false,
   showCommissions = false,
   showPriceTables = false,
+  showReports = false,
   orgName,
   user,
   signOut,
@@ -112,6 +115,7 @@ export function MobileTabs({
   showFinance?: boolean;
   showCommissions?: boolean;
   showPriceTables?: boolean;
+  showReports?: boolean;
   orgName: string;
   user: MenuUser;
   signOut: () => Promise<void>;
@@ -124,6 +128,7 @@ export function MobileTabs({
   const moreItems = [
     billing,
     goals,
+    ...(showReports ? [reports] : []),
     ...(showCommissions ? [commissions] : []),
     ...(showFinance ? [payables] : []),
     principals,

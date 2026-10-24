@@ -48,7 +48,7 @@ export default async function ProductPage({
   const settings = await getSettings();
 
   const [{ data: p }, { data: variants }, { data: images }] = await Promise.all([
-    supabase.from("products").select("*, principals(name)").eq("id", id).maybeSingle(),
+    supabase.from("products").select("*, principals(name), product_commission_terms(commission_pct)").eq("id", id).maybeSingle(),
     supabase
       .from("product_variants")
       .select("id, code, attributes, ean")
@@ -249,7 +249,12 @@ export default async function ProductPage({
                 </Field>
                 {canSeeCommissions ? (
                   <Field label="Comissão deste produto (%)" hint="Vazio = usa a regra da representada.">
-                    <input name="commission_pct" inputMode="decimal" defaultValue={v(p.commission_pct)} className={inputCls} />
+                    <input name="commission_pct" inputMode="decimal" defaultValue={v(
+                      (() => {
+                        const t = p.product_commission_terms as { commission_pct: number | null } | { commission_pct: number | null }[] | null;
+                        return Array.isArray(t) ? t[0]?.commission_pct : t?.commission_pct;
+                      })(),
+                    )} className={inputCls} />
                   </Field>
                 ) : null}
               </div>

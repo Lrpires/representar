@@ -42,7 +42,7 @@ export default async function CommissionsPage({
   // Busca pelo número da NF: procura em todos os meses.
   const q = safeQ(sp.q).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
   const baseCols =
-    "id, order_id, value, due_date, status, received_at, received_value, principal_id, orders(number, commission_pct, customers(name)), principals(name)";
+    "id, order_id, value, pct, due_date, status, received_at, received_value, principal_id, orders(number, customers(name)), principals(name)";
   const build = (withReceipts: boolean, withInstallments = false) => {
     const nfCols = `${q ? "order_invoices!inner" : "order_invoices"}(id, number, series, issued_at, value, file_path)`;
     let qy = supabase
@@ -70,7 +70,7 @@ export default async function CommissionsPage({
     Promise.resolve(listResult),
     supabase.from("commissions").select("value, received_value").eq("status", "a_receber").lt("due_date", today),
     supabase.from("principals").select("id, name").order("name"),
-    supabase.from("orders").select("subtotal, discount_pct, commission_pct").eq("status", "enviado"),
+    supabase.from("orders").select("subtotal, discount_pct, order_commission_terms(commission_pct)").eq("status", "enviado"),
   ]);
 
   const rows = (data ?? []) as unknown as Row[];
@@ -84,7 +84,11 @@ export default async function CommissionsPage({
   const faturado = live.reduce((s, r) => s + nfValue(r), 0);
   const lateTotal = (lateData ?? []).reduce((s, r) => s + Math.max(Number(r.value) - Number(r.received_value ?? 0), 0), 0);
   const pipelineTotal = (pipeline ?? []).reduce(
-    (s, o) => s + (Number(o.subtotal) * (1 - Number(o.discount_pct) / 100) * Number(o.commission_pct ?? 0)) / 100,
+    (s, o) => {
+      const t = o.order_commission_terms as unknown as { commission_pct: number | null } | { commission_pct: number | null }[] | null;
+      const pct = Number((Array.isArray(t) ? t[0]?.commission_pct : t?.commission_pct) ?? 0);
+      return s + (Number(o.subtotal) * (1 - Number(o.discount_pct) / 100) * pct) / 100;
+    },
     0,
   );
 

@@ -40,7 +40,7 @@ export default async function OrderPage({
 
   const { data: o } = await supabase
     .from("orders")
-    .select("*, customers(id, name, cnpj), principals(name, cnpj, commission_close_mode, commission_days_after)")
+    .select("*, customers(id, name, cnpj), principals(name, cnpj), order_commission_terms(commission_pct)")
     .eq("id", id)
     .maybeSingle();
   if (!o) notFound();
@@ -60,12 +60,15 @@ export default async function OrderPage({
   const editable = canEdit && (!sentEdit || sp.editar === "1");
   const customer = o.customers as unknown as { id: string; name: string; cnpj: string | null } | null;
   const principal = o.principals as unknown as {
-    name: string; cnpj: string | null; commission_close_mode: string; commission_days_after: number | null;
+    name: string; cnpj: string | null;
   } | null;
   // Pedido importado: o vendedor do sistema antigo vem pelo nome até ele ter login.
   const sellerName = (o.seller_name as string | null) || seller?.full_name || seller?.email || "";
   const label = formatOrderNumber(o.number, settings);
-  const commissionPct = Number(o.commission_pct ?? 0);
+  // % de comissão do pedido: fica numa tabela que só quem vê comissões lê (migração 027).
+  const terms = o.order_commission_terms as unknown as { commission_pct: number | null } | { commission_pct: number | null }[] | null;
+  const pctRaw = Array.isArray(terms) ? terms[0]?.commission_pct : terms?.commission_pct;
+  const commissionPct = canSeeCommissions ? Number(pctRaw ?? 0) : 0;
 
   // Notas fiscais do pedido (antes da migração 009, a lista vem vazia).
   // Com os itens da nota (025) e as parcelas (021); sem essas migrações, carrega com o que houver.
@@ -315,7 +318,7 @@ export default async function OrderPage({
             freight_mode: o.freight_mode ?? "",
             freight_value: Number(o.freight_value) ? priceText(Number(o.freight_value)) : "",
             discount_pct: Number(o.discount_pct) ? numText(Number(o.discount_pct), 2) : "",
-            commission_pct: canSeeCommissions && o.commission_pct != null ? numText(commissionPct, 2) : "",
+            commission_pct: canSeeCommissions && pctRaw != null ? numText(commissionPct, 2) : "",
             notes: o.notes ?? "",
             items: (items ?? []).map((i) => ({
               id: i.id,
@@ -693,7 +696,7 @@ function Billing({
 
 type OrderRow = Record<string, unknown> & {
   order_date: string; expected_delivery: string | null; payment_terms: string | null; freight_mode: string | null;
-  freight_value: number; discount_pct: number; commission_pct: number | null; notes: string | null; invoice_number: string | null;
+  freight_value: number; discount_pct: number; notes: string | null; invoice_number: string | null;
 };
 type ItemRow = {
   id: string; code: string | null; description: string; unit: string; qty: number; list_price: number;
@@ -722,7 +725,7 @@ function OrderView({
     items.map((i) => ({ qty: Number(i.qty), price: Number(i.list_price), discount: Number(i.discount_pct) })),
     Number(o.discount_pct),
     Number(o.freight_value),
-    Number(o.commission_pct ?? 0),
+    0,
   );
   return (
     <div className="grid gap-5">

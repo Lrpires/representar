@@ -66,19 +66,9 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
 
   const discountPct = num(input.discount_pct);
   const freight = num(input.freight_value);
-  // Quem não vê comissão (vendedor, gerente) não escolhe o %: vale o do pedido (na edição) ou o padrão da representada.
-  let commissionPct = num(input.commission_pct);
-  if (!canSeeCommissions) {
-    const { data: prev } = input.id
-      ? await supabase.from("orders").select("commission_pct, principal_id").eq("id", input.id).maybeSingle()
-      : { data: null };
-    if (prev && prev.principal_id === input.principal_id && prev.commission_pct != null) {
-      commissionPct = Number(prev.commission_pct);
-    } else {
-      const { data: pr } = await supabase.from("principals").select("default_commission_pct").eq("id", input.principal_id).maybeSingle();
-      commissionPct = Number(pr?.default_commission_pct ?? 0);
-    }
-  }
+  // O % fica numa tabela protegida (migração 027). Quem não vê comissão (vendedor) não escolhe:
+  // o banco põe o padrão da representada no pedido novo e mantém o do pedido na edição.
+  const commissionPct = canSeeCommissions ? num(input.commission_pct) : 0;
   if (discountPct < 0 || discountPct > 100) return { error: "O desconto geral deve ficar entre 0 e 100." };
   if (freight < 0) return { error: "O frete não pode ser negativo." };
   if (commissionPct < 0 || commissionPct > 100) return { error: "Informe um percentual de comissão entre 0 e 100." };
@@ -128,7 +118,6 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
     freight_mode: mode,
     freight_value: freight,
     discount_pct: discountPct,
-    commission_pct: commissionPct,
     notes: input.notes.trim() || null,
     subtotal: t.subtotal,
     total: t.total,
@@ -190,6 +179,14 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
     orderId = data.id;
   }
 
+  // % de comissão escolhido (só quem vê comissões). O banco já pôs o padrão da representada no pedido novo.
+  if (canSeeCommissions && orderId) {
+    const { error } = await supabase
+      .from("order_commission_terms")
+      .upsert({ order_id: orderId, org_id: orgId, commission_pct: commissionPct, updated_at: new Date().toISOString() }, { onConflict: "order_id" });
+    if (error) return { error: error.message.includes("order_commission_terms") ? "Falta rodar a migração 027 no Supabase." : friendly(error.message) };
+  }
+
   // Grava os itens novos antes de apagar os antigos: se algo falhar, nada se perde.
   const rowsToInsert = items.map((i, position) => {
       const l = lineTotals(lines[position]);
@@ -248,7 +245,7 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
 }
 
 function friendly(message: string): string {
-  if (message.includes("commission_pct") || message.includes("variant_id")) {
+  if (message.includes("variant_id")) {
     return "Falta rodar a migração 008 no Supabase para salvar pedidos no formato novo.";
   }
   return `Não foi possível salvar: ${message}`;

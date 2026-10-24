@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getContext, ROLES, type Role } from "@/lib/session";
 import { fail } from "@/lib/flash";
-import { text, optional } from "@/lib/format";
+import { text, optional, parseNumber } from "@/lib/format";
 
 const PATH = "/equipe";
 
@@ -112,4 +112,42 @@ export async function removeMember(memberId: string) {
   const { error } = await supabase.from("members").delete().eq("id", memberId).eq("org_id", orgId);
   if (error) fail(PATH, `Não foi possível remover: ${error.message}`);
   done("Pessoa removida do escritório.");
+}
+
+// ---------- Regra de comissão do vendedor (migração 029; só quem vê comissões) ----------
+
+export async function saveSellerRule(formData: FormData) {
+  const { supabase, orgId, canSeeCommissions } = await getContext();
+  if (!canSeeCommissions) fail(PATH, "Só administrador, gerente e financeiro definem a comissão dos vendedores.");
+  const sellerId = text(formData, "seller_id") || null;
+  const sellerName = text(formData, "seller_name") || null;
+  const mode = text(formData, "mode");
+  const raw = text(formData, "value");
+  const value = raw ? parseNumber(raw) : NaN;
+  if (!sellerId && !sellerName) fail(PATH, "Vendedor não identificado.");
+  if (mode !== "share" && mode !== "rate") fail(PATH, "Escolha o tipo da regra.");
+  if (!Number.isFinite(value) || value < 0 || value > 100) fail(PATH, "Informe um percentual entre 0 e 100.");
+
+  let q = supabase.from("seller_commission_rules").select("id").eq("org_id", orgId);
+  q = sellerId ? q.eq("seller_id", sellerId) : q.is("seller_id", null).ilike("seller_name", sellerName!);
+  const { data: existing } = await q.maybeSingle();
+  const row = { org_id: orgId, seller_id: sellerId, seller_name: sellerId ? null : sellerName, mode, value, updated_at: new Date().toISOString() };
+  const { error } = existing
+    ? await supabase.from("seller_commission_rules").update(row).eq("id", existing.id)
+    : await supabase.from("seller_commission_rules").insert(row);
+  if (error) {
+    if (error.message.includes("seller_commission_rules")) fail(PATH, "Falta rodar a migração 029 no Supabase.");
+    fail(PATH, `Não foi possível salvar: ${error.message}`);
+  }
+  revalidatePath(PATH);
+  revalidatePath("/relatorios", "layout");
+  redirect(`${PATH}?ok=${encodeURIComponent("Regra de comissão salva.")}#comissao-vendedores`);
+}
+
+export async function deleteSellerRule(id: string) {
+  const { supabase, canSeeCommissions } = await getContext();
+  if (!canSeeCommissions) fail(PATH, "Sem permissão.");
+  await supabase.from("seller_commission_rules").delete().eq("id", id);
+  revalidatePath(PATH);
+  redirect(`${PATH}?ok=${encodeURIComponent("Regra tirada.")}#comissao-vendedores`);
 }

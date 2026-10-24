@@ -2,7 +2,9 @@ import { SOLD_STATUSES } from "@/lib/orders";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getContext, roleLabel, roleHint, ROLES, type Role } from "@/lib/session";
-import { inviteMember, cancelInvite, updateMember, removeMember } from "./actions";
+import { inviteMember, cancelInvite, updateMember, removeMember, saveSellerRule, deleteSellerRule } from "./actions";
+import { RULE_MODES, type SellerRule } from "@/lib/seller-payout";
+import { numText } from "@/lib/orders";
 import { brl, formatDate, todayISO } from "@/lib/format";
 import { avatarUrl } from "@/lib/storage";
 import { Sheet } from "@/components/sheet";
@@ -10,7 +12,7 @@ import { Icon } from "@/components/icons";
 import { ConfirmButton } from "@/components/confirm-button";
 import {
   PageHeader, Field, ErrorNote, OkNote, Badge, Avatar, SheetForm, NewButton, TableShell, CardList,
-  inputCls, th, td, tr, dangerBtn, iconBtn,
+  inputCls, th, td, tr, dangerBtn, iconBtn, ghostBtn,
 } from "@/components/ui";
 
 const PATH = "/equipe";
@@ -30,6 +32,7 @@ const MATRIX: { label: string; roles: Role[] }[] = [
   { label: "Ver pedidos e clientes de toda a equipe", roles: ["owner", "manager", "finance"] },
   { label: "Cadastrar representadas e produtos", roles: ["owner", "manager"] },
   { label: "Registrar faturamento e comissões", roles: ["owner", "manager", "finance"] },
+  { label: "Ver comissões (valores, % e regras)", roles: ["owner", "manager", "finance"] },
   { label: "Contas a pagar", roles: ["owner", "manager", "finance"] },
   { label: "Lançar metas (o vendedor vê as dele)", roles: ["owner", "manager"] },
   { label: "Ver a equipe", roles: ["owner", "manager"] },
@@ -43,7 +46,7 @@ export default async function TeamPage({
   searchParams: Promise<{ erro?: string; ok?: string; novo?: string; editar?: string }>;
 }) {
   const sp = await searchParams;
-  const { supabase, orgId, user, role, isOwner } = await getContext();
+  const { supabase, orgId, user, role, isOwner, canSeeCommissions } = await getContext();
   if (role !== "owner" && role !== "manager") redirect("/");
 
   const monthStart = `${todayISO().slice(0, 7)}-01`;
@@ -78,6 +81,39 @@ export default async function TeamPage({
   }
 
   const people = members ?? [];
+
+  // Regras de comissão dos vendedores (migração 029; só quem vê comissões) e vendedores do sistema antigo (pelo nome).
+  const [{ data: ruleData, error: ruleErr }, { data: legacyData }] = canSeeCommissions
+    ? await Promise.all([
+        supabase.from("seller_commission_rules").select("id, seller_id, seller_name, mode, value").eq("org_id", orgId),
+        supabase.from("orders").select("seller_name").not("seller_name", "is", null).limit(20000),
+      ])
+    : [{ data: [], error: null }, { data: [] }];
+  const rules = (ruleData ?? []) as SellerRule[];
+  const memberNames = new Set(people.map((m) => (m.full_name || m.email || "").trim().toLowerCase()));
+  const legacyNames = [...new Set(((legacyData ?? []) as { seller_name: string }[]).map((o) => o.seller_name.trim()))]
+    .filter((n) => n && !memberNames.has(n.toLowerCase()))
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const ruleRows = [
+    ...people
+      .filter((m) => m.role !== "finance")
+      .map((m) => ({
+        key: `id:${m.user_id}`,
+        name: m.full_name || m.email || "Usuário",
+        sub: roleLabel[m.role as Role],
+        sellerId: m.user_id as string,
+        sellerName: "",
+        rule: rules.find((r) => r.seller_id === m.user_id) ?? null,
+      })),
+    ...legacyNames.map((n) => ({
+      key: `nome:${n.toLowerCase()}`,
+      name: n,
+      sub: "Do sistema antigo (sem login)",
+      sellerId: "",
+      sellerName: n,
+      rule: rules.find((r) => !r.seller_id && (r.seller_name ?? "").toLowerCase() === n.toLowerCase()) ?? null,
+    })),
+  ];
   const editing = people.find((m) => m.id === sp.editar);
   const sheetOpen = isOwner && (sp.novo === "1");
   const nameOf = (m: { full_name: string | null; email: string | null }) => m.full_name || m.email || "Usuário";
@@ -234,6 +270,62 @@ export default async function TeamPage({
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {/* Regra de comissão de cada vendedor (só quem vê comissões) */}
+      {canSeeCommissions ? (
+        <section id="comissao-vendedores" className="mb-6 scroll-mt-24">
+          <h2 className="mb-1 text-sm font-semibold">Comissão dos vendedores</h2>
+          <p className="mb-3 text-[13px] text-muted">
+            Quanto cada vendedor ganha do que o escritório recebe das fábricas. Vale para todas as representadas. O vendedor não vê
+            esta regra. O repasse sai em Relatórios → Repasse aos vendedores.
+          </p>
+          {ruleErr ? (
+            <p className="rounded-lg bg-warn-soft px-3 py-2 text-[13px] text-warn">Para usar, rode a migração 029 no Supabase.</p>
+          ) : (
+            <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+              {ruleRows.map((r) => (
+                <li key={r.key} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{r.name}</p>
+                    <p className="text-xs text-muted">{r.sub}</p>
+                  </div>
+                  <form action={saveSellerRule} className="flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="seller_id" value={r.sellerId} />
+                    <input type="hidden" name="seller_name" value={r.sellerName} />
+                    <select name="mode" defaultValue={r.rule?.mode ?? "share"} aria-label="Tipo da regra" className={`${inputCls} sm:w-56`}>
+                      {RULE_MODES.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="relative">
+                      <input
+                        name="value"
+                        inputMode="decimal"
+                        required
+                        defaultValue={r.rule ? numText(Number(r.rule.value), 3) : ""}
+                        placeholder="0"
+                        aria-label={`Percentual de ${r.name}`}
+                        className={`${inputCls} w-24 pr-7 text-right tabular-nums`}
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">%</span>
+                    </span>
+                    <button className={ghostBtn}>{r.rule ? "Salvar" : "Definir"}</button>
+                    {r.rule ? (
+                      <ConfirmButton message={`Tirar a regra de ${r.name}?`} formAction={deleteSellerRule.bind(null, r.rule.id)} className={iconBtn}>
+                        <Icon name="x" size={14} />
+                        <span className="sr-only">Tirar a regra</span>
+                      </ConfirmButton>
+                    ) : null}
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 text-xs text-muted">{RULE_MODES.map((m) => `${m.label}: ${m.hint}`).join(" ")}</p>
         </section>
       ) : null}
 

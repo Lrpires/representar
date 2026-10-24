@@ -56,8 +56,9 @@ export default async function PrincipalPage({
   const sp = await searchParams;
   const { supabase, canManage, orgId, canSeeCommissions: seeComm } = await getContext();
 
-  const [{ data: p }, { data: contacts }] = await Promise.all([
-    supabase.from("principals").select("*").eq("id", id).maybeSingle(),
+  const [{ data: raw }, { data: contacts }] = await Promise.all([
+    // A regra de comissão vem da tabela protegida (migração 027): para quem não vê comissões, vem vazia.
+    supabase.from("principals").select("*, principal_commission_terms(*)").eq("id", id).maybeSingle(),
     supabase
       .from("principal_contacts")
       .select("id, name, role, phone, email, birthday, is_main")
@@ -65,7 +66,10 @@ export default async function PrincipalPage({
       .order("is_main", { ascending: false })
       .order("name"),
   ]);
-  if (!p) notFound();
+  if (!raw) notFound();
+  const termsRaw = raw.principal_commission_terms as Record<string, unknown> | Record<string, unknown>[] | null;
+  const terms = (Array.isArray(termsRaw) ? termsRaw[0] : termsRaw) ?? {};
+  const p = { ...raw, ...(seeComm ? terms : {}) };
 
   const v = (x: string | number | null | undefined) => (x == null ? "" : String(x));
   const save = updatePrincipal.bind(null, id);

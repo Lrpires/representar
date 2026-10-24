@@ -28,7 +28,7 @@ function check(path: string, label: string, n: number | null, min: number, max: 
 }
 
 export async function updateProduct(id: string, formData: FormData) {
-  const { supabase, canManage, canSeeCommissions } = await getContext();
+  const { supabase, orgId, canManage, canSeeCommissions } = await getContext();
   const path = here(id);
   if (!canManage) fail(path, "Só administrador e gerente podem alterar produtos.");
 
@@ -97,7 +97,6 @@ export async function updateProduct(id: string, formData: FormData) {
       order_multiple: multiple,
       lead_time_days: lead,
       ipi_pct: ipi,
-      ...(canSeeCommissions ? { commission_pct: commission } : {}),
       weight_kg: weight,
       length_cm: length,
       width_cm: width,
@@ -112,6 +111,15 @@ export async function updateProduct(id: string, formData: FormData) {
   if (error) {
     if (error.code === "23505") fail(path, "Já existe outro produto com esse código nessa representada.");
     fail(path, `Não foi possível salvar: ${error.message}`);
+  }
+  // Comissão própria do produto: tabela protegida (migração 027). Vazio = usa a regra da representada.
+  if (canSeeCommissions) {
+    if (commission == null) await supabase.from("product_commission_terms").delete().eq("product_id", id);
+    else {
+      await supabase
+        .from("product_commission_terms")
+        .upsert({ product_id: id, org_id: orgId, commission_pct: commission, updated_at: new Date().toISOString() }, { onConflict: "product_id" });
+    }
   }
   done(id, "Produto salvo.");
 }

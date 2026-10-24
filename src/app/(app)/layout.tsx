@@ -25,6 +25,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   const showTeam = role === "owner" || role === "manager";
   const showFinance = role !== "seller";
+  // Relatórios: administrador, gerente e financeiro (os de comissão, só para quem vê comissões).
+  const showReports = role !== "seller";
   const canOrder = role !== "finance";
   const [counts, settings, profile] = await Promise.all([getCounts(), getSettings(), getProfile()]);
   const menuUser = { name: profile.name, email: profile.email, roleName: profile.roleName, photoUrl: profile.photoUrl };
@@ -71,7 +73,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
         ) : null}
 
-        <SideNav counts={navCounts} showTeam={showTeam} showFinance={showFinance} showCommissions={canSeeCommissions} showPriceTables={settings.usePriceTables} />
+        <SideNav counts={navCounts} showTeam={showTeam} showFinance={showFinance} showCommissions={canSeeCommissions} showPriceTables={settings.usePriceTables} showReports={showReports} />
 
         <div className="mt-auto grid gap-2 pt-6">
           {next ? (
@@ -140,6 +142,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         showPriceTables={settings.usePriceTables}
         showTeam={showTeam}
         showFinance={showFinance}
+        showReports={showReports}
         showCommissions={canSeeCommissions}
         orgName={orgName}
         user={menuUser}

@@ -94,7 +94,7 @@ export async function duplicateOrder(id: string) {
   const ctx = await getContext();
   if (ctx.role === "finance") fail(here(id), "O perfil Financeiro não cria pedidos.");
   const [{ data: o }, { data: items }] = await Promise.all([
-    ctx.supabase.from("orders").select("*").eq("id", id).maybeSingle(),
+    ctx.supabase.from("orders").select("*, order_commission_terms(commission_pct)").eq("id", id).maybeSingle(),
     ctx.supabase.from("order_items").select("*").eq("order_id", id).order("position"),
   ]);
   if (!o) fail("/pedidos", "Pedido não encontrado.");
@@ -112,7 +112,6 @@ export async function duplicateOrder(id: string) {
       freight_mode: o.freight_mode,
       freight_value: o.freight_value,
       discount_pct: o.discount_pct,
-      commission_pct: o.commission_pct,
       notes: o.notes,
       subtotal: o.subtotal,
       total: o.total,
@@ -120,6 +119,13 @@ export async function duplicateOrder(id: string) {
     .select("id")
     .single();
   if (error || !created) fail(here(id), `Não foi possível duplicar: ${error?.message}`);
+
+  // O banco já pôs o % padrão da representada; quem vê comissões leva o % do pedido original.
+  const t = o.order_commission_terms as { commission_pct: number | null } | { commission_pct: number | null }[] | null;
+  const pct = Array.isArray(t) ? t[0]?.commission_pct : t?.commission_pct;
+  if (ctx.canSeeCommissions && pct != null) {
+    await ctx.supabase.from("order_commission_terms").upsert({ order_id: created.id, org_id: ctx.orgId, commission_pct: pct }, { onConflict: "order_id" });
+  }
 
   if ((items ?? []).length) {
     await ctx.supabase.from("order_items").insert(

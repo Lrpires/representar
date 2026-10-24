@@ -75,15 +75,15 @@ function readCommissionRule(formData: FormData, path: string) {
 }
 
 export async function updatePrincipal(id: string, formData: FormData) {
-  const { supabase, canManage, canSeeCommissions } = await getContext();
+  const { supabase, orgId, canManage, canSeeCommissions } = await getContext();
   const path = here(id);
   if (!canManage) fail(path, "Só administrador e gerente podem alterar representadas.");
 
   const name = text(formData, "name");
   if (!name) fail(path, "Informe o nome da representada.");
 
-  // A regra de comissão só é lida e salva por quem enxerga comissões (o gerente não vê esses campos).
-  const commissionRule = canSeeCommissions ? readCommissionRule(formData, path) : {};
+  // A regra de comissão só é lida e salva por quem enxerga comissões; fica na tabela protegida (migração 027).
+  const commissionRule = canSeeCommissions ? readCommissionRule(formData, path) : null;
 
   const cnpjRaw = text(formData, "cnpj");
   if (cnpjRaw && !isValidCnpj(cnpjRaw)) fail(path, "CNPJ inválido");
@@ -118,10 +118,15 @@ export async function updatePrincipal(id: string, formData: FormData) {
       territory: optional(formData, "territory"),
       contact: optional(formData, "contact"),
       notes: optional(formData, "notes"),
-      ...commissionRule,
     })
     .eq("id", id);
   if (error) fail(path, `Não foi possível salvar: ${error.message}`);
+  if (commissionRule) {
+    const { error: e2 } = await supabase
+      .from("principal_commission_terms")
+      .upsert({ principal_id: id, org_id: orgId, ...commissionRule, updated_at: new Date().toISOString() }, { onConflict: "principal_id" });
+    if (e2) fail(path, `Não foi possível salvar a comissão: ${e2.message}`);
+  }
 
   done(id, "Alterações salvas.");
 }

@@ -24,11 +24,17 @@ export default async function PrincipalsPage({
 
   let query = supabase
     .from("principals")
-    .select("*")
+    // % e prazo da comissão vêm da tabela protegida (migração 027): para quem não vê comissões, vêm vazios.
+    .select("*, principal_commission_terms(default_commission_pct, commission_close_mode, commission_days_after)")
     .order("name");
   if (q) query = query.or(`name.ilike.*${q}*,cnpj.ilike.*${q}*`);
   const { data } = await query;
-  const all = data ?? [];
+  type Terms = { default_commission_pct: number | null; commission_close_mode: string; commission_days_after: number | null };
+  const all = (data ?? []).map((row) => {
+    const t = row.principal_commission_terms as unknown as Terms | Terms[] | null;
+    const terms = (Array.isArray(t) ? t[0] : t) ?? { default_commission_pct: null, commission_close_mode: "", commission_days_after: null };
+    return { ...row, ...terms };
+  });
 
   const status = sp.status === "ativas" || sp.status === "inativas" ? sp.status : "todas";
   const nActive = all.filter((p) => p.active).length;

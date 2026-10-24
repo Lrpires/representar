@@ -14,7 +14,7 @@
 ## 2. Como trabalhar comigo (regras do dono do projeto)
 
 - Responder em **português do Brasil**, de forma **simples** (o dono é empreendedor, não programador).
-- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **027**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
+- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **030**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
 - Visual no nível Linear/Notion, **mobile first**, seguindo o design system da marca (seção 7).
 - Commit e push só quando o dono pedir ("faz o commit e o push").
 
@@ -53,11 +53,11 @@ supabase/migrations/    001 a 020
 | `seller` | Vendedor | Só os **próprios** clientes, pedidos, prospecção e meta. **Não vê comissões** nem contas a pagar |
 | `finance` | Financeiro | Pedidos, faturamento, **comissões** e contas a pagar (hoje não enxerga a ficha de clientes — ver pendências) |
 
-Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canManage`, `isOwner`, `isBackOffice` e `canSeeCommissions` (owner + finance). No banco: funções `is_member`, `is_manager`, `is_owner`, `is_back_office`, `can_see_commissions`.
+Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canManage`, `isOwner`, `isBackOffice` e `canSeeCommissions` (owner + manager + finance). No banco: funções `is_member`, `is_manager`, `is_owner`, `is_back_office`, `can_see_commissions`.
 
 ## 5. Módulos e regras de negócio
 
-> **Regra de ouro da comissão:** o vendedor não vê **nada** de comissão — nem valor, nem %, nem menção em textos e confirmações (pedido, nota, PDF, telas). Só quem tem `canSeeCommissions` (administrador e financeiro). O % do pedido não vai para o navegador de quem não vê comissão; para essas pessoas, o servidor usa o % do próprio pedido (na edição) ou o padrão da representada.
+> **Regra de ouro da comissão:** o vendedor não vê **nada** de comissão — nem valor, nem %, nem menção em textos e confirmações (pedido, nota, PDF, telas). Só quem tem `canSeeCommissions` (administrador, gerente e financeiro). No banco (migração 027), % do pedido, regra da representada e % do produto ficam em tabelas próprias que só essas pessoas leem; as comissões da nota são criadas pela função `create_invoice_commissions` (o vendedor lança a nota sem ver o %). O % do pedido não vai para o navegador de quem não vê comissão; para essas pessoas, o servidor usa o % do próprio pedido (na edição) ou o padrão da representada.
 
 **Pedidos**
 - Status: `rascunho` → `enviado` → `parcial` (faturado em parte) → `faturado` → `entregue`; ou `cancelado`.
@@ -85,6 +85,10 @@ Na ficha do pedido, as notas aparecem **por último e só para consulta**, numa 
 **Preço sugerido no pedido**: o último preço que aquele cliente pagou no produto (e na mesma cor, se houver); se ele nunca comprou, o preço fica em branco. Tabelas de preço são opcionais (Configurações → Preços nos pedidos): ligadas, aparecem no menu e o pedido sugere o preço da tabela vigente.
 
 **Lançar nota pelo XML**: só aparecem os pedidos em aberto do cliente e da representada da nota (`src/lib/nfe-match.ts`). A representada é reconhecida pela raiz do CNPJ (matriz e filiais) ou pelo nome na razão social do emitente; o cliente, pelo CNPJ/CPF ou pela razão social. Há busca pelo número do pedido, e o número citado na nota (`xPed` dos itens ou "Pedido 360" nas informações complementares) já vem escolhido, com o selo "Citado na nota". **Todos os itens da nota** são gravados como vieram (`order_invoice_lines`); cada um é ligado a um item do pedido (sugerido pelo código/descrição, dá para trocar ou deixar sem ligação), e a quantidade faturada de cada item do pedido é a soma dos itens da nota ligados a ele (pode passar do que faltava). Lançada à mão, os itens da nota são os do pedido. O painel da nota (Faturamento, `?nota=`) é largo e, quando a nota tem XML guardado, mostra o espelho completo lido do XML (`nfe-mirror.tsx`, rota `/nf/[id]?xml=1`): identificação, emitente, destinatário, produtos com NCM/CFOP, totais, parcelas (Parcela | Vencimento | Valor), transporte e informações complementares.
+
+**Repasse aos vendedores** (migração 029, só quem vê comissões): cada vendedor tem **uma regra** (Equipe → Comissão dos vendedores), para todas as representadas: **% da comissão do escritório** (ex.: 40%) ou **% do valor faturado** (ex.: 1%, proporcional ao que o escritório recebeu daquela comissão). O vendedor ganha **quando o escritório recebe** (recebimentos em `commission_receipts`). Vendedores do sistema antigo (sem login) têm regra pelo nome (`seller_name`). Cálculo em `src/lib/seller-payout.ts`. O vendedor não vê nada disso.
+
+**Relatórios** (`/relatorios`, administrador, gerente e financeiro): Repasse aos vendedores (por período de recebimento, com "Registrar pagamento" e desfazer, para não pagar duas vezes), Comissões por representada (previsto, recebido, em aberto, atrasado), Vendas por vendedor, por cliente (curva ABC), por representada e Produtos mais vendidos (todas as cores juntas). Todos com filtro de período e representada e download em Excel (`/relatorios/planilha`). Dados em `src/lib/reports.ts`.
 
 **Comissões**: nascem de cada nota (valor da nota × % do pedido), com vencimento pela regra da representada. Se a representada paga **no faturamento**, é uma comissão só, com o valor completo, contada da emissão. Se paga **na liquidez**, nasce **uma comissão por parcela** da nota (duplicata), proporcional ao valor dela e vencendo pela regra aplicada ao vencimento da parcela (ex.: "dia 10 do mês seguinte": parcela de 10/12 → comissão em janeiro). As parcelas vêm do XML (`<dup>`) ou são digitadas/geradas pelo prazo do pedido ao lançar a nota (migração 021). Recebimento em **várias partes** (cada pagamento é lançado e somado; enquanto faltar, fica em aberto) e **encerramento manual com motivo** (devolução parcial, inadimplência…), que pode ser reaberto. Busca pelo número da NF em todos os meses (migração 020). Cancelar o pedido cancela as comissões a receber (gatilho no banco). Só administrador e financeiro veem.
 
@@ -123,6 +127,9 @@ Na ficha do pedido, as notas aparecem **por último e só para consulta**, numa 
 | 024 | Escritório aberto: consultas levam `x-org-id` e as permissões valem só para esse escritório |
 | 025 | Itens da nota como vieram na NF (`order_invoice_lines`), ligados ou não a um item do pedido |
 | 026 | Histórico de observações do pedido (`order_notes`) |
+| 027 | Comissão protegida: `order_commission_terms`, `principal_commission_terms`, `product_commission_terms` (só quem vê comissões lê), % padrão do pedido por gatilho, `create_invoice_commissions` (comissões da nota calculadas no banco), gerente passa a ver comissões |
+| 028 | Remove as colunas antigas de comissão de `orders`, `principals` e `products` (rodar depois do sistema novo no ar) |
+| 029 | Repasse aos vendedores: `seller_commission_rules` (regra por vendedor, com login ou pelo nome do sistema antigo), `seller_payouts` e `commission_receipts.seller_payout_id` |
 
 Storage: `product-images` (público), `invoices` (privado, link temporário), `avatars`, `logos`.
 
@@ -144,7 +151,7 @@ Storage: `product-images` (público), `invoices` (privado, link temporário), `a
 
 ## 9. Pendências e próximos passos
 
-- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 027 liberando leitura de clientes ao financeiro.
+- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 030 liberando leitura de clientes ao financeiro.
 - **Importação: próxima etapa** — notas fiscais em lote (vários XMLs de uma vez, trazendo o histórico de faturamento e comissões) e pedidos antigos por planilha. Representadas, clientes e produtos já importam.
 - **Cobrança/assinatura, teste grátis e limites por plano** — não existem.
 - Ícones sem versão no design system (lixeira, editar, relógio…) usam o desenho antigo com o traço novo.

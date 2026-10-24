@@ -35,7 +35,7 @@ export async function createPrincipal(formData: FormData) {
   if (state && !/^[A-Z]{2}$/.test(state)) fail(PATH, "Use a sigla do estado com 2 letras (ex.: PE).");
   const zip = text(formData, "zip").replace(/\D/g, "");
 
-  const { error } = await supabase.from("principals").insert({
+  const { data: created, error } = await supabase.from("principals").insert({
     org_id: orgId,
     name,
     legal_name: optional(formData, "legal_name"),
@@ -47,14 +47,23 @@ export async function createPrincipal(formData: FormData) {
     district: optional(formData, "district"),
     city: optional(formData, "city"),
     state: state || null,
-    default_commission_pct: commission,
     contact: optional(formData, "contact"),
-    // "Dias para pagamento": a comissão vence N dias depois do faturamento.
-    ...(days !== null
-      ? { commission_trigger: "faturamento", commission_close_mode: "dias_apos_evento", commission_days_after: days }
-      : {}),
-  });
-  if (error) fail(PATH, `Não foi possível salvar: ${error.message}`);
+  }).select("id").single();
+  if (error || !created) fail(PATH, `Não foi possível salvar: ${error?.message}`);
+
+  // Regra de comissão (tabela protegida, migração 027; o banco cria a linha com o padrão ao cadastrar).
+  await supabase
+    .from("principal_commission_terms")
+    .upsert(
+      {
+        principal_id: created.id,
+        org_id: orgId,
+        default_commission_pct: commission,
+        // "Dias para pagamento": a comissão vence N dias depois do faturamento.
+        ...(days !== null ? { commission_trigger: "faturamento", commission_close_mode: "dias_apos_evento", commission_days_after: days } : {}),
+      },
+      { onConflict: "principal_id" },
+    );
 
   revalidatePath(PATH);
   redirect(`${PATH}?ok=${encodeURIComponent(`${name} cadastrada.`)}`);

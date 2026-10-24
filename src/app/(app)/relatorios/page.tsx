@@ -24,25 +24,25 @@ const REPORTS: Report[] = [
   {
     href: "/relatorios/vendas?por=vendedor",
     title: "Vendas por vendedor",
-    text: "Pedidos e valor vendido por vendedor, com a participação de cada um.",
+    text: "Vendido, comissão gerada e % médio de cada vendedor, com o repasse estimado e o que fica para o escritório.",
     icon: "users",
   },
   {
     href: "/relatorios/vendas?por=cliente",
     title: "Vendas por cliente (curva ABC)",
-    text: "Quem mais compra: clientes A (80% do valor), B (até 95%) e C (o resto).",
+    text: "Clientes A, B e C pelo valor vendido ou pela comissão que geram (um pedido de 5% pesa mais que um de 3%).",
     icon: "target",
   },
   {
     href: "/relatorios/vendas?por=representada",
     title: "Vendas por representada",
-    text: "Quanto cada fábrica vendeu no período.",
+    text: "Vendido, comissão gerada e % médio de cada fábrica no período.",
     icon: "factory",
   },
   {
     href: "/relatorios/vendas?por=produto",
     title: "Produtos mais vendidos",
-    text: "Quantidade e valor por produto (todas as cores juntas).",
+    text: "Quantidade, valor e comissão por produto (todas as cores juntas).",
     icon: "box",
   },
 ];

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getContext } from "@/lib/session";
 import { resolvePeriod } from "@/lib/cockpit";
-import { loadSales, type SalesBy } from "@/lib/reports";
+import { loadSales, type SalesBy, type SalesSort } from "@/lib/reports";
+import { ruleText } from "@/lib/seller-payout";
 import { qtyText } from "@/lib/orders";
 import { brl, pct, todayISO } from "@/lib/format";
 import { CockpitShell } from "@/components/cockpit/filters";
@@ -20,7 +21,7 @@ const BY: { value: SalesBy; label: string; title: string; col: string }[] = [
 export default async function SalesReport({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; de?: string; ate?: string; rep?: string; por?: string }>;
+  searchParams: Promise<{ periodo?: string; de?: string; ate?: string; rep?: string; por?: string; ordem?: string }>;
 }) {
   const sp = await searchParams;
   const { supabase, isBackOffice } = await getContext();
@@ -28,12 +29,16 @@ export default async function SalesReport({
   const by = (BY.find((b) => b.value === sp.por) ?? BY[0]).value;
   const def = BY.find((b) => b.value === by)!;
   const P = resolvePeriod(sp.periodo, sp.de, sp.ate, todayISO());
+  const sort: SalesSort = sp.ordem === "comissao" ? "comissao" : "valor";
   const base = Object.entries({ periodo: sp.periodo, de: sp.de, ate: sp.ate, rep: sp.rep }).filter(([, v]) => v) as [string, string][];
-  const params = new URLSearchParams([...base, ["por", by]]);
-  const tab = (v: SalesBy) => `/relatorios/vendas?${new URLSearchParams([...base, ["por", v]])}`;
+  const withSort = (list: [string, string][]) => (sort === "comissao" ? [...list, ["ordem", "comissao"] as [string, string]] : list);
+  const params = new URLSearchParams(withSort([...base, ["por", by]]));
+  const tab = (v: SalesBy) => `/relatorios/vendas?${new URLSearchParams(withSort([...base, ["por", v]]))}`;
+  const sortHref = (o: SalesSort) =>
+    `/relatorios/vendas?${new URLSearchParams([...base, ["por", by], ...(o === "comissao" ? [["ordem", "comissao"] as [string, string]] : [])])}`;
 
-  const [{ rows, total }, { data: principals }] = await Promise.all([
-    loadSales(P, by, sp.rep),
+  const [{ rows, total, totalCommission, showCommission }, { data: principals }] = await Promise.all([
+    loadSales(P, by, sp.rep, sort),
     supabase.from("principals").select("id, name").order("name"),
   ]);
   const orders = by === "produto" ? null : rows.reduce((s, r) => s + r.orders, 0);
@@ -61,8 +66,22 @@ export default async function SalesReport({
           </Link>
         ))}
       </nav>
+      {showCommission ? (
+        <div className="-mt-1 mb-4 flex flex-wrap items-center gap-2 text-[13px]">
+          <span className="text-muted">Ordenar e calcular a curva por</span>
+          {(["valor", "comissao"] as SalesSort[]).map((o) => (
+            <Link
+              key={o}
+              href={sortHref(o)}
+              className={`rounded-md border px-2.5 py-1 font-medium transition ${o === sort ? "border-ink bg-ink text-on-ink" : "border-line-strong text-ink-2 hover:bg-hover"}`}
+            >
+              {o === "valor" ? "Valor vendido" : "Comissão (resultado)"}
+            </Link>
+          ))}
+        </div>
+      ) : null}
       <CockpitShell principals={(principals ?? []).map((p) => ({ value: p.id, label: p.name }))} sellers={null} periodLabel={P.label} compareLabel="Pedidos enviados e faturados, pela data do pedido">
-        <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line md:grid-cols-3 [&>div]:bg-surface [&>div]:p-4" style={{ gap: 1 }}>
+        <dl className="mb-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-line md:grid-cols-4 [&>div]:bg-surface [&>div]:p-4" style={{ gap: 1 }}>
           <div>
             <dt className="text-[13px] text-muted">Vendido</dt>
             <dd className="mt-1 text-lg font-semibold tabular-nums">{brl(total)}</dd>
@@ -71,6 +90,14 @@ export default async function SalesReport({
             <dt className="text-[13px] text-muted">{def.col === "Produto" ? "Produtos diferentes" : `${def.col}s`}</dt>
             <dd className="mt-1 text-lg font-semibold tabular-nums">{rows.length}</dd>
           </div>
+          {showCommission ? (
+            <div>
+              <dt className="text-[13px] text-muted">Comissão gerada</dt>
+              <dd className="mt-1 text-lg font-semibold tabular-nums">
+                {brl(totalCommission)} <span className="text-xs font-normal text-muted">{pct(total ? (totalCommission / total) * 100 : 0)} médio</span>
+              </dd>
+            </div>
+          ) : null}
           {orders != null ? (
             <div>
               <dt className="text-[13px] text-muted">Ticket médio por pedido</dt>
@@ -89,6 +116,18 @@ export default async function SalesReport({
                   {by === "cliente" ? <th className="px-3 py-2 text-center font-medium">Curva</th> : null}
                   {by === "produto" ? <th className="px-3 py-2 text-right font-medium">Quantidade</th> : <th className="px-3 py-2 text-right font-medium">Pedidos</th>}
                   <th className="px-3 py-2 text-right font-medium">Valor</th>
+                  {showCommission ? (
+                    <>
+                      <th className="px-3 py-2 text-right font-medium">Comissão</th>
+                      <th className="px-3 py-2 text-right font-medium">% médio</th>
+                    </>
+                  ) : null}
+                  {showCommission && by === "vendedor" ? (
+                    <>
+                      <th className="px-3 py-2 text-right font-medium">Repasse estimado</th>
+                      <th className="px-3 py-2 text-right font-medium">Fica no escritório</th>
+                    </>
+                  ) : null}
                   <th className="py-2 pl-3 pr-5 text-right font-medium">Participação</th>
                 </tr>
               </thead>
@@ -107,12 +146,29 @@ export default async function SalesReport({
                     ) : null}
                     <td className="px-3 py-2.5 text-right tabular-nums">{by === "produto" ? qtyText(r.qty ?? 0) : r.orders}</td>
                     <td className="px-3 py-2.5 text-right font-medium tabular-nums">{brl(r.value)}</td>
+                    {showCommission ? (
+                      <>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{brl(r.commission)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-ink-2">{pct(r.avgPct)}</td>
+                      </>
+                    ) : null}
+                    {showCommission && by === "vendedor" ? (
+                      <>
+                        <td className="px-3 py-2.5 text-right tabular-nums" title={ruleText(r.rule ?? null, (n) => pct(n))}>
+                          {r.rule ? brl(r.payout ?? 0) : <span className="text-xs text-warn">sem regra</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">
+                          {brl(r.office ?? 0)}
+                          {r.commission ? <span className="block text-[11px] text-muted">{pct(((r.office ?? 0) / r.commission) * 100)} da comissão</span> : null}
+                        </td>
+                      </>
+                    ) : null}
                     <td className="py-2.5 pl-3 pr-5 text-right tabular-nums text-ink-2">{pct(r.share * 100)}</td>
                   </tr>
                 ))}
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-8 text-center text-muted">
+                    <td colSpan={10} className="px-5 py-8 text-center text-muted">
                       Nenhuma venda no período.
                     </td>
                   </tr>

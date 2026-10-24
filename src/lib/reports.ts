@@ -163,28 +163,51 @@ export async function loadCommissionsByPrincipal(P: Pick<Period, "start" | "end"
 /* ---------------------------------------------------------------- Vendas */
 
 export type SalesBy = "vendedor" | "cliente" | "representada" | "produto";
-export type SalesRow = { key: string; name: string; sub?: string; orders: number; value: number; qty?: number; share: number; cumulative: number; abc: "A" | "B" | "C" };
+export type SalesSort = "valor" | "comissao";
+export type SalesRow = {
+  key: string; name: string; sub?: string; orders: number; value: number; qty?: number;
+  // Resultado (só para quem vê comissões): comissão que as vendas geram para o escritório e o % médio ponderado.
+  commission: number; avgPct: number;
+  // Por vendedor: repasse estimado pela regra dele e o que fica para o escritório.
+  payout?: number; office?: number; rule?: SellerRule | null;
+  share: number; cumulative: number; abc: "A" | "B" | "C";
+};
 
-// Vendido no período (pedidos enviados ou faturados), agrupado. Clientes com curva ABC (A = 80% do valor, B = até 95%).
-export async function loadSales(P: Pick<Period, "start" | "end">, by: SalesBy, rep?: string) {
-  const { supabase, orgId } = await getContext();
+// Vendido no período (pedidos enviados ou faturados), agrupado. Curva ABC (A = 80%, B = até 95%) pelo critério da ordem:
+// valor vendido ou comissão gerada (o resultado: um pedido de 5% pesa mais que um de 3%).
+// A comissão é calculada pelo % de cada pedido e só aparece para quem vê comissões.
+export async function loadSales(P: Pick<Period, "start" | "end">, by: SalesBy, rep?: string, sort: SalesSort = "valor") {
+  const { supabase, orgId, canSeeCommissions } = await getContext();
   const names = by === "vendedor" ? await memberNames(supabase, orgId) : new Map<string, string>();
-  const groups = new Map<string, { name: string; sub?: string; orders: Set<string>; value: number; qty: number }>();
-  const add = (key: string, name: string, orderId: string, value: number, qty = 0, sub?: string) => {
+  const groups = new Map<string, { name: string; sub?: string; orders: Set<string>; value: number; qty: number; commission: number }>();
+  const add = (key: string, name: string, orderId: string, value: number, qty = 0, sub?: string, pct = 0) => {
     let g = groups.get(key);
-    if (!g) groups.set(key, (g = { name, sub, orders: new Set(), value: 0, qty: 0 }));
+    if (!g) groups.set(key, (g = { name, sub, orders: new Set(), value: 0, qty: 0, commission: 0 }));
     g.orders.add(orderId);
     g.value += value;
     g.qty += qty;
+    g.commission += (value * pct) / 100;
+  };
+  const pctOf = (o: { order_commission_terms?: unknown } | null | undefined) => {
+    if (!canSeeCommissions || !o) return 0;
+    const t = one(o.order_commission_terms as { commission_pct: number | null } | { commission_pct: number | null }[] | null);
+    return Number(t?.commission_pct ?? 0);
   };
 
   let error: unknown = null;
   if (by === "produto") {
-    type I = { order_id: string; variant_id: string | null; code: string | null; description: string; qty: number; line_total: number; orders: { principals: { name: string } | null } | null };
+    type I = {
+      order_id: string; variant_id: string | null; code: string | null; description: string; qty: number; line_total: number;
+      orders: { discount_pct: number; principals: { name: string } | null; order_commission_terms?: unknown } | null;
+    };
     const res = await fetchAll<I>((a, b) => {
       let q = supabase
         .from("order_items")
-        .select("order_id, variant_id, code, description, qty, line_total, orders!inner(order_date, status, principal_id, principals(name))")
+        .select(
+          `order_id, variant_id, code, description, qty, line_total, orders!inner(order_date, status, principal_id, discount_pct, principals(name)${
+            canSeeCommissions ? ", order_commission_terms(commission_pct)" : ""
+          })`,
+        )
         .in("orders.status", SOLD_STATUSES)
         .gte("orders.order_date", P.start)
         .lte("orders.order_date", P.end);
@@ -196,17 +219,25 @@ export async function loadSales(P: Pick<Period, "start" | "end">, by: SalesBy, r
       // Produto do catálogo conta uma vez, qualquer que seja a cor ("Malha — Preto" e "Malha — Azul").
       const name = i.variant_id ? i.description.split(" — ")[0] : i.description;
       const key = i.variant_id ? `v:${i.variant_id}` : `d:${(i.code ?? "").toLowerCase()}|${name.toLowerCase()}`;
-      add(key, name, i.order_id, Number(i.line_total), Number(i.qty), [i.code, one(one(i.orders)?.principals)?.name].filter(Boolean).join(" · "));
+      const o = one(i.orders);
+      // O item conta com o desconto geral do pedido (a comissão é sobre o valor líquido).
+      const net = Number(i.line_total) * (1 - Number(o?.discount_pct ?? 0) / 100);
+      add(key, name, i.order_id, net, Number(i.qty), [i.code, one(o?.principals)?.name].filter(Boolean).join(" · "), pctOf(o));
     }
   } else {
     type O = {
       id: string; total: number; seller_id: string; seller_name?: string | null; customer_id: string; principal_id: string;
       customers: { name: string; city?: string | null; state?: string | null } | null; principals: { name: string } | null;
+      order_commission_terms?: unknown; freight_value: number;
     };
     const res = await fetchAll<O>((a, b) => {
       let q = supabase
         .from("orders")
-        .select("id, total, seller_id, seller_name, customer_id, principal_id, customers(name, city, state), principals(name)")
+        .select(
+          `id, total, freight_value, seller_id, seller_name, customer_id, principal_id, customers(name, city, state), principals(name)${
+            canSeeCommissions ? ", order_commission_terms(commission_pct)" : ""
+          }`,
+        )
         .in("status", SOLD_STATUSES)
         .gte("order_date", P.start)
         .lte("order_date", P.end);
@@ -216,36 +247,61 @@ export async function loadSales(P: Pick<Period, "start" | "end">, by: SalesBy, r
     error = res.error;
     for (const o of res.data) {
       const v = Number(o.total);
+      // A comissão é sobre o valor dos produtos (sem o frete).
+      const pct = pctOf(o);
+      const cpct = v ? (pct * Math.max(v - Number(o.freight_value ?? 0), 0)) / v : 0;
       if (by === "vendedor") {
         const key = sellerKey(o);
-        add(key, sellerLabel(key, names) ?? (o.seller_name ?? "").trim(), o.id, v);
+        add(key, sellerLabel(key, names) ?? (o.seller_name ?? "").trim(), o.id, v, 0, undefined, cpct);
       } else if (by === "cliente") {
         const c = one(o.customers);
-        add(o.customer_id, c?.name ?? "Cliente", o.id, v, 0, [c?.city, c?.state].filter(Boolean).join(" / "));
+        add(o.customer_id, c?.name ?? "Cliente", o.id, v, 0, [c?.city, c?.state].filter(Boolean).join(" / "), cpct);
       } else {
-        add(o.principal_id, one(o.principals)?.name ?? "—", o.id, v);
+        add(o.principal_id, one(o.principals)?.name ?? "—", o.id, v, 0, undefined, cpct);
       }
     }
   }
 
+  // Repasse estimado por vendedor (regra dele) e o que fica para o escritório.
+  const rules =
+    by === "vendedor" && canSeeCommissions
+      ? (((await supabase.from("seller_commission_rules").select("id, seller_id, seller_name, mode, value").eq("org_id", orgId)).data ?? []) as SellerRule[]).map(
+          (r) => ({ ...r, value: Number(r.value) }),
+        )
+      : [];
+
+  const bySort = sort === "comissao" && canSeeCommissions;
+  const metric = (g: { value: number; commission: number }) => (bySort ? g.commission : g.value);
   const total = [...groups.values()].reduce((s, g) => s + g.value, 0);
+  const totalCommission = [...groups.values()].reduce((s, g) => s + g.commission, 0);
+  const totalMetric = bySort ? totalCommission : total;
   let acc = 0;
   const rows: SalesRow[] = [...groups.entries()]
-    .sort((a, b) => b[1].value - a[1].value)
+    .sort((a, b) => metric(b[1]) - metric(a[1]))
     .map(([key, g]) => {
-      const share = total ? g.value / total : 0;
+      const share = totalMetric ? metric(g) / totalMetric : 0;
       acc += share;
-      return {
+      const row: SalesRow = {
         key,
         name: g.name,
         sub: g.sub,
         orders: g.orders.size,
         value: r2(g.value),
         qty: by === "produto" ? g.qty : undefined,
+        commission: canSeeCommissions ? r2(g.commission) : 0,
+        avgPct: canSeeCommissions && g.value ? (g.commission / g.value) * 100 : 0,
         share,
         cumulative: acc,
         abc: acc - share < 0.8 ? "A" : acc - share < 0.95 ? "B" : "C",
       };
+      if (by === "vendedor" && canSeeCommissions) {
+        const rule = ruleFor(rules, key, sellerLabel(key, names));
+        const payout = !rule ? 0 : rule.mode === "share" ? (g.commission * rule.value) / 100 : (g.value * rule.value) / 100;
+        row.rule = rule;
+        row.payout = r2(payout);
+        row.office = r2(g.commission - payout);
+      }
+      return row;
     });
-  return { rows, total: r2(total), error };
+  return { rows, total: r2(total), totalCommission: canSeeCommissions ? r2(totalCommission) : 0, showCommission: canSeeCommissions, error };
 }

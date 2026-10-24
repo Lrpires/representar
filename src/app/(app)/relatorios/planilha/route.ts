@@ -50,14 +50,19 @@ export async function GET(req: Request) {
     const by = (["vendedor", "cliente", "representada", "produto"] as SalesBy[]).find((b) => b === url.searchParams.get("por")) ?? "vendedor";
     const label = { vendedor: "Vendedor", cliente: "Cliente", representada: "Representada", produto: "Produto" }[by];
     title = by === "produto" ? "Produtos mais vendidos" : `Vendas por ${label.toLowerCase()}`;
-    const { rows: data } = await loadSales(P, by, rep);
+    const sort = url.searchParams.get("ordem") === "comissao" ? "comissao" : "valor";
+    const { rows: data, showCommission } = await loadSales(P, by, rep, sort);
     cols = [
       { header: label, width: 40 },
       { header: by === "produto" ? "Código / representada" : by === "cliente" ? "Cidade / UF" : "", width: 24 },
       ...(by === "cliente" ? [{ header: "Curva ABC", width: 10 }] : []),
       by === "produto" ? { header: "Quantidade", width: 14, qty: true } : { header: "Pedidos", width: 10 },
       { header: "Valor vendido", width: 16, money: true },
-      { header: "Participação", width: 12, pct: true },
+      ...(showCommission ? [{ header: "Comissão", width: 14, money: true }, { header: "% médio", width: 10, pct: true }] : []),
+      ...(showCommission && by === "vendedor"
+        ? [{ header: "Repasse estimado", width: 16, money: true }, { header: "Fica no escritório", width: 16, money: true }]
+        : []),
+      { header: sort === "comissao" ? "Participação na comissão" : "Participação", width: 14, pct: true },
       { header: "Acumulado", width: 12, pct: true },
     ];
     rows = data.map((x) => [
@@ -66,6 +71,8 @@ export async function GET(req: Request) {
       ...(by === "cliente" ? [x.abc] : []),
       by === "produto" ? x.qty ?? 0 : x.orders,
       x.value,
+      ...(showCommission ? [x.commission, x.avgPct / 100] : []),
+      ...(showCommission && by === "vendedor" ? [x.rule ? x.payout ?? 0 : null, x.office ?? 0] : []),
       x.share,
       x.cumulative,
     ]);

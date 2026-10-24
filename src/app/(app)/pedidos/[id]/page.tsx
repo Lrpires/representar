@@ -251,7 +251,7 @@ export default async function OrderPage({
               <form action={cancelOrder.bind(null, id)}>
                 <ConfirmButton
                   message={
-                    o.status !== "enviado"
+                    o.status !== "enviado" && canSeeCommissions
                       ? "Cancelar este pedido também cancela a comissão. Continuar?"
                       : "Cancelar este pedido?"
                   }
@@ -284,7 +284,7 @@ export default async function OrderPage({
           <p className="mt-4 flex items-center gap-2 rounded-lg bg-alert-soft px-3 py-2.5 text-[13px] text-alert">
             <Icon name="alert" size={15} />
             Pedido cancelado{o.cancel_reason ? `: ${o.cancel_reason}` : "."}
-            {o.invoiced_at ? " A comissão deste pedido foi cancelada." : ""}
+            {o.invoiced_at && canSeeCommissions ? " A comissão deste pedido foi cancelada." : ""}
           </p>
         ) : null}
       </section>
@@ -295,8 +295,8 @@ export default async function OrderPage({
           <Icon name="info" size={16} className="mt-0.5 shrink-0 text-muted" />
           <span>
             Você está alterando um pedido já enviado. Ele continua como está (enviado ou faturado em parte). Item que já
-            saiu em nota não pode ser tirado nem ficar com menos do que foi faturado; as notas já lançadas e as comissões
-            delas não mudam.
+            saiu em nota não pode ser tirado nem ficar com menos do que foi faturado; as notas já lançadas
+            {canSeeCommissions ? " e as comissões delas" : ""} não mudam.
           </span>
         </div>
       ) : null}
@@ -315,7 +315,7 @@ export default async function OrderPage({
             freight_mode: o.freight_mode ?? "",
             freight_value: Number(o.freight_value) ? priceText(Number(o.freight_value)) : "",
             discount_pct: Number(o.discount_pct) ? numText(Number(o.discount_pct), 2) : "",
-            commission_pct: o.commission_pct != null ? numText(commissionPct, 2) : "",
+            commission_pct: canSeeCommissions && o.commission_pct != null ? numText(commissionPct, 2) : "",
             notes: o.notes ?? "",
             items: (items ?? []).map((i) => ({
               id: i.id,
@@ -468,7 +468,8 @@ export default async function OrderPage({
             <input name="close_note" className={inputCls} />
           </Field>
           <p className="rounded-lg bg-subtle px-3 py-2.5 text-[13px] text-ink-2 sm:col-span-2">
-            As comissões das notas já lançadas continuam valendo. Se mudar de ideia, dá para reabrir depois.
+            {canSeeCommissions ? "As comissões das notas já lançadas continuam valendo. " : "As notas já lançadas continuam valendo. "}
+            Se mudar de ideia, dá para reabrir depois.
           </p>
         </SheetForm>
       </Sheet>

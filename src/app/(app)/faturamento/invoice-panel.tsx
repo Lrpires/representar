@@ -297,7 +297,7 @@ export async function InvoicePanel({
               ) : (
                 <form className="sm:mr-auto">
                   <ConfirmButton
-                    message={`Excluir a NF ${detail.number ?? ""}? A comissão desta nota também será apagada e o pedido volta a esperar essas quantidades. Não dá para desfazer.`}
+                    message={`Excluir a NF ${detail.number ?? ""}?${canSeeCommissions ? " A comissão desta nota também será apagada e" : ""} o pedido volta a esperar essas quantidades. Não dá para desfazer.`}
                     formAction={deleteInvoice.bind(null, detail.id)}
                     className={dangerBtn}
                   >

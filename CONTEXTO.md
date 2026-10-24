@@ -57,6 +57,8 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 
 ## 5. Módulos e regras de negócio
 
+> **Regra de ouro da comissão:** o vendedor não vê **nada** de comissão — nem valor, nem %, nem menção em textos e confirmações (pedido, nota, PDF, telas). Só quem tem `canSeeCommissions` (administrador e financeiro). O % do pedido não vai para o navegador de quem não vê comissão; para essas pessoas, o servidor usa o % do próprio pedido (na edição) ou o padrão da representada.
+
 **Pedidos**
 - Status: `rascunho` → `enviado` → `parcial` (faturado em parte) → `faturado` → `entregue`; ou `cancelado`.
 - Itens do catálogo ou digitados à mão. **Numeração separada por representada** (cada uma tem a sua sequência 1, 2, 3…), com início, prefixo e sufixo configuráveis (migração 019).

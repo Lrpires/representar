@@ -17,7 +17,7 @@ type TableRow = { price_items: { variant_id: string; price: number }[] | null };
 
 // Tudo o que o editor de pedido precisa para funcionar sem ir ao servidor a cada tecla.
 export async function loadEditorData() {
-  const { supabase, orgId, canManage } = await getContext();
+  const { supabase, orgId, canManage, canSeeCommissions } = await getContext();
   const settings = await getSettings();
   const today = todayISO();
 
@@ -153,7 +153,8 @@ export async function loadEditorData() {
   const editorPrincipals: EditorPrincipal[] = (principals ?? []).map((p) => ({
     id: p.id,
     name: p.name,
-    commission: p.default_commission_pct == null ? null : Number(p.default_commission_pct),
+    // O % padrão só vai para o navegador de quem vê comissões.
+    commission: !canSeeCommissions || p.default_commission_pct == null ? null : Number(p.default_commission_pct),
   }));
 
   const units: EditorUnit[] = UNITS.filter((u) => settings.units.includes(u.value));

@@ -288,7 +288,7 @@ export async function registerInvoice(orderId: string, formData: FormData) {
 // Exclui uma nota fiscal (só pela área de Faturamento). As comissões dela são apagadas junto.
 // A nota cuja comissão já foi recebida não pode ser excluída: o recebimento precisa ser desfeito antes.
 export async function deleteInvoice(invoiceId: string) {
-  const { supabase, isBackOffice, user } = await getContext();
+  const { supabase, isBackOffice, user, canSeeCommissions } = await getContext();
   const BILLING = "/faturamento";
   const detail = `${BILLING}?nota=${invoiceId}`;
   const { data: inv } = await supabase
@@ -303,7 +303,12 @@ export async function deleteInvoice(invoiceId: string) {
   // Quem não vê comissões pergunta ao banco se a desta nota já foi recebida.
   const { data: paidRpc } = await supabase.rpc("invoice_commission_received", { p_invoice: invoiceId });
   if (commission?.status === "recebida" || paidRpc === true) {
-    fail(detail, "A comissão desta nota já teve recebimento. Apague os recebimentos em Comissões antes de excluir a nota.");
+    fail(
+      detail,
+      canSeeCommissions
+        ? "A comissão desta nota já teve recebimento. Apague os recebimentos em Comissões antes de excluir a nota."
+        : "Esta nota não pode mais ser excluída. Fale com o administrador do escritório.",
+    );
   }
 
   // Apaga a nota; as comissões dela saem junto (ligação "em cascata" no banco).
@@ -316,7 +321,10 @@ export async function deleteInvoice(invoiceId: string) {
   revalidatePath(BILLING);
   revalidatePath("/comissoes");
   revalidatePath("/");
-  redirect(`${BILLING}?ok=${encodeURIComponent(`NF ${inv.number ?? ""} excluída, junto com a comissão dela. O pedido voltou a esperar essa quantidade.`)}`);
+  const done = canSeeCommissions
+    ? `NF ${inv.number ?? ""} excluída, junto com a comissão dela. O pedido voltou a esperar essa quantidade.`
+    : `NF ${inv.number ?? ""} excluída. O pedido voltou a esperar essa quantidade.`;
+  redirect(`${BILLING}?ok=${encodeURIComponent(done)}`);
 }
 
 // Encerra o pedido com saldo não faturado (ex.: a fábrica não vai mandar o restante).

@@ -44,7 +44,7 @@ const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 // intent "send" já marca como Enviado. Em caso de erro devolve a mensagem.
 export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Promise<{ error: string }> {
   const ctx = await getContext();
-  const { supabase, orgId, user, role, canManage } = ctx;
+  const { supabase, orgId, user, role, canManage, canSeeCommissions } = ctx;
   if (role === "finance") return { error: "O perfil Financeiro não cria nem altera pedidos." };
 
   if (!input.customer_id) return { error: "Escolha o cliente." };
@@ -66,7 +66,19 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
 
   const discountPct = num(input.discount_pct);
   const freight = num(input.freight_value);
-  const commissionPct = num(input.commission_pct);
+  // Quem não vê comissão (vendedor, gerente) não escolhe o %: vale o do pedido (na edição) ou o padrão da representada.
+  let commissionPct = num(input.commission_pct);
+  if (!canSeeCommissions) {
+    const { data: prev } = input.id
+      ? await supabase.from("orders").select("commission_pct, principal_id").eq("id", input.id).maybeSingle()
+      : { data: null };
+    if (prev && prev.principal_id === input.principal_id && prev.commission_pct != null) {
+      commissionPct = Number(prev.commission_pct);
+    } else {
+      const { data: pr } = await supabase.from("principals").select("default_commission_pct").eq("id", input.principal_id).maybeSingle();
+      commissionPct = Number(pr?.default_commission_pct ?? 0);
+    }
+  }
   if (discountPct < 0 || discountPct > 100) return { error: "O desconto geral deve ficar entre 0 e 100." };
   if (freight < 0) return { error: "O frete não pode ser negativo." };
   if (commissionPct < 0 || commissionPct > 100) return { error: "Informe um percentual de comissão entre 0 e 100." };

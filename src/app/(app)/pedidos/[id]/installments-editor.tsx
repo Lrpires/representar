@@ -107,7 +107,7 @@ export function InstallmentsEditor({
         {auto && rows.length
           ? `Calculadas pelo prazo do pedido, a partir de ${formatDate(rows[0].due)}. Ajuste se a nota tiver vencimentos diferentes. `
           : ""}
-        Se a representada paga na liquidez, cada parcela gera a sua comissão, conforme o vencimento.
+        Os vencimentos e valores das parcelas, como estão na nota.
       </p>
     </div>
   );

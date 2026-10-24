@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Icon, type IconName } from "./icons";
 import { Avatar } from "./ui";
 import { ThemeSwitch } from "./theme";
-import type { MenuUser } from "./user-menu";
+import { OfficeSwitcher, type MenuUser, type Office } from "./user-menu";
 
 type Item = { href: string; label: string; short: string; icon: IconName };
 
@@ -105,6 +105,8 @@ export function MobileTabs({
   orgName,
   user,
   signOut,
+  offices = [],
+  switchOrg,
 }: {
   showTeam?: boolean;
   showFinance?: boolean;
@@ -113,6 +115,8 @@ export function MobileTabs({
   orgName: string;
   user: MenuUser;
   signOut: () => Promise<void>;
+  offices?: Office[];
+  switchOrg?: (orgId: string) => Promise<void>;
 }) {
   const isActive = useActive();
   const pathname = usePathname();
@@ -225,6 +229,15 @@ export function MobileTabs({
                 );
               })}
             </ul>
+            {switchOrg && offices.length > 1 ? (
+              <div className="mx-3 mt-3 rounded-xl border border-line px-1">
+                <OfficeSwitcher
+                  offices={offices}
+                  switchOrg={switchOrg}
+                  itemClass="flex h-12 w-full items-center gap-3 rounded-md px-3 text-[15px] text-ink-2 active:bg-hover"
+                />
+              </div>
+            ) : null}
             <ThemeSwitch className="mx-3 mt-3" />
             <form action={signOut} className="mx-3 mt-3">
               <button className="flex h-[3.25rem] w-full items-center gap-3 rounded-xl border border-line px-4 text-[15px] text-alert active:bg-hover">

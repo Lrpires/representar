@@ -10,10 +10,19 @@ import { setupSteps } from "@/lib/setup";
 import { SideNav, MobileTabs } from "@/components/nav";
 import { Icon } from "@/components/icons";
 import { Logo, Progress } from "@/components/ui";
-import { signOut } from "./actions";
+import { signOut, switchOrg } from "./actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { orgName, role, canManage, canSeeCommissions, numberFormat } = await getContext();
+  const { orgName, role, canManage, canSeeCommissions, numberFormat, supabase, user, orgId } = await getContext();
+  // Escritórios do usuário (para trocar pelo menu, quando tiver mais de um).
+  const { data: myOrgs } = await supabase.from("members").select("org_id, organizations(name)").eq("user_id", user.id);
+  const offices = (myOrgs ?? [])
+    .map((m) => ({
+      id: m.org_id as string,
+      name: (m.organizations as unknown as { name: string } | null)?.name ?? "Escritório",
+      current: m.org_id === orgId,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   const showTeam = role === "owner" || role === "manager";
   const showFinance = role !== "seller";
   const canOrder = role !== "finance";
@@ -86,7 +95,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </Link>
           ) : null}
 
-          <UserMenu user={menuUser} signOut={signOut} showSettings={showTeam} variant="sidebar" />
+          <UserMenu user={menuUser} signOut={signOut} showSettings={showTeam} variant="sidebar" offices={offices} switchOrg={switchOrg} />
         </div>
       </aside>
 
@@ -113,7 +122,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 Configuração {done}/{steps.length}
               </Link>
             ) : null}
-            <UserMenu user={menuUser} signOut={signOut} showSettings={showTeam} variant="header" />
+            <UserMenu user={menuUser} signOut={signOut} showSettings={showTeam} variant="header" offices={offices} switchOrg={switchOrg} />
           </div>
         </div>
       </header>
@@ -135,6 +144,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         orgName={orgName}
         user={menuUser}
         signOut={signOut}
+        offices={offices}
+        switchOrg={switchOrg}
       />
     </div>
     </NumberFormatProvider>

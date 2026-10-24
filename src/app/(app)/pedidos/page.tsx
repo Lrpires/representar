@@ -47,6 +47,8 @@ export default async function OrdersPage({
   const settings = await getSettings();
   const canCreate = role !== "finance";
 
+  // Nome do vendedor do sistema antigo (migração 023), quando houver.
+  const hasSellerName = !(await supabase.from("orders").select("seller_name").limit(1)).error;
   let query = supabase
     .from("orders")
     .select("id, number, status, order_date, sent_at, expected_delivery, total, seller_id, principal_id, customers(name), principals(name)")
@@ -66,6 +68,15 @@ export default async function OrdersPage({
   ]);
 
   const sellerName = new Map((members ?? []).map((m) => [m.user_id, m.full_name || m.email || "—"] as const));
+  // Mesmos filtros da lista, só para trazer o nome do vendedor antigo.
+  const legacySeller = new Map<string, string>();
+  if (hasSellerName && isBackOffice && ordersData?.length) {
+    let named = supabase.from("orders").select("id, seller_name").order("number", { ascending: false }).limit(500);
+    if (sp.rep) named = named.eq("principal_id", sp.rep);
+    if (start) named = named.gte("order_date", start);
+    const { data } = await named;
+    for (const n of (data ?? []) as { id: string; seller_name: string | null }[]) if (n.seller_name) legacySeller.set(n.id, n.seller_name);
+  }
 
   const all = (ordersData ?? []).map((o) => {
     return {
@@ -77,6 +88,7 @@ export default async function OrdersPage({
       aging: orderAging({ status: o.status, expected_delivery: o.expected_delivery }, settings.warnDays, settings.criticalDays, todayISO()),
       total: Number(o.total),
       seller_id: o.seller_id as string,
+      seller: legacySeller.get(o.id) ?? sellerName.get(o.seller_id) ?? "—",
       customer: (o.customers as unknown as { name: string } | null)?.name ?? "",
       principal: (o.principals as unknown as { name: string } | null)?.name ?? "",
     };
@@ -241,7 +253,7 @@ export default async function OrdersPage({
                         </td>
                         <td className={`${td} max-w-[16rem] truncate font-medium`}>{o.customer}</td>
                         <td className={`${td} text-ink-2`}>{o.principal}</td>
-                        {isBackOffice ? <td className={`${td} text-ink-2`}>{sellerName.get(o.seller_id) ?? "—"}</td> : null}
+                        {isBackOffice ? <td className={`${td} text-ink-2`}>{o.seller}</td> : null}
                         <td className={`${td} whitespace-nowrap tabular-nums text-ink-2`}>{formatDate(o.order_date)}</td>
                         <td className={td}>
                           <span className="flex flex-wrap items-center gap-1.5">

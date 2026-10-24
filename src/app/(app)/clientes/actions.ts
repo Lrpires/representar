@@ -6,6 +6,7 @@ import { getContext } from "@/lib/session";
 import { fail } from "@/lib/flash";
 import { text, optional } from "@/lib/format";
 import { formatCnpj, formatPhone, isValidCnpj, isValidPhone } from "@/lib/br";
+import { loadSellers } from "@/lib/sellers";
 
 const PATH = "/clientes";
 const detail = (id: string) => `${PATH}/${id}`;
@@ -43,14 +44,25 @@ function readCustomer(formData: FormData, back: string) {
   };
 }
 
+// Vendedor padrão escolhido no formulário (só administrador e gerente escolhem; vendedor fica com ele mesmo).
+async function chosenSeller(formData: FormData, back: string): Promise<string | null> {
+  const { supabase, orgId, canManage } = await getContext();
+  const id = text(formData, "seller_id");
+  if (!canManage || !id) return null;
+  const sellers = await loadSellers(supabase, orgId);
+  if (!sellers.some((s) => s.id === id)) fail(back, "Escolha um vendedor da equipe.");
+  return id;
+}
+
 export async function createCustomer(formData: FormData) {
   const { supabase, orgId, user } = await getContext();
   const back = `${PATH}?novo=1`;
   const fields = readCustomer(formData, back);
+  const sellerId = (await chosenSeller(formData, back)) ?? user.id;
 
   const { data, error } = await supabase
     .from("customers")
-    .insert({ org_id: orgId, seller_id: user.id, ...fields })
+    .insert({ org_id: orgId, seller_id: sellerId, ...fields })
     .select("id")
     .single();
   if (error || !data) fail(back, `Não foi possível salvar: ${error?.message ?? "erro desconhecido"}`);
@@ -70,7 +82,11 @@ export async function updateCustomer(id: string, formData: FormData) {
   const moved = before && addressKeys.some((k) => (before[k] ?? null) !== (fields[k] ?? null));
   const geoReset = moved && "latitude" in before ? { latitude: null, longitude: null, geo_quality: null, geocoded_at: null } : {};
 
-  const { error } = await supabase.from("customers").update({ ...fields, ...geoReset }).eq("id", id);
+  const sellerId = await chosenSeller(formData, back);
+  const { error } = await supabase
+    .from("customers")
+    .update({ ...fields, ...geoReset, ...(sellerId ? { seller_id: sellerId } : {}) })
+    .eq("id", id);
   if (error) fail(back, `Não foi possível salvar: ${error.message}`);
 
   revalidatePath(PATH);

@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { setActiveFormat, toFmt } from "@/lib/number-format";
 
@@ -22,7 +23,9 @@ export const roleHint: Record<Role, string> = {
 export const ROLES: Role[] = ["owner", "manager", "seller", "finance"];
 
 // Usuário logado + escritório + papel. Quem não tem escritório vai para o onboarding.
-// Hoje usa o primeiro escritório do usuário; a troca entre escritórios fica para depois.
+// Quem participa de mais de um escritório escolhe qual abrir (menu do usuário); a escolha fica num cookie.
+// Sem escolha (ou escolha inválida), abre o primeiro escritório do usuário.
+export const ORG_COOKIE = "rep_org";
 export const getContext = cache(async () => {
   const supabase = await createClient();
   // O middleware já validou o login no servidor do Supabase nesta mesma requisição.
@@ -33,15 +36,20 @@ export const getContext = cache(async () => {
   const user = { id: claims.sub as string, email: (claims.email as string | undefined) ?? "" };
 
   // Traz também a moeda e o formato dos números do escritório (migração 020); sem eles, só o nome.
-  const findMembership = async () => {
-    const q = (cols: string) =>
-      supabase.from("members").select(cols).eq("user_id", user.id).order("created_at", { ascending: true }).limit(1).maybeSingle();
+  const chosen = (await cookies()).get(ORG_COOKIE)?.value;
+  const findMembership = async (orgId?: string) => {
+    const q = (cols: string) => {
+      let query = supabase.from("members").select(cols).eq("user_id", user.id);
+      if (orgId) query = query.eq("org_id", orgId);
+      return query.order("created_at", { ascending: true }).limit(1).maybeSingle();
+    };
     const full = await q("org_id, role, organizations(name, currency, number_style, number_group)");
     const res = full.error ? await q("org_id, role, organizations(name)") : full;
     return res as unknown as { data: { org_id: string; role: string; organizations: unknown } | null };
   };
 
-  let { data: membership } = await findMembership();
+  let { data: membership } = chosen && /^[0-9a-f-]{36}$/.test(chosen) ? await findMembership(chosen) : { data: null };
+  if (!membership) ({ data: membership } = await findMembership());
 
   // Quem foi convidado entra no escritório que o convidou, em vez de criar um novo.
   if (!membership) {

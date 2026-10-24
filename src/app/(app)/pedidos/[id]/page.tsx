@@ -57,7 +57,8 @@ export default async function OrderPage({
   const principal = o.principals as unknown as {
     name: string; cnpj: string | null; commission_close_mode: string; commission_days_after: number | null;
   } | null;
-  const sellerName = seller?.full_name || seller?.email || "";
+  // Pedido importado: o vendedor do sistema antigo vem pelo nome até ele ter login.
+  const sellerName = (o.seller_name as string | null) || seller?.full_name || seller?.email || "";
   const label = formatOrderNumber(o.number, settings);
   const commissionPct = Number(o.commission_pct ?? 0);
 
@@ -255,6 +256,7 @@ export default async function OrderPage({
           showCommission={canSeeCommissions}
           initial={{
             id,
+            seller_id: o.seller_id,
             customer_id: o.customer_id,
             principal_id: o.principal_id,
             order_date: o.order_date,
@@ -279,6 +281,7 @@ export default async function OrderPage({
           customers={editor.customers}
           principals={editor.principals}
           products={editor.products}
+          sellers={editor.sellers}
           priceHistory={editor.priceHistory}
           principalLists={editor.principalLists}
           units={editor.units}

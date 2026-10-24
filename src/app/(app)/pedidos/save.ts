@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getContext } from "@/lib/session";
 import { lineTotals, orderTotals, num } from "@/lib/orders";
+import { loadSellers } from "@/lib/sellers";
 
 export type ItemInput = {
   variant_id: string | null;
@@ -18,6 +19,7 @@ export type ItemInput = {
 
 export type OrderInput = {
   id?: string;
+  seller_id?: string; // vendedor do pedido (vem do cliente; administrador e gerente podem trocar)
   customer_id: string;
   principal_id: string;
   order_date: string;
@@ -88,6 +90,14 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
     }
   }
 
+  // Vendedor: só administrador e gerente escolhem; os demais lançam no próprio nome.
+  let sellerId = user.id;
+  if (canManage && input.seller_id && input.seller_id !== user.id) {
+    const team = await loadSellers(supabase, orgId);
+    if (!team.some((s) => s.id === input.seller_id)) return { error: "Escolha um vendedor da equipe." };
+    sellerId = input.seller_id;
+  }
+
   const lines = items.map((i) => ({ qty: num(i.qty), price: num(i.price), discount: num(i.discount) }));
   const t = orderTotals(lines, discountPct, freight, commissionPct);
   const mode = input.freight_mode === "cif" || input.freight_mode === "fob" ? input.freight_mode : null;
@@ -119,12 +129,15 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
     if (!canManage && o.seller_id !== user.id) return { error: "Você não pode alterar este pedido." };
     const { data: old } = await supabase.from("order_items").select("id").eq("order_id", orderId);
     oldItemIds = (old ?? []).map((i) => i.id);
-    const { error } = await supabase.from("orders").update(header).eq("id", orderId);
+    const { error } = await supabase
+      .from("orders")
+      .update({ ...header, ...(canManage && input.seller_id ? { seller_id: sellerId } : {}) })
+      .eq("id", orderId);
     if (error) return { error: friendly(error.message) };
   } else {
     const { data, error } = await supabase
       .from("orders")
-      .insert({ ...header, org_id: orgId, seller_id: user.id, number: 0 })
+      .insert({ ...header, org_id: orgId, seller_id: sellerId, number: 0 })
       .select("id")
       .single();
     if (error || !data) return { error: friendly(error?.message ?? "erro desconhecido") };

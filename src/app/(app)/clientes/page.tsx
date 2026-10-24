@@ -1,3 +1,4 @@
+import { loadSellers } from "@/lib/sellers";
 import { SOLD_STATUSES } from "@/lib/orders";
 import Link from "next/link";
 import { getContext } from "@/lib/session";
@@ -27,7 +28,8 @@ export default async function CustomersPage({
 }) {
   const sp = await searchParams;
   const q = safeQ(sp.q);
-  const { supabase, canManage } = await getContext();
+  const { supabase, canManage, orgId } = await getContext();
+  const sellers = canManage ? await loadSellers(supabase, orgId) : undefined;
 
   let query = supabase
     .from("customers")
@@ -259,7 +261,7 @@ export default async function CustomersPage({
       <Sheet open={sheetOpen} title="Novo cliente" description="Entra na sua carteira e já pode receber pedidos." closeHref={PATH}>
         <SheetForm action={createCustomer} closeHref={PATH} submitLabel="Salvar cliente">
           <ErrorNote message={sp.erro} />
-          <CustomerFields />
+          <CustomerFields sellers={sellers} />
         </SheetForm>
       </Sheet>
     </>

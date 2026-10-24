@@ -13,7 +13,7 @@ export default async function NewOrderPage({
   searchParams: Promise<{ cliente?: string }>;
 }) {
   const sp = await searchParams;
-  const { role, canSeeCommissions } = await getContext();
+  const { role, canSeeCommissions, user } = await getContext();
   if (role === "finance") redirect("/pedidos");
 
   const data = await loadEditorData();
@@ -42,6 +42,9 @@ export default async function NewOrderPage({
         <OrderEditor
           showCommission={canSeeCommissions}
           initial={{
+            // Vendedor padrão do cliente; sem ele, quem está lançando.
+            seller_id:
+              customer?.seller_id && data.sellers.some((s) => s.id === customer.seller_id) ? customer.seller_id : user.id,
             customer_id: customer?.id ?? "",
             principal_id: principalId,
             order_date: todayISO(),
@@ -57,6 +60,7 @@ export default async function NewOrderPage({
           customers={data.customers}
           principals={data.principals}
           products={data.products}
+          sellers={data.sellers}
           priceHistory={data.priceHistory}
           principalLists={data.principalLists}
           units={data.units}

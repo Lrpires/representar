@@ -30,6 +30,7 @@ function greeting(): string {
 type Order = {
   id: string; number: number; status: string; order_date: string; total: number;
   principal_id: string; seller_id: string; customer_id: string;
+  seller_name?: string | null; // vendedor do sistema antigo (migração 023), enquanto não tem login
   customers: { name: string } | null; principals: { name: string } | null;
 };
 
@@ -73,6 +74,9 @@ export default async function HomePage({
     return r as T;
   }
 
+  // Nome do vendedor do sistema antigo (migração 023); sem ela, o Painel segue sem esse campo.
+  const hasSellerName = !(await supabase.from("orders").select("seller_name").limit(1)).error;
+
   const [
     { data: curData },
     { data: prevData },
@@ -92,7 +96,7 @@ export default async function HomePage({
       scoped(
         supabase
           .from("orders")
-          .select("id, number, status, order_date, total, principal_id, seller_id, customer_id, customers(name), principals(name)")
+          .select(`id, number, status, order_date, total, principal_id, seller_id, customer_id, ${hasSellerName ? "seller_name, " : ""}customers(name), principals(name)`)
           .gte("order_date", P.start)
           .lte("order_date", P.end),
       )
@@ -124,7 +128,7 @@ export default async function HomePage({
       scoped(
         supabase
           .from("order_items")
-          .select("description, code, unit, qty, line_total, orders!inner(order_date, status, principal_id, seller_id)")
+          .select("variant_id, description, code, unit, qty, line_total, orders!inner(order_date, status, principal_id, seller_id)")
           .in("orders.status", SOLD)
           .gte("orders.order_date", P.start)
           .lte("orders.order_date", P.end),
@@ -210,10 +214,21 @@ export default async function HomePage({
   };
   const share = (v: number) => (soldTotal ? v / soldTotal : 0);
   const byPrincipal = rank(sold, (o) => o.principal_id, (o) => Number(o.total)).slice(0, 6);
-  const bySeller = rank(sold, (o) => o.seller_id, (o) => Number(o.total)).slice(0, 6);
+  // Pedido importado com vendedor que ainda não tem login: agrupa pelo nome antigo.
+  const sellerKey = (o: Order) => (o.seller_name ? `nome:${o.seller_name}` : o.seller_id);
+  const bySeller = rank(sold, sellerKey, (o) => Number(o.total)).slice(0, 6);
   const byCustomer = rank(sold, (o) => o.customer_id, (o) => Number(o.total)).slice(0, 6);
   const customerName = new Map(sold.map((o) => [o.customer_id, o.customers?.name ?? "Cliente"] as const));
-  const productRows = (items ?? []).map((i) => ({ k: `${i.code ?? ""}|${i.description}`, v: Number(i.line_total), q: Number(i.qty), u: String(i.unit ?? "unidade") }));
+  // Produto do catálogo conta uma vez só, qualquer que seja a cor/tamanho ("Malha — Preto" e "Malha — Azul" = 1 produto).
+  const productRows = (items ?? []).map((i) => {
+    const name = i.variant_id ? String(i.description).split(" — ")[0] : String(i.description);
+    return {
+      k: i.variant_id ? `${i.variant_id}|${name}` : `${i.code ?? ""}|${name}`,
+      v: Number(i.line_total),
+      q: Number(i.qty),
+      u: String(i.unit ?? "unidade"),
+    };
+  });
   const byProduct = rank(productRows, (r) => r.k, (r) => r.v).slice(0, 6);
   const productQty = new Map<string, number>();
   for (const r of productRows) productQty.set(r.k, (productQty.get(r.k) ?? 0) + r.q);
@@ -451,10 +466,10 @@ export default async function HomePage({
               empty="Sem vendas no período."
               rows={bySeller.map(([id, v]) => ({
                 key: id,
-                name: sName.get(id) ?? "Vendedor",
+                name: id.startsWith("nome:") ? id.slice(5) : sName.get(id) ?? "Vendedor",
                 value: brl(v),
                 share: share(v),
-                href: link({ vend: id }),
+                href: id.startsWith("nome:") ? undefined : link({ vend: id }),
               }))}
             />
           ) : (

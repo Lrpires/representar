@@ -1,3 +1,4 @@
+import { loadSellers } from "@/lib/sellers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getContext } from "@/lib/session";
@@ -45,6 +46,7 @@ export default async function CustomerPage({
   const sp = await searchParams;
   const { supabase, canManage, role, orgId } = await getContext();
   const settings = await getSettings();
+  const sellers = await loadSellers(supabase, orgId);
 
   const [{ data: c }, { data: orders }, { data: interactions }] = await Promise.all([
     supabase
@@ -99,6 +101,9 @@ export default async function CustomerPage({
             {c.phone ? <Meta icon="phone">{c.phone}</Meta> : null}
             {place ? <Meta icon="pin">{place}</Meta> : null}
             {c.status !== "ativo" ? <Badge>Inativo</Badge> : null}
+            {sellers.find((s) => s.id === c.seller_id) ? (
+              <Meta icon="user">Vendedor: {sellers.find((s) => s.id === c.seller_id)!.name}</Meta>
+            ) : null}
           </>
         }
         action={
@@ -315,7 +320,7 @@ export default async function CustomerPage({
       <Sheet open={editing} title="Editar cliente" closeHref={here}>
         <SheetForm action={updateCustomer.bind(null, id)} closeHref={here} submitLabel="Salvar alterações">
           <ErrorNote message={sp.erro} />
-          <CustomerFields values={c} />
+          <CustomerFields values={c} sellers={canManage ? sellers : undefined} />
           {canManage ? (
             <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-alert/20 p-3 sm:col-span-2">
               <p className="text-[13px] text-muted">Excluir apaga o cliente e as interações. Só é possível sem pedidos.</p>

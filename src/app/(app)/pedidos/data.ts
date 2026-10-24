@@ -3,6 +3,7 @@ import { getSettings } from "@/lib/settings";
 import { UNITS } from "@/lib/units";
 import { todayISO } from "@/lib/format";
 import { optionsText, toOptionList, type OptionList } from "@/lib/options";
+import { loadSellers } from "@/lib/sellers";
 import type { EditorCustomer, EditorPrincipal, EditorProduct, EditorUnit, PriceHistory } from "./editor";
 
 type HistoryRow = {
@@ -16,7 +17,7 @@ type TableRow = { price_items: { variant_id: string; price: number }[] | null };
 
 // Tudo o que o editor de pedido precisa para funcionar sem ir ao servidor a cada tecla.
 export async function loadEditorData() {
-  const { supabase } = await getContext();
+  const { supabase, orgId, canManage } = await getContext();
   const settings = await getSettings();
   const today = todayISO();
 
@@ -138,7 +139,7 @@ export async function loadEditorData() {
   products.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   // select("*") funciona com ou sem as migrações 006/007 (colunas novas opcionais).
-  type C = { id: string; name: string; city?: string | null; state?: string | null; cnpj: string | null };
+  type C = { id: string; name: string; city?: string | null; state?: string | null; cnpj: string | null; seller_id: string | null };
   const editorCustomers: EditorCustomer[] = ((customers ?? []) as C[]).map((c) => ({
     id: c.id,
     name: c.name,
@@ -146,6 +147,7 @@ export async function loadEditorData() {
     state: c.state ?? null,
     cnpj: c.cnpj,
     last_principal_id: lastPrincipal.get(c.id) ?? null,
+    seller_id: c.seller_id,
   }));
 
   const editorPrincipals: EditorPrincipal[] = (principals ?? []).map((p) => ({
@@ -157,5 +159,8 @@ export async function loadEditorData() {
   const units: EditorUnit[] = UNITS.filter((u) => settings.units.includes(u.value));
   const defaultUnit = settings.units.includes("unidade") ? "unidade" : settings.units[0] ?? "unidade";
 
-  return { customers: editorCustomers, principals: editorPrincipals, products, priceHistory, principalLists, units, defaultUnit, settings };
+  // Administrador e gerente escolhem o vendedor do pedido; o vendedor lança sempre no nome dele.
+  const sellers = canManage ? await loadSellers(supabase, orgId) : [];
+
+  return { sellers, customers: editorCustomers, principals: editorPrincipals, products, priceHistory, principalLists, units, defaultUnit, settings };
 }

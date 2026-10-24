@@ -12,7 +12,15 @@ import { useNumberFormat } from "@/components/number-format";
 import { describeWithOptions, optionsText, type OptionList } from "@/lib/options";
 import { OptionGrid, type GridLine } from "./option-grid";
 
-export type EditorCustomer = { id: string; name: string; city: string | null; state: string | null; cnpj: string | null; last_principal_id: string | null };
+export type EditorCustomer = {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  cnpj: string | null;
+  last_principal_id: string | null;
+  seller_id: string | null; // vendedor padrão do cliente
+};
 export type EditorPrincipal = { id: string; name: string; commission: number | null };
 export type EditorProduct = {
   id: string;
@@ -50,6 +58,7 @@ export function OrderEditor({
   customers,
   principals,
   products,
+  sellers = [],
   priceHistory = {},
   principalLists = {},
   units,
@@ -60,6 +69,7 @@ export function OrderEditor({
   customers: EditorCustomer[];
   principals: EditorPrincipal[];
   products: EditorProduct[];
+  sellers?: { id: string; name: string }[]; // só para quem escolhe o vendedor (administrador e gerente)
   priceHistory?: PriceHistory;
   principalLists?: Record<string, OptionList[]>; // listas de cada representada (cor, tamanho…)
   units: EditorUnit[];
@@ -368,6 +378,8 @@ export function OrderEditor({
                   const c = customers.find((x) => x.id === o.id);
                   setCustomerText(o.label);
                   set("customer_id", o.id);
+                  // O vendedor padrão do cliente vem junto (e pode ser trocado).
+                  if (c?.seller_id && sellers.some((s) => s.id === c.seller_id)) set("seller_id", c.seller_id);
                   // Sugere a representada da última compra do cliente (se a pessoa não escolheu outra à mão).
                   if (c?.last_principal_id && (!f.principal_id || principalAuto)) {
                     pickPrincipal(c.last_principal_id);
@@ -411,6 +423,17 @@ export function OrderEditor({
               </select>
               {principalAuto ? <span className="mt-1.5 block text-xs text-muted">Sugerida pela última compra do cliente.</span> : null}
             </Field>
+            {sellers.length ? (
+              <Field label="Vendedor" className="col-span-2 lg:col-span-1">
+                <select value={f.seller_id ?? ""} onChange={(e) => set("seller_id", e.target.value)} className={inputCls}>
+                  {sellers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
             <Field label="Data">
               <input type="date" value={f.order_date} onChange={(e) => set("order_date", e.target.value)} className={inputCls} />
             </Field>

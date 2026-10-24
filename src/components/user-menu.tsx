@@ -8,6 +8,34 @@ import { Avatar } from "./ui";
 import { ThemeSwitch } from "./theme";
 
 export type MenuUser = { name: string; email: string; roleName: string; photoUrl: string | null };
+export type Office = { id: string; name: string; current: boolean };
+
+// Lista de escritórios para trocar (só aparece para quem participa de mais de um).
+export function OfficeSwitcher({
+  offices,
+  switchOrg,
+  itemClass,
+}: {
+  offices: Office[];
+  switchOrg: (orgId: string) => Promise<void>;
+  itemClass: string;
+}) {
+  if (offices.length < 2) return null;
+  return (
+    <div className="py-1">
+      <p className="px-2.5 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-faint">Escritórios</p>
+      {offices.map((o) => (
+        <form key={o.id} action={switchOrg.bind(null, o.id)}>
+          <button role="menuitem" disabled={o.current} className={`${itemClass} ${o.current ? "font-medium text-ink" : ""}`}>
+            <Icon name="factory" size={16} className="text-muted" />
+            <span className="min-w-0 flex-1 truncate text-left">{o.name}</span>
+            {o.current ? <Icon name="check" size={15} className="text-accent-ink" /> : null}
+          </button>
+        </form>
+      ))}
+    </div>
+  );
+}
 
 // Crachá do usuário (foto, nome e perfil) com menu: Meu perfil, Configurações, Sair.
 export function UserMenu({
@@ -15,11 +43,15 @@ export function UserMenu({
   signOut,
   showSettings,
   variant,
+  offices = [],
+  switchOrg,
 }: {
   user: MenuUser;
   signOut: () => Promise<void>;
   showSettings: boolean;
   variant: "sidebar" | "header";
+  offices?: Office[];
+  switchOrg?: (orgId: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -100,6 +132,12 @@ export function UserMenu({
               </Link>
             ) : null}
           </div>
+          {switchOrg && offices.length > 1 ? (
+            <>
+              <div className="h-px bg-line" />
+              <OfficeSwitcher offices={offices} switchOrg={switchOrg} itemClass={item} />
+            </>
+          ) : null}
           <div className="h-px bg-line" />
           <ThemeSwitch className="px-2.5 py-2.5" />
           <div className="h-px bg-line" />

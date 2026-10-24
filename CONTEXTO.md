@@ -14,7 +14,7 @@
 ## 2. Como trabalhar comigo (regras do dono do projeto)
 
 - Responder em **português do Brasil**, de forma **simples** (o dono é empreendedor, não programador).
-- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **026**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
+- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **027**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
 - Visual no nível Linear/Notion, **mobile first**, seguindo o design system da marca (seção 7).
 - Commit e push só quando o dono pedir ("faz o commit e o push").
 
@@ -65,7 +65,9 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 
 **Faturamento (notas fiscais)**
 - Um pedido pode ter várias notas (faturamento parcial). Se faltar saldo, o pedido fica `parcial`; o botão **"Finalizar pedido"** encerra mesmo sem o restante (pode reabrir).
-- Na ficha do pedido, as notas aparecem **por último e só para consulta**, numa tabela (NF, emissão, quantidade, valor, vencimentos) com o resumo faturado / falta faturar; clicar abre o painel da nota ali mesmo (`?nota=`, componente `faturamento/invoice-panel.tsx`, o mesmo do Faturamento, sem o botão de excluir). Detalhes e **exclusão da nota** (que apaga a comissão dela junto) ficam na área **Faturamento**, ao clicar na nota (`/faturamento?nota=…`).
+- Pedido **enviado ou faturado em parte pode ser editado** (botão "Editar pedido"): os itens são atualizados no lugar (as notas continuam ligadas), item já faturado não sai nem fica com menos do que o faturado, e a representada não muda se já houver nota; o status é recalculado (`syncOrder`). Faturado e cancelado não se editam. A ficha mostra a **comissão prevista** (% do pedido × total), a das notas lançadas e a já recebida (só administrador e financeiro), e tem o **histórico de observações** (`order_notes`, migração 026: data, hora e autor; quem escreveu ou administrador/gerente apaga).
+
+Na ficha do pedido, as notas aparecem **por último e só para consulta**, numa tabela (NF, emissão, quantidade, valor, vencimentos) com o resumo faturado / falta faturar; clicar abre o painel da nota ali mesmo (`?nota=`, componente `faturamento/invoice-panel.tsx`, o mesmo do Faturamento, sem o botão de excluir). Detalhes e **exclusão da nota** (que apaga a comissão dela junto) ficam na área **Faturamento**, ao clicar na nota (`/faturamento?nota=…`).
 - Lançamento **à mão** (escolhendo o pedido) ou pelo **XML da NF-e**, os dois pela área Faturamento: o sistema lê número, série, data, valor, chave de acesso e itens, sugere o pedido pelo CNPJ do emitente (representada) e do destinatário (cliente) e casa os itens por código/descrição. A mesma chave não entra duas vezes.
 
 **Avisos de atraso**: contados a partir da **previsão de entrega** do pedido. Passou da previsão e não foi totalmente faturado: fica amarelo (atenção) e vermelho (crítico) após X/Y dias, definidos em Configurações. Pedido sem previsão de entrega não entra na conta. Aparecem no Painel, Pedidos e Faturamento.
@@ -118,6 +120,7 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 | 023 | Nome do vendedor do sistema antigo (`orders.seller_name`, `customers.seller_name`) |
 | 024 | Escritório aberto: consultas levam `x-org-id` e as permissões valem só para esse escritório |
 | 025 | Itens da nota como vieram na NF (`order_invoice_lines`), ligados ou não a um item do pedido |
+| 026 | Histórico de observações do pedido (`order_notes`) |
 
 Storage: `product-images` (público), `invoices` (privado, link temporário), `avatars`, `logos`.
 
@@ -139,7 +142,7 @@ Storage: `product-images` (público), `invoices` (privado, link temporário), `a
 
 ## 9. Pendências e próximos passos
 
-- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 026 liberando leitura de clientes ao financeiro.
+- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 027 liberando leitura de clientes ao financeiro.
 - **Importação: próxima etapa** — notas fiscais em lote (vários XMLs de uma vez, trazendo o histórico de faturamento e comissões) e pedidos antigos por planilha. Representadas, clientes e produtos já importam.
 - **Cobrança/assinatura, teste grátis e limites por plano** — não existem.
 - Ícones sem versão no design system (lixeira, editar, relógio…) usam o desenho antigo com o traço novo.

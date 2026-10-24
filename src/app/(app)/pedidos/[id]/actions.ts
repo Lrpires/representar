@@ -142,3 +142,33 @@ export async function duplicateOrder(id: string) {
   revalidatePath("/pedidos");
   redirect(`${here(created.id)}?ok=${encodeURIComponent("Pedido duplicado. Confira e salve.")}`);
 }
+
+// Observação no histórico do pedido (migração 026): o que mudou entre o pedido e o faturamento.
+export async function addOrderNote(id: string, formData: FormData) {
+  const { supabase, orgId, user } = await getContext();
+  const body = text(formData, "body");
+  if (!body) fail(here(id), "Escreva a observação.");
+  if (body.length > 4000) fail(here(id), "A observação pode ter até 4.000 caracteres.");
+  const { data: me } = await supabase.from("members").select("full_name, email").eq("org_id", orgId).eq("user_id", user.id).maybeSingle();
+  const { error } = await supabase.from("order_notes").insert({
+    org_id: orgId,
+    order_id: id,
+    author_id: user.id,
+    author_name: me?.full_name || me?.email || user.email,
+    body,
+  });
+  if (error) {
+    if (error.message.includes("order_notes")) fail(here(id), "Falta rodar a migração 026 no Supabase.");
+    fail(here(id), `Não foi possível salvar: ${error.message}`);
+  }
+  revalidatePath(here(id));
+  redirect(`${here(id)}?ok=${encodeURIComponent("Observação registrada.")}#observacoes`);
+}
+
+export async function deleteOrderNote(id: string, noteId: string) {
+  const { supabase } = await getContext();
+  const { error } = await supabase.from("order_notes").delete().eq("id", noteId).eq("order_id", id);
+  if (error) fail(here(id), `Não foi possível apagar: ${error.message}`);
+  revalidatePath(here(id));
+  redirect(`${here(id)}?ok=${encodeURIComponent("Observação apagada.")}#observacoes`);
+}

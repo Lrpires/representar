@@ -4,6 +4,7 @@ import { getContext } from "@/lib/session";
 import { getSettings } from "@/lib/settings";
 import {
   sendOrder, reopenOrder, cancelOrder, deleteDraft, duplicateOrder,
+  addOrderNote, deleteOrderNote,
 } from "./actions";
 import { registerInvoice, finalizeOrder, reopenFinalized } from "./invoices";
 import { orderAging } from "@/lib/aging";
@@ -19,7 +20,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { ConfirmButton } from "@/components/confirm-button";
 import { SubmitButton } from "@/components/submit";
 import {
-  PageHeader, Badge, ErrorNote, OkNote, Field, SheetForm, Properties, Property, inputCls,
+  PageHeader, Badge, ErrorNote, OkNote, Field, SheetForm, Properties, Property, inputCls, textareaCls,
   primaryBtn, ghostBtn, dangerBtn, iconBtn,
 } from "@/components/ui";
 
@@ -30,7 +31,7 @@ export default async function OrderPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ erro?: string; ok?: string; faturar?: string; finalizar?: string; nota?: string }>;
+  searchParams: Promise<{ erro?: string; ok?: string; faturar?: string; finalizar?: string; nota?: string; editar?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -53,7 +54,10 @@ export default async function OrderPage({
   const st = statusInfo(o.status);
   const mine = o.seller_id === user.id;
   const canOwn = canManage || mine;
-  const editable = o.status === "rascunho" && canOwn && role !== "finance";
+  // Rascunho abre já no editor. Enviado ou faturado em parte também pode ser alterado (botão "Editar pedido").
+  const canEdit = ["rascunho", "enviado", "parcial"].includes(o.status) && canOwn && role !== "finance";
+  const sentEdit = o.status !== "rascunho";
+  const editable = canEdit && (!sentEdit || sp.editar === "1");
   const customer = o.customers as unknown as { id: string; name: string; cnpj: string | null } | null;
   const principal = o.principals as unknown as {
     name: string; cnpj: string | null; commission_close_mode: string; commission_days_after: number | null;
@@ -97,6 +101,26 @@ export default async function OrderPage({
   const leftQty = Math.max(totalQty - doneQty, 0);
 
   const editor = editable ? await loadEditorData() : null;
+
+  // Histórico de observações (migração 026; sem ela, a lista vem vazia).
+  type Note = { id: string; body: string; author_id: string | null; author_name: string | null; created_at: string };
+  const { data: notesData } = await supabase
+    .from("order_notes")
+    .select("id, body, author_id, author_name, created_at")
+    .eq("order_id", id)
+    .order("created_at", { ascending: false });
+  const notes = (notesData ?? []) as Note[];
+
+  // Comissão do pedido (só administrador e financeiro): prevista pelo % do pedido e a que já nasceu das notas.
+  const liveCommissions = invoices.flatMap((i) => i.commissions).filter((c) => c.status !== "cancelada");
+  const commission = canSeeCommissions
+    ? {
+        pct: commissionPct,
+        expected: Math.round(Number(o.total) * commissionPct) / 100,
+        fromNotes: liveCommissions.reduce((s, c) => s + Number(c.value), 0),
+        received: liveCommissions.filter((c) => c.status === "recebida").reduce((s, c) => s + Number(c.value), 0),
+      }
+    : null;
 
   return (
     <>
@@ -197,6 +221,12 @@ export default async function OrderPage({
 
             {o.status === "enviado" || o.status === "parcial" ? (
               <>
+                {canEdit && !editable ? (
+                  <Link href={`${here}?editar=1`} className={ghostBtn}>
+                    <Icon name="edit" size={15} />
+                    Editar pedido
+                  </Link>
+                ) : null}
                 {canInvoice ? (
                   <Link href={`${here}?faturar=1`} scroll={false} className={primaryBtn}>
                     <Icon name="receipt" size={15} />
@@ -260,9 +290,20 @@ export default async function OrderPage({
       </section>
 
 
+      {editable && editor && sentEdit ? (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-line bg-subtle px-4 py-3 text-[13px] text-ink-2">
+          <Icon name="info" size={16} className="mt-0.5 shrink-0 text-muted" />
+          <span>
+            Você está alterando um pedido já enviado. Ele continua como está (enviado ou faturado em parte). Item que já
+            saiu em nota não pode ser tirado nem ficar com menos do que foi faturado; as notas já lançadas e as comissões
+            delas não mudam.
+          </span>
+        </div>
+      ) : null}
       {editable && editor ? (
         <OrderEditor
           showCommission={canSeeCommissions}
+          sentEdit={sentEdit ? { cancelHref: here } : undefined}
           initial={{
             id,
             seller_id: o.seller_id,
@@ -277,6 +318,7 @@ export default async function OrderPage({
             commission_pct: o.commission_pct != null ? numText(commissionPct, 2) : "",
             notes: o.notes ?? "",
             items: (items ?? []).map((i) => ({
+              id: i.id,
               variant_id: i.variant_id,
               code: i.code ?? "",
               description: i.description,
@@ -304,8 +346,71 @@ export default async function OrderPage({
           customer={customer}
           principalName={principal?.name ?? ""}
           sellerName={sellerName}
+          commission={commission}
         />
       )}
+
+      {/* Histórico de observações: o que aconteceu entre o pedido e o faturamento */}
+      <section id="observacoes" className="mt-5 scroll-mt-24 rounded-xl border border-line bg-surface">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+          <h2 className="text-sm font-semibold">
+            Histórico de observações <span className="ml-1 font-normal text-muted">{notes.length}</span>
+          </h2>
+        </header>
+        <details className="group border-b border-line">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[13px] font-medium text-accent-ink hover:bg-subtle sm:px-5 [&::-webkit-details-marker]:hidden">
+            <Icon name="plus" size={14} strokeWidth={2} />
+            Adicionar observação
+          </summary>
+          <form action={addOrderNote.bind(null, id)} className="grid gap-3 px-4 pb-4 sm:px-5">
+            <textarea
+              name="body"
+              required
+              rows={3}
+              maxLength={4000}
+              placeholder="Ex.: a fábrica pediu mais 10 dias para a cor Vinho; o cliente aceitou."
+              className={textareaCls}
+            />
+            <div>
+              <SubmitButton className={primaryBtn} pending="Salvando…">
+                Registrar observação
+              </SubmitButton>
+            </div>
+          </form>
+        </details>
+        {notes.length === 0 ? (
+          <p className="px-4 py-5 text-center text-sm text-muted sm:px-5">
+            Nada registrado ainda. Use para anotar novidades até o faturamento: prazos, trocas, combinados com a fábrica.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {notes.map((n) => (
+              <li key={n.id} className="group/n flex gap-3 px-4 py-3 sm:px-5">
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted">
+                    <span className="font-medium text-ink-2">{n.author_name || "Alguém da equipe"}</span> ·{" "}
+                    {new Date(n.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" })}
+                  </p>
+                  <p className="mt-0.5 whitespace-pre-line text-sm leading-relaxed text-ink">{n.body}</p>
+                </div>
+                {n.author_id === user.id || canManage ? (
+                  <form>
+                    <ConfirmButton
+                      message="Apagar esta observação?"
+                      formAction={deleteOrderNote.bind(null, id, n.id)}
+                      className={`${iconBtn} opacity-0 focus:opacity-100 group-hover/n:opacity-100`}
+                    >
+                      <Icon name="trash" size={14} />
+                      <span className="sr-only">Apagar observação</span>
+                    </ConfirmButton>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Faturamento por último: aqui só se consulta; editar ou excluir a nota é na área de Faturamento. */}
       {invoices.length > 0 || canInvoice ? (
@@ -602,7 +707,9 @@ function OrderView({
   customer,
   principalName,
   sellerName,
+  commission,
 }: {
+  commission?: { pct: number; expected: number; fromNotes: number; received: number } | null;
   o: OrderRow;
   items: ItemRow[];
   invoicedQty: Map<string, number> | null;
@@ -694,7 +801,7 @@ function OrderView({
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section className="rounded-xl border border-line bg-surface p-4 sm:p-5">
-          <h2 className="mb-2 text-sm font-semibold">Observações</h2>
+          <h2 className="mb-2 text-sm font-semibold">Observações do pedido</h2>
           {o.notes ? (
             <p className="whitespace-pre-line text-sm leading-relaxed text-ink-2">{o.notes}</p>
           ) : (
@@ -725,6 +832,26 @@ function OrderView({
               <dd className="text-xl font-semibold tabular-nums tracking-[-0.02em]">{brl(t.total)}</dd>
             </div>
           </dl>
+          {commission ? (
+            <dl className="mt-4 grid gap-2 border-t border-line pt-3 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-muted">Comissão prevista ({numText(commission.pct, 2)}%)</dt>
+                <dd className="font-semibold tabular-nums">{brl(commission.expected)}</dd>
+              </div>
+              {commission.fromNotes ? (
+                <div className="flex justify-between">
+                  <dt className="text-muted">Das notas lançadas</dt>
+                  <dd className="tabular-nums">{brl(commission.fromNotes)}</dd>
+                </div>
+              ) : null}
+              {commission.fromNotes ? (
+                <div className="flex justify-between">
+                  <dt className="text-muted">Já recebida</dt>
+                  <dd className="tabular-nums text-ok">{brl(commission.received)}</dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
         </section>
       </div>
     </div>

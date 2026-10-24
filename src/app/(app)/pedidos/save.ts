@@ -5,8 +5,13 @@ import { redirect } from "next/navigation";
 import { getContext } from "@/lib/session";
 import { lineTotals, orderTotals, num } from "@/lib/orders";
 import { loadSellers } from "@/lib/sellers";
+import { syncOrder } from "./[id]/invoices";
+
+// Pedido enviado ou faturado em parte também pode ser alterado (não o faturado nem o cancelado).
+const EDITABLE = ["rascunho", "enviado", "parcial"];
 
 export type ItemInput = {
+  id?: string; // item já gravado (na edição de pedido enviado, o item é atualizado no lugar, sem perder as notas)
   variant_id: string | null;
   options?: Record<string, string> | null; // opções escolhidas na grade, ex.: {"Cor": "Azul"}
   code: string;
@@ -116,28 +121,57 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
     subtotal: t.subtotal,
     total: t.total,
     updated_at: new Date().toISOString(),
-    ...(intent === "send" ? { status: "enviado" as const, sent_at: new Date().toISOString() } : {}),
   };
 
   let orderId = input.id;
   let oldItemIds: string[] = [];
+  let sentEdit = false; // alteração de pedido já enviado
 
   if (orderId) {
-    const { data: o } = await supabase.from("orders").select("status, seller_id").eq("id", orderId).maybeSingle();
+    const { data: o } = await supabase.from("orders").select("status, seller_id, principal_id").eq("id", orderId).maybeSingle();
     if (!o) return { error: "Pedido não encontrado." };
-    if (o.status !== "rascunho") return { error: "Só é possível alterar um pedido em rascunho." };
+    if (!EDITABLE.includes(o.status)) return { error: "Pedido faturado ou cancelado não pode ser alterado." };
     if (!canManage && o.seller_id !== user.id) return { error: "Você não pode alterar este pedido." };
+    sentEdit = o.status !== "rascunho";
+    if (sentEdit) {
+      const done = await invoicedByItem(supabase, orderId);
+      if (done.size && input.principal_id !== o.principal_id) {
+        return { error: "Este pedido já tem nota fiscal: não dá para trocar a representada." };
+      }
+      // Item já faturado não pode sair nem ficar com menos do que já foi faturado.
+      const kept = new Map(items.filter((i) => i.id).map((i) => [i.id!, num(i.qty)] as const));
+      const { data: current } = await supabase.from("order_items").select("id, description").eq("order_id", orderId);
+      for (const it of current ?? []) {
+        const inv = done.get(it.id) ?? 0;
+        if (inv <= 0) continue;
+        if (!kept.has(it.id)) return { error: `${it.description}: já foi faturado, não pode sair do pedido.` };
+        if (kept.get(it.id)! < inv - 0.0005) {
+          return { error: `${it.description}: já foram faturados ${String(inv).replace(".", ",")}; a quantidade não pode ser menor.` };
+        }
+      }
+    }
+
     const { data: old } = await supabase.from("order_items").select("id").eq("order_id", orderId);
     oldItemIds = (old ?? []).map((i) => i.id);
     const { error } = await supabase
       .from("orders")
-      .update({ ...header, ...(canManage && input.seller_id ? { seller_id: sellerId } : {}) })
+      .update({
+        ...header,
+        ...(intent === "send" && !sentEdit ? { status: "enviado" as const, sent_at: new Date().toISOString() } : {}),
+        ...(canManage && input.seller_id ? { seller_id: sellerId } : {}),
+      })
       .eq("id", orderId);
     if (error) return { error: friendly(error.message) };
   } else {
     const { data, error } = await supabase
       .from("orders")
-      .insert({ ...header, org_id: orgId, seller_id: sellerId, number: 0 })
+      .insert({
+        ...header,
+        ...(intent === "send" ? { status: "enviado" as const, sent_at: new Date().toISOString() } : {}),
+        org_id: orgId,
+        seller_id: sellerId,
+        number: 0,
+      })
       .select("id")
       .single();
     if (error || !data) return { error: friendly(error?.message ?? "erro desconhecido") };
@@ -163,6 +197,29 @@ export async function saveOrder(input: OrderInput, intent: "draft" | "send"): Pr
         options: i.variant_id && i.options && Object.keys(i.options).length ? i.options : null,
       };
   });
+  if (sentEdit && orderId) {
+    // Pedido enviado: atualiza os itens no lugar (as notas continuam ligadas a eles), cria os novos e tira os removidos.
+    const keepIds = new Set(items.map((i) => i.id).filter((x): x is string => !!x && oldItemIds.includes(x)));
+    for (const [n, i] of items.entries()) {
+      const row = rowsToInsert[n];
+      if (i.id && keepIds.has(i.id)) {
+        const { error } = await supabase.from("order_items").update(row).eq("id", i.id);
+        if (error) return { error: friendly(error.message) };
+      } else {
+        const { error } = await supabase.from("order_items").insert(row);
+        if (error) return { error: friendly(error.message) };
+      }
+    }
+    const removed = oldItemIds.filter((x) => !keepIds.has(x));
+    if (removed.length) await supabase.from("order_items").delete().in("id", removed);
+    await syncOrder(supabase, orderId);
+    revalidatePath("/pedidos");
+    revalidatePath(`/pedidos/${orderId}`);
+    revalidatePath("/faturamento");
+    revalidatePath("/");
+    redirect(`/pedidos/${orderId}?ok=${encodeURIComponent("Alterações salvas.")}`);
+  }
+
   let { error: itemsError } = await supabase.from("order_items").insert(rowsToInsert);
   // Sem a migração 022 (coluna options), grava sem as opções (elas já estão na descrição).
   if (itemsError?.message.includes("options")) {
@@ -183,4 +240,15 @@ function friendly(message: string): string {
     return "Falta rodar a migração 008 no Supabase para salvar pedidos no formato novo.";
   }
   return `Não foi possível salvar: ${message}`;
+}
+
+// Quanto de cada item do pedido já saiu em nota fiscal.
+async function invoicedByItem(supabase: Awaited<ReturnType<typeof getContext>>["supabase"], orderId: string) {
+  const { data } = await supabase
+    .from("order_invoice_items")
+    .select("order_item_id, qty, order_invoices!inner(order_id)")
+    .eq("order_invoices.order_id", orderId);
+  const m = new Map<string, number>();
+  for (const d of data ?? []) m.set(d.order_item_id, (m.get(d.order_item_id) ?? 0) + Number(d.qty));
+  return m;
 }

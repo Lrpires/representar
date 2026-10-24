@@ -64,6 +64,7 @@ export function OrderEditor({
   units,
   defaultUnit,
   showCommission = true,
+  sentEdit,
 }: {
   initial: OrderInput;
   customers: EditorCustomer[];
@@ -75,6 +76,7 @@ export function OrderEditor({
   units: EditorUnit[];
   defaultUnit: string;
   showCommission?: boolean; // vendedor e gerente não veem a comissão (o % segue o padrão da representada)
+  sentEdit?: { cancelHref: string }; // alterando pedido já enviado: só "Salvar alterações" (o pedido segue enviado)
 }) {
   const { brl, num, numText, priceText } = useNumberFormat();
   const [f, setF] = useState(initial);
@@ -737,14 +739,27 @@ export function OrderEditor({
           </span>
         }
       >
-        <button type="button" disabled={pending} onClick={() => submit("draft")} className={ghostBtn}>
-          {pending ? "Salvando…" : "Salvar rascunho"}
-        </button>
-        <button type="button" disabled={pending} onClick={() => submit("send")} className={primaryBtn}>
-          <Icon name="send" size={15} />
-          <span className="sm:hidden">Enviar</span>
-          <span className="hidden sm:inline">Salvar e enviar</span>
-        </button>
+        {sentEdit ? (
+          <>
+            <Link href={sentEdit.cancelHref} className={ghostBtn}>
+              Cancelar
+            </Link>
+            <button type="button" disabled={pending} onClick={() => submit("draft")} className={primaryBtn}>
+              {pending ? "Salvando…" : "Salvar alterações"}
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" disabled={pending} onClick={() => submit("draft")} className={ghostBtn}>
+              {pending ? "Salvando…" : "Salvar rascunho"}
+            </button>
+            <button type="button" disabled={pending} onClick={() => submit("send")} className={primaryBtn}>
+              <Icon name="send" size={15} />
+              <span className="sm:hidden">Enviar</span>
+              <span className="hidden sm:inline">Salvar e enviar</span>
+            </button>
+          </>
+        )}
       </SaveBar>
     </div>
   );

@@ -14,7 +14,7 @@
 ## 2. Como trabalhar comigo (regras do dono do projeto)
 
 - Responder em **português do Brasil**, de forma **simples** (o dono é empreendedor, não programador).
-- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **024**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
+- **Antes de mudar o banco de dados: avisar** e criar uma **nova migração numerada** (a próxima é a **025**). Nunca alterar migrações já existentes. Migrações devem poder rodar mais de uma vez sem erro.
 - Visual no nível Linear/Notion, **mobile first**, seguindo o design system da marca (seção 7).
 - Commit e push só quando o dono pedir ("faz o commit e o push").
 
@@ -72,13 +72,15 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 
 **Opções do produto (cor, tamanho, voltagem…)**: listas cadastradas uma vez em Produtos → "Cores, tamanhos e opções" (`/produtos/opcoes`), **sempre de uma representada**. No pedido, os itens só aparecem depois de escolher a representada (um pedido tem produtos de uma representada só; trocar a representada tira os itens da outra). Todo produto da representada pode usar as listas dela: a grade começa vazia e as cores entram uma a uma por uma busca (código ou nome), porque cartelas passam de 100 cores; dá para escolher a lista e cruzar com outra (ex.: cor × tamanho); botão "Sem cor" lança a linha comum. Ligar a lista a produtos (até 2 por produto) é opcional: faz a grade abrir direto nela. No produto, dá para desmarcar opções que ele não tem. Cada opção pode ter acréscimo de preço (valor ou %). No pedido, escolher um produto com lista abre uma grade (por cor, ou cor × tamanho); cada opção com quantidade vira uma linha, com a descrição "Produto — Cor / Tamanho" e as opções guardadas em `order_items.options`.
 
-**Vários escritórios**: quem participa de mais de um troca pelo menu do usuário ("Escritórios"); a escolha fica no cookie `rep_org` (`src/lib/session.ts`, ação `switchOrg`).
+**Vários escritórios**: quem participa de mais de um troca pelo menu do usuário ("Escritórios"); a escolha fica no cookie `rep_org` (`src/lib/session.ts`, ação `switchOrg`). Toda consulta do servidor vai com o cabeçalho `x-org-id` do escritório aberto e o banco (migração 024) limita os dados a ele; consultas de membros devem filtrar `org_id`, porque a pessoa sempre enxerga os próprios vínculos.
 
 **Importação do sistema antigo (Bubble)**: os arquivos SQL ficam em `importacao/` (fora do git, têm dados de clientes), numerados na ordem de rodar no Supabase. IDs fixos: rodar de novo não duplica. 3 escritórios (RV, BV, VF), só 2026; vendedor antigo em `seller_name` (Painel, lista e pedido mostram esse nome até o vendedor ter login).
 
 **Vendedor do cliente e do pedido**: o cliente tem um **vendedor padrão** (`customers.seller_id`), escolhido por administrador/gerente no cadastro; quando um vendedor cadastra, fica com ele mesmo. No pedido, o vendedor vem do cliente e administrador/gerente podem trocar na hora (`orders.seller_id`); o vendedor lança sempre no próprio nome.
 
 **Preço sugerido no pedido**: o último preço que aquele cliente pagou no produto (e na mesma cor, se houver); se ele nunca comprou, o preço fica em branco. Tabelas de preço são opcionais (Configurações → Preços nos pedidos): ligadas, aparecem no menu e o pedido sugere o preço da tabela vigente.
+
+**Lançar nota pelo XML**: só aparecem os pedidos em aberto do cliente e da representada da nota (`src/lib/nfe-match.ts`). A representada é reconhecida pela raiz do CNPJ (matriz e filiais) ou pelo nome na razão social do emitente; o cliente, pelo CNPJ/CPF ou pela razão social. Há busca pelo número do pedido, e o número citado na nota (`xPed` dos itens ou "Pedido 360" nas informações complementares) já vem escolhido, com o selo "Citado na nota".
 
 **Comissões**: nascem de cada nota (valor da nota × % do pedido), com vencimento pela regra da representada. Se a representada paga **no faturamento**, é uma comissão só, com o valor completo, contada da emissão. Se paga **na liquidez**, nasce **uma comissão por parcela** da nota (duplicata), proporcional ao valor dela e vencendo pela regra aplicada ao vencimento da parcela (ex.: "dia 10 do mês seguinte": parcela de 10/12 → comissão em janeiro). As parcelas vêm do XML (`<dup>`) ou são digitadas/geradas pelo prazo do pedido ao lançar a nota (migração 021). Recebimento em **várias partes** (cada pagamento é lançado e somado; enquanto faltar, fica em aberto) e **encerramento manual com motivo** (devolução parcial, inadimplência…), que pode ser reaberto. Busca pelo número da NF em todos os meses (migração 020). Cancelar o pedido cancela as comissões a receber (gatilho no banco). Só administrador e financeiro veem.
 
@@ -114,6 +116,7 @@ Regras no código: `getContext()` em `src/lib/session.ts` devolve `role`, `canMa
 | 021 | Parcelas da nota (`order_invoice_installments`) e comissão por parcela (`commissions.installment_id`) |
 | 022 | Listas de opções (`option_lists`, `option_values`, `product_option_lists`, `product_option_hidden`), `order_items.options`, `organizations.use_price_tables` |
 | 023 | Nome do vendedor do sistema antigo (`orders.seller_name`, `customers.seller_name`) |
+| 024 | Escritório aberto: consultas levam `x-org-id` e as permissões valem só para esse escritório |
 
 Storage: `product-images` (público), `invoices` (privado, link temporário), `avatars`, `logos`.
 
@@ -135,7 +138,7 @@ Storage: `product-images` (público), `invoices` (privado, link temporário), `a
 
 ## 9. Pendências e próximos passos
 
-- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 024 liberando leitura de clientes ao financeiro.
+- **Financeiro não enxerga clientes** (regra antiga do banco): os nomes aparecem como "Cliente" para esse perfil. Correção proposta: migração 025 liberando leitura de clientes ao financeiro.
 - **Importação: próxima etapa** — notas fiscais em lote (vários XMLs de uma vez, trazendo o histórico de faturamento e comissões) e pedidos antigos por planilha. Representadas, clientes e produtos já importam.
 - **Cobrança/assinatura, teste grátis e limites por plano** — não existem.
 - Ícones sem versão no design system (lixeira, editar, relógio…) usam o desenho antigo com o traço novo.

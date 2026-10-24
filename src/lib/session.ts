@@ -64,8 +64,11 @@ export const getContext = cache(async () => {
   const numberFormat = toFmt(org);
   setActiveFormat(numberFormat);
 
+  // Daqui em diante, toda consulta vai com o escritório aberto: o banco mostra só os dados dele (migração 024).
+  const scoped = await createClient(membership.org_id as string);
+
   return {
-    supabase,
+    supabase: scoped,
     user,
     orgId: membership.org_id as string,
     orgName: org?.name ?? "Meu escritório",

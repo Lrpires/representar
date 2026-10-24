@@ -68,7 +68,7 @@ async function planPrincipals(ctx: Ctx, rows: { line: number; cells: Cells }[]):
 async function planCustomers(ctx: Ctx, rows: { line: number; cells: Cells }[]): Promise<Planned[]> {
   const [{ data }, { data: members }] = await Promise.all([
     ctx.supabase.from("customers").select("id, name, cnpj").limit(50000),
-    ctx.supabase.from("members").select("user_id, email"),
+    ctx.supabase.from("members").select("user_id, email").eq("org_id", ctx.orgId),
   ]);
   const byCnpj = new Map((data ?? []).filter((p) => p.cnpj).map((p) => [onlyDigits(p.cnpj!), p.id] as const));
   const byName = new Map((data ?? []).map((p) => [lower(p.name), p.id] as const));

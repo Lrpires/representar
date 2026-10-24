@@ -65,7 +65,7 @@ export default async function BillingPage({
   /* ---------- A faturar ---------- */
   let openQuery = supabase
     .from("orders")
-    .select("id, number, status, order_date, sent_at, expected_delivery, total, discount_pct, payment_terms, principal_id, customers(name, cnpj), principals(name, cnpj), order_items(id, code, description, qty, unit, unit_price, position)")
+    .select("id, number, status, order_date, sent_at, expected_delivery, total, discount_pct, payment_terms, principal_id, customers(name, cnpj), principals(name, legal_name, cnpj), order_items(id, code, description, qty, unit, unit_price, position)")
     .in("status", OPEN_STATUSES)
     .order("order_date")
     .limit(1000);
@@ -138,7 +138,7 @@ export default async function BillingPage({
   }
   type OpenRow = {
     id: string; number: number; status: string; order_date: string; sent_at: string | null; expected_delivery: string | null; total: number;
-    customers: { name: string; cnpj: string | null } | null; principals: { name: string; cnpj: string | null } | null;
+    customers: { name: string; cnpj: string | null } | null; principals: { name: string; legal_name?: string | null; cnpj: string | null } | null;
     discount_pct: number;
     payment_terms: string | null;
     order_items: { id: string; code: string | null; description: string; qty: number; unit: string; unit_price: number; position: number }[];
@@ -157,6 +157,7 @@ export default async function BillingPage({
 
   const xmlOrders: OpenOrder[] = ((openData ?? []) as unknown as OpenRow[]).map((o) => ({
     id: o.id,
+    number: o.number,
     label: formatOrderNumber(o.number, settings),
     date: o.order_date,
     status: o.status,
@@ -164,6 +165,7 @@ export default async function BillingPage({
     customerName: o.customers?.name ?? "",
     customerCnpj: o.customers?.cnpj ?? null,
     principalName: o.principals?.name ?? "",
+    principalLegalName: o.principals?.legal_name ?? null,
     principalCnpj: o.principals?.cnpj ?? null,
     items: o.order_items.map((i) => ({ id: i.id, code: i.code ?? "", description: i.description, qty: Number(i.qty), invoiced: doneQty.get(i.id) ?? 0 })),
   }));

@@ -43,7 +43,7 @@ export default async function OrdersPage({
   if (sp.novo === "1") redirect(`${PATH}/novo${sp.cliente ? `?cliente=${sp.cliente}` : ""}`);
 
   const q = safeQ(sp.q).toLowerCase();
-  const { supabase, role, isBackOffice } = await getContext();
+  const { supabase, role, isBackOffice, orgId } = await getContext();
   const settings = await getSettings();
   const canCreate = role !== "finance";
 
@@ -62,7 +62,7 @@ export default async function OrdersPage({
     query,
     supabase.from("principals").select("id, name").order("name"),
     isBackOffice
-      ? supabase.from("members").select("user_id, full_name, email")
+      ? supabase.from("members").select("user_id, full_name, email").eq("org_id", orgId)
       : Promise.resolve({ data: [] as { user_id: string; full_name: string | null; email: string | null }[] }),
     supabase.from("customers").select("id", { count: "exact", head: true }),
   ]);

@@ -19,7 +19,24 @@ export type Nfe = {
   destName: string;
   items: NfeItem[];
   installments: NfeInstallment[];
+  additionalInfo: string; // informações complementares (infCpl / infAdFisco)
+  orderRefs: string[]; // números de pedido citados na nota (xPed dos itens e "Pedido 123" nas informações)
 };
+
+// Números de pedido escritos nas informações complementares: "Pedido 360", "Ped. nº 360", "N/Pedido: 360",
+// "Seu pedido 360/26", "Pedido do representante 360"…
+export function orderRefsFromText(text: string): string[] {
+  const out: string[] = [];
+  const re = /\bped(?:ido)?s?\b\.?[^0-9\n]{0,25}?(\d{1,9})(?:\s*[,e/]\s*(\d{1,9}))*/gi;
+  for (const m of text.matchAll(re)) {
+    for (const n of m[0].match(/\d{1,9}/g) ?? []) {
+      // "360/26": o número que vem depois da barra é o ano, não outro pedido.
+      if (/^\d{2}$/.test(n) && m[0].includes(`/${n}`)) continue;
+      out.push(n.replace(/^0+(?=\d)/, ""));
+    }
+  }
+  return out;
+}
 
 const num = (s: string | null | undefined) => {
   const n = Number((s ?? "").trim());
@@ -62,9 +79,15 @@ export function parseNfe(xml: string): Nfe {
     .map((d) => ({ number: text("nDup", d), dueDate: text("dVenc", d).slice(0, 10), value: num(text("vDup", d)) }))
     .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d.dueDate) && d.value > 0);
 
+  const additionalInfo = [text("infCpl"), text("infAdFisco")].filter(Boolean).join("\n");
+  const xPed = all("xPed", inf).map((e) => digits(e.textContent).replace(/^0+(?=\d)/, "")).filter(Boolean);
+  const orderRefs = [...new Set([...xPed, ...orderRefsFromText(additionalInfo)])];
+
   return {
     accessKey,
     installments,
+    additionalInfo,
+    orderRefs,
     number: text("nNF", ide).replace(/^0+(?=\d)/, ""),
     series: text("serie", ide),
     issuedAt: issued.slice(0, 10),

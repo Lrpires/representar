@@ -40,7 +40,7 @@ export default async function HomePage({
   searchParams: Promise<{ periodo?: string; de?: string; ate?: string; rep?: string; vend?: string }>;
 }) {
   const sp = await searchParams;
-  const { supabase, canManage, role, isBackOffice, user } = await getContext();
+  const { supabase, canManage, role, isBackOffice, user, orgId } = await getContext();
   const [counts, settings, profile] = await Promise.all([getCounts(), getSettings(), getProfile()]);
   const today = todayISO();
   const P = resolvePeriod(sp.periodo, sp.de, sp.ate, today);
@@ -147,7 +147,7 @@ export default async function HomePage({
     ),
     supabase.from("principals").select("id, name").order("name"),
     isBackOffice
-      ? supabase.from("members").select("user_id, full_name, email, role")
+      ? supabase.from("members").select("user_id, full_name, email, role").eq("org_id", orgId)
       : Promise.resolve({ data: [] as { user_id: string; full_name: string | null; email: string | null; role: string }[] }),
     isBackOffice
       ? supabase.from("payables").select("amount, due_date").eq("status", "pendente").lte("due_date", addDays(today, 7))

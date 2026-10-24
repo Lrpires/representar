@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { parseNfe, matchItems, type Nfe } from "@/lib/nfe";
+import { samePrincipal, sameCustomer } from "@/lib/nfe-match";
 import { digits } from "@/lib/br";
 import { formatDate } from "@/lib/format";
 import { Icon } from "@/components/icons";
@@ -10,6 +11,7 @@ import { useNumberFormat } from "@/components/number-format";
 
 export type OpenOrder = {
   id: string;
+  number: number;
   label: string;
   date: string;
   status: string;
@@ -17,6 +19,7 @@ export type OpenOrder = {
   customerName: string;
   customerCnpj: string | null;
   principalName: string;
+  principalLegalName?: string | null;
   principalCnpj: string | null;
   items: { id: string; code: string; description: string; qty: number; invoiced: number }[];
 };
@@ -30,23 +33,32 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [orderId, setOrderId] = useState("");
   const [qty, setQty] = useState<Record<string, string>>({});
-  const [showAll, setShowAll] = useState(false);
+  const [search, setSearch] = useState("");
 
-  // Pontua cada pedido em aberto: mesmo emitente e mesmo destinatário valem mais; itens em comum, também.
+  // Só entram os pedidos em aberto do cliente e da representada da nota.
+  const candidates = useMemo(() => (nfe ? orders.filter((o) => samePrincipal(o, nfe) && sameCustomer(o, nfe)) : []), [nfe, orders]);
+  const anyPrincipal = useMemo(() => (nfe ? orders.some((o) => samePrincipal(o, nfe)) : false), [nfe, orders]);
+  const anyCustomer = useMemo(() => (nfe ? orders.some((o) => sameCustomer(o, nfe)) : false), [nfe, orders]);
+  // Número do pedido citado na nota (forte) ou qualquer número das informações complementares (fraco).
+  const cited = useMemo(() => {
+    if (!nfe) return new Set<string>();
+    const strong = new Set(nfe.orderRefs);
+    const byRef = candidates.filter((o) => strong.has(String(o.number)));
+    if (byRef.length) return new Set(byRef.map((o) => o.id));
+    const loose = new Set((nfe.additionalInfo.match(/\d{1,7}/g) ?? []).map((x) => x.replace(/^0+(?=\d)/, "")));
+    const byLoose = candidates.filter((o) => loose.has(String(o.number)));
+    return new Set(byLoose.length === 1 ? [byLoose[0].id] : []);
+  }, [nfe, candidates]);
   const ranked = useMemo(() => {
     if (!nfe) return [];
-    return orders
-      .map((o) => {
-        const sameP = !!o.principalCnpj && digits(o.principalCnpj) === nfe.emitCnpj;
-        const sameC = !!o.customerCnpj && digits(o.customerCnpj) === nfe.destDoc;
-        const m = matchItems(nfe.items, o.items);
-        const score = (sameP ? 4 : 0) + (sameC ? 4 : 0) + m.qty.size;
-        return { o, sameP, sameC, matched: m.qty.size, score };
-      })
-      .sort((a, b) => b.score - a.score || b.o.date.localeCompare(a.o.date));
-  }, [nfe, orders]);
-  const strong = ranked.filter((r) => r.sameC && r.sameP);
-  const list = showAll || strong.length === 0 ? ranked : strong;
+    return candidates
+      .map((o) => ({ o, cited: cited.has(o.id), matched: matchItems(nfe.items, o.items).qty.size }))
+      .sort((a, b) => Number(b.cited) - Number(a.cited) || b.matched - a.matched || b.o.date.localeCompare(a.o.date));
+  }, [nfe, candidates, cited]);
+  const term = search.trim().toLowerCase();
+  const list = term
+    ? ranked.filter(({ o }) => o.label.toLowerCase().includes(term) || String(o.number) === term.replace(/\D/g, ""))
+    : ranked;
   const chosen = orders.find((o) => o.id === orderId) ?? null;
 
   function choose(id: string) {
@@ -66,8 +78,12 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
     try {
       const n = parseNfe(await file.text());
       setNfe(n);
-      // Já escolhe sozinho quando só um pedido combina com cliente e representada.
-      const best = orders.filter((o) => digits(o.principalCnpj) === n.emitCnpj && digits(o.customerCnpj) === n.destDoc);
+      setSearch("");
+      // Já escolhe sozinho: o pedido citado na nota ou, se só houver um do cliente com a representada, esse.
+      const mine = orders.filter((o) => samePrincipal(o, n) && sameCustomer(o, n));
+      const refs = new Set(n.orderRefs);
+      const byRef = mine.filter((o) => refs.has(String(o.number)));
+      const best = byRef.length === 1 ? byRef : mine.length === 1 ? mine : [];
       if (best.length === 1) {
         setOrderId(best[0].id);
         const m = matchItems(n.items, best[0].items);
@@ -132,26 +148,40 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
             </p>
           </div>
 
-          {/* Pedido a vincular */}
+          {/* Pedido a vincular: só os do cliente e da representada da nota */}
           <div className="sm:col-span-2">
-            <div className="mb-1.5 flex items-baseline justify-between">
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
               <p className="text-[13px] font-medium text-ink-2">Vincular ao pedido</p>
-              {strong.length > 0 && ranked.length > strong.length ? (
-                <button type="button" onClick={() => setShowAll((v) => !v)} className="text-xs font-medium text-pen hover:underline">
-                  {showAll ? "Só os sugeridos" : "Ver todos em aberto"}
-                </button>
+              {candidates.length > 3 ? (
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar nº do pedido"
+                  aria-label="Buscar pelo número do pedido"
+                  className="h-9 w-44 rounded-md border border-line-strong bg-surface px-2.5 text-sm outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/25 sm:h-8"
+                />
               ) : null}
             </div>
-            {strong.length === 0 ? (
-              <p className="mb-2 rounded-md bg-warn-soft px-3 py-2 text-[13px] text-warn">
-                Nenhum pedido em aberto com este cliente e esta representada. Escolha manualmente abaixo.
+            {nfe.orderRefs.length ? (
+              <p className="mb-2 text-xs text-muted">
+                A nota cita {nfe.orderRefs.length === 1 ? "o pedido" : "os pedidos"} {nfe.orderRefs.join(", ")}.
+                {cited.size ? "" : " Nenhum deles está em aberto para este cliente."}
               </p>
             ) : null}
-            {list.length === 0 ? (
-              <p className="text-[13px] text-muted">Não há pedidos enviados aguardando faturamento.</p>
+            {candidates.length === 0 ? (
+              <p className="rounded-md bg-warn-soft px-3 py-2 text-[13px] text-warn">
+                {!anyPrincipal
+                  ? `Não achei a representada desta nota (${nfe.emitName || nfe.emitCnpj}). Confira o CNPJ dela no cadastro da representada.`
+                  : !anyCustomer
+                    ? `Não achei pedido em aberto do cliente ${nfe.destName || nfe.destDoc}. Confira o CNPJ no cadastro do cliente.`
+                    : `${nfe.destName || "Este cliente"} não tem pedido em aberto com esta representada.`}
+              </p>
+            ) : list.length === 0 ? (
+              <p className="rounded-md bg-subtle px-3 py-2 text-[13px] text-muted">Nenhum pedido deste cliente com esse número.</p>
             ) : (
               <ul className="max-h-64 divide-y divide-line overflow-y-auto rounded-lg border border-line">
-                {list.map(({ o, sameC, sameP, matched }) => (
+                {list.map(({ o, cited: isCited, matched }) => (
                   <li key={o.id}>
                     <label className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 transition ${orderId === o.id ? "bg-pen-soft/60" : "hover:bg-subtle"}`}>
                       <input type="radio" name="_pick" checked={orderId === o.id} onChange={() => choose(o.id)} className="h-4 w-4 accent-[var(--color-pen)]" />
@@ -165,7 +195,7 @@ export function XmlImport({ orders }: { orders: OpenOrder[] }) {
                           {matched ? ` · ${matched} ${matched === 1 ? "item casou" : "itens casaram"}` : ""}
                         </span>
                       </span>
-                      {sameC && sameP ? <Badge tone="ok">Sugerido</Badge> : o.status === "parcial" ? <Badge tone="pen">Parcial</Badge> : null}
+                      {isCited ? <Badge tone="ok">Citado na nota</Badge> : o.status === "parcial" ? <Badge tone="pen">Parcial</Badge> : null}
                     </label>
                   </li>
                 ))}

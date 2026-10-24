@@ -48,14 +48,14 @@ export default async function GoalsPage({
   searchParams: Promise<{ mes?: string; nova?: string; total?: string; plano?: string; distribuir?: string; ok?: string; erro?: string }>;
 }) {
   const sp = await searchParams;
-  const { supabase, canManage, isBackOffice } = await getContext();
+  const { supabase, canManage, isBackOffice, orgId } = await getContext();
   const month = monthInfo(sp.mes);
   const today = todayISO();
 
   const [{ goals, sales, invoices, error }, { data: principals }, { data: members }] = await Promise.all([
     loadGoals(month.start, month.end),
     supabase.from("principals").select("id, name, active").order("name"),
-    supabase.from("members").select("*"),
+    supabase.from("members").select("*").eq("org_id", orgId),
   ]);
 
   const principalName = new Map((principals ?? []).map((p) => [p.id, p.name] as const));

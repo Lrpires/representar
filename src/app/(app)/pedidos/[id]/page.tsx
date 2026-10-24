@@ -13,6 +13,7 @@ import { brl, formatDate, todayISO } from "@/lib/format";
 import { unitLabel } from "@/lib/units";
 import { loadEditorData } from "../data";
 import { OrderEditor } from "../editor";
+import { InvoicePanel } from "../../faturamento/invoice-panel";
 import { Sheet } from "@/components/sheet";
 import { Icon, type IconName } from "@/components/icons";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -29,7 +30,7 @@ export default async function OrderPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ erro?: string; ok?: string; faturar?: string; finalizar?: string }>;
+  searchParams: Promise<{ erro?: string; ok?: string; faturar?: string; finalizar?: string; nota?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -63,16 +64,24 @@ export default async function OrderPage({
   const commissionPct = Number(o.commission_pct ?? 0);
 
   // Notas fiscais do pedido (antes da migração 009, a lista vem vazia).
-  const { data: invData } = await supabase
+  // Com os itens da nota (025) e as parcelas (021); sem essas migrações, carrega com o que houver.
+  const invBase =
+    "id, number, series, issued_at, value, file_path, file_name, notes, order_invoice_items(order_item_id, qty), commissions(value, pct, due_date, status, received_at)";
+  const full = await supabase
     .from("order_invoices")
-    .select("id, number, series, issued_at, value, file_path, file_name, notes, order_invoice_items(order_item_id, qty), commissions(value, pct, due_date, status, received_at)")
+    .select(`${invBase}, order_invoice_lines(qty, unit), order_invoice_installments(due_date, position)`)
     .eq("order_id", id)
     .order("issued_at");
+  const invData: unknown[] | null = full.error
+    ? (await supabase.from("order_invoices").select(invBase).eq("order_id", id).order("issued_at")).data
+    : full.data;
   type Inv = {
     id: string; number: string | null; series: string | null; issued_at: string; value: number;
     file_path: string | null; file_name: string | null; notes: string | null;
     order_invoice_items: { order_item_id: string; qty: number }[];
     commissions: { value: number; pct: number; due_date: string; status: string; received_at: string | null }[];
+    order_invoice_lines?: { qty: number; unit: string | null }[];
+    order_invoice_installments?: { due_date: string; position: number }[];
   };
   const invoices = (invData ?? []) as unknown as Inv[];
   const invoicedQty = new Map<string, number>();
@@ -309,8 +318,13 @@ export default async function OrderPage({
           progress={totalQty ? Math.min(doneQty / totalQty, 1) : 0}
           canInvoice={canInvoice}
           newHref={`${here}?faturar=1`}
+          noteHref={(nid) => `${here}?nota=${nid}`}
+          unit={items?.[0]?.unit ?? "unidade"}
         />
       ) : null}
+
+      {/* A nota abre aqui mesmo, por cima do pedido (só para consulta; excluir é no Faturamento). */}
+      {sp.nota ? <InvoicePanel invoiceId={sp.nota} closeHref={here} fromOrder /> : null}
 
       <Sheet
         open={sp.faturar === "1" && canInvoice}
@@ -401,22 +415,23 @@ function Stepper({
   );
 }
 
-// Faturamento do pedido: notas fiscais, quantidades, arquivo e comissão de cada uma.
+// Faturamento do pedido: as notas numa tabela (NF, emissão, quantidade, valor, vencimentos, arquivo).
+// Clicar numa nota abre o painel dela aqui mesmo.
 function Billing({
   invoices,
-  items,
-  invoicedQty,
   total,
   invoicedTotal,
-  progress,
   canInvoice,
   newHref,
+  noteHref,
+  unit,
 }: {
   invoices: {
     id: string; number: string | null; series: string | null; issued_at: string; value: number;
     file_path: string | null; file_name: string | null; notes: string | null;
     order_invoice_items: { order_item_id: string; qty: number }[];
-    commissions: { value: number; pct: number; due_date: string; status: string; received_at: string | null }[];
+    order_invoice_lines?: { qty: number; unit: string | null }[];
+    order_invoice_installments?: { due_date: string; position: number }[];
   }[];
   items: { id: string; description: string; unit: string; qty: number }[];
   invoicedQty: Map<string, number>;
@@ -425,30 +440,27 @@ function Billing({
   progress: number;
   canInvoice: boolean;
   newHref: string;
+  noteHref: (id: string) => string;
+  unit: string;
 }) {
-  const desc = new Map(items.map((i) => [i.id, i]));
+  // Quantidade da nota: a soma dos itens da NF (025); nas notas antigas, a soma ligada aos itens do pedido.
+  const qtyOf = (inv: (typeof invoices)[number]) =>
+    inv.order_invoice_lines?.length
+      ? inv.order_invoice_lines.reduce((s, l) => s + Number(l.qty), 0)
+      : inv.order_invoice_items.reduce((s, l) => s + Number(l.qty), 0);
+  const dues = (inv: (typeof invoices)[number]) =>
+    [...(inv.order_invoice_installments ?? [])].sort((a, b) => a.position - b.position).map((x) => formatDate(x.due_date));
+  const totalQty = invoices.reduce((s, i) => s + qtyOf(i), 0);
+  const pct = total ? Math.min(invoicedTotal / total, 1) : 0;
+  const left = Math.max(total - invoicedTotal, 0);
+  const u = unitLabel(unit).toLowerCase();
+
   return (
     <section className="mt-5 overflow-hidden rounded-xl border border-line bg-surface">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold">
-            Faturamento <span className="ml-1 font-normal text-muted">{invoices.length} {invoices.length === 1 ? "nota" : "notas"}</span>
-          </h2>
-          <div className="mt-1.5 flex items-center gap-2.5">
-            <span className="block h-1.5 w-32 overflow-hidden rounded-full bg-active sm:w-48">
-              <span className="block h-full rounded-full bg-ok" style={{ width: `${progress * 100}%` }} />
-            </span>
-            <span className="text-xs tabular-nums text-muted">
-              {brl(invoicedTotal)} de {brl(total)} · {Math.round(progress * 100)}% das quantidades
-            </span>
-          </div>
-        </div>
-        {canInvoice && invoices.length > 0 ? (
-          <Link href={newHref} scroll={false} className={ghostBtn}>
-            <Icon name="plus" size={15} strokeWidth={2} />
-            Nova nota
-          </Link>
-        ) : null}
+        <h2 className="text-sm font-semibold">
+          Faturamento <span className="ml-1 font-normal text-muted">{invoices.length} {invoices.length === 1 ? "nota" : "notas"}</span>
+        </h2>
       </header>
 
       {invoices.length === 0 ? (
@@ -456,74 +468,118 @@ function Billing({
           Nenhuma nota fiscal ainda. Quando a representada faturar, use <span className="font-medium text-ink-2">Marcar como faturado</span>.
         </p>
       ) : (
-        <ul className="divide-y divide-line">
-          {invoices.map((inv) => {
-            const qty = inv.order_invoice_items.reduce((s, l) => s + Number(l.qty), 0);
-            return (
-              <li key={inv.id} className="px-4 py-3.5 sm:px-5">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ok-soft text-ok">
-                    <Icon name="receipt" size={17} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <Link href={`/faturamento?nota=${inv.id}`} className="text-sm font-medium hover:text-accent-ink hover:underline">
-                      NF {inv.number || "sem número"}
-                      {inv.series ? <span className="font-normal text-muted"> · série {inv.series}</span> : null}
-                    </Link>
-                    <p className="text-xs text-muted">
-                      {formatDate(inv.issued_at)}
-                      {qty ? ` · ${numText(qty, 3)} un. em ${inv.order_invoice_items.length} ${inv.order_invoice_items.length === 1 ? "item" : "itens"}` : ""}
-                      {inv.notes ? ` · ${inv.notes}` : ""}
-                    </p>
-                  </div>
-                  <p className="text-sm font-semibold tabular-nums">{brl(Number(inv.value))}</p>
-                  <div className="flex items-center">
-                    {inv.file_path ? (
-                      <>
-                        <a href={`/nf/${inv.id}`} target="_blank" rel="noopener noreferrer" className={iconBtn} title="Ver nota fiscal">
-                          <Icon name="file" size={16} />
-                          <span className="sr-only">Ver nota fiscal</span>
-                        </a>
-                        <a href={`/nf/${inv.id}?baixar=1`} className={iconBtn} title={`Baixar ${inv.file_name ?? "arquivo da nota"}`}>
-                          <Icon name="download" size={16} />
-                          <span className="sr-only">Baixar arquivo da nota</span>
-                        </a>
-                      </>
-                    ) : (
-                      <span className="px-2 text-[11px] text-faint" title="Nenhum arquivo anexado">sem PDF</span>
-                    )}
-                    <Link href={`/faturamento?nota=${inv.id}`} className={iconBtn} title="Ver detalhes, editar ou excluir no Faturamento">
-                      <Icon name="chevron-right" size={16} />
-                      <span className="sr-only">Abrir no Faturamento</span>
-                    </Link>
-                  </div>
-                </div>
-                {inv.order_invoice_items.length ? (
-                  <details className="group mt-2 sm:ml-[3.25rem]">
-                    <summary className="inline-flex cursor-pointer items-center gap-1 text-xs text-muted hover:text-ink">
-                      <Icon name="chevron-right" size={12} className="transition group-open:rotate-90" />
-                      Ver quantidades
-                    </summary>
-                    <ul className="mt-2 grid gap-1 rounded-lg bg-subtle p-3 text-[13px]">
-                      {inv.order_invoice_items.map((l) => {
-                        const it = desc.get(l.order_item_id);
-                        return (
-                          <li key={l.order_item_id} className="flex justify-between gap-3">
-                            <span className="truncate text-ink-2">{it?.description ?? "Item removido"}</span>
-                            <span className="shrink-0 tabular-nums">
-                              {numText(Number(l.qty), 3)}
-                              <span className="text-muted"> / {numText(Number(it?.qty ?? 0), 3)} {it ? unitLabel(it.unit).toLowerCase() : ""}</span>
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </details>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          {/* Resumo: quanto já foi faturado e quanto falta */}
+          <dl className="grid grid-cols-2 border-b border-line sm:grid-cols-4 [&>div]:px-4 [&>div]:py-3 sm:[&>div]:px-5">
+            <div>
+              <dt className="text-xs text-muted">Faturado</dt>
+              <dd className="mt-0.5 text-base font-semibold tabular-nums">{brl(invoicedTotal)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Do pedido</dt>
+              <dd className="mt-0.5 text-base font-semibold tabular-nums">{brl(total)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Falta faturar</dt>
+              <dd className={`mt-0.5 text-base font-semibold tabular-nums ${left > 0.005 ? "" : "text-ok"}`}>{left > 0.005 ? brl(left) : "Nada"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Quantidade nas notas</dt>
+              <dd className="mt-0.5 text-base font-semibold tabular-nums">
+                {numText(totalQty, 3) || "0"} <span className="text-xs font-normal text-muted">{u}</span>
+              </dd>
+            </div>
+            <div className="col-span-2 sm:col-span-4 !pt-0">
+              <span className="flex items-center gap-2.5">
+                <span className="block h-1.5 flex-1 overflow-hidden rounded-full bg-active">
+                  <span className="block h-full rounded-full bg-ok" style={{ width: `${pct * 100}%` }} />
+                </span>
+                <span className="text-xs tabular-nums text-muted">{Math.round((invoicedTotal / (total || 1)) * 100)}% do valor</span>
+              </span>
+            </div>
+          </dl>
+
+          {/* Computador: tabela */}
+          <table className="hidden w-full text-sm md:table">
+            <thead className="bg-subtle text-xs text-muted">
+              <tr>
+                <th className="py-2 pl-5 text-left font-medium">Nota fiscal</th>
+                <th className="px-3 py-2 text-left font-medium">Emissão</th>
+                <th className="px-3 py-2 text-right font-medium">Quantidade</th>
+                <th className="px-3 py-2 text-right font-medium">Valor</th>
+                <th className="px-3 py-2 text-left font-medium">Vencimentos</th>
+                <th className="w-24 pr-5" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {invoices.map((inv) => {
+                const q = qtyOf(inv);
+                const d = dues(inv);
+                return (
+                  <tr key={inv.id} className="group relative transition-colors hover:bg-subtle">
+                    <td className="py-2.5 pl-5">
+                      <Link href={noteHref(inv.id)} scroll={false} className="font-medium after:absolute after:inset-0 group-hover:text-accent-ink">
+                        NF {inv.number || "sem número"}
+                      </Link>
+                      {inv.notes ? <span className="block max-w-[16rem] truncate text-xs text-muted">{inv.notes}</span> : null}
+                    </td>
+                    <td className="px-3 py-2.5 tabular-nums text-ink-2">{formatDate(inv.issued_at)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{q ? `${numText(q, 3)} ${u}` : <span className="text-faint">—</span>}</td>
+                    <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{brl(Number(inv.value))}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-ink-2">{d.length ? d.join(" · ") : <span className="text-faint">—</span>}</td>
+                    <td className="relative z-10 pr-5 text-right">
+                      <span className="inline-flex items-center">
+                        {inv.file_path ? (
+                          <a href={`/nf/${inv.id}?baixar=1`} className={iconBtn} title={`Baixar ${inv.file_name ?? "arquivo da nota"}`}>
+                            <Icon name="download" size={15} />
+                            <span className="sr-only">Baixar arquivo da nota</span>
+                          </a>
+                        ) : null}
+                        <Icon name="chevron-right" size={16} className="ml-1 text-faint group-hover:text-ink" />
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot className="border-t border-line-strong bg-subtle text-sm">
+              <tr>
+                <td className="py-2.5 pl-5 font-medium" colSpan={2}>
+                  Total
+                </td>
+                <td className="px-3 py-2.5 text-right font-medium tabular-nums">{numText(totalQty, 3)} {u}</td>
+                <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{brl(invoicedTotal)}</td>
+                <td colSpan={2} />
+              </tr>
+            </tfoot>
+          </table>
+
+          {/* Celular: uma linha por nota */}
+          <ul className="divide-y divide-line md:hidden">
+            {invoices.map((inv) => {
+              const q = qtyOf(inv);
+              const d = dues(inv);
+              return (
+                <li key={inv.id}>
+                  <Link href={noteHref(inv.id)} scroll={false} className="flex items-center gap-3 px-4 py-3 active:bg-hover">
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-3">
+                        <span className="text-sm font-medium">NF {inv.number || "sem número"}</span>
+                        <span className="text-sm font-semibold tabular-nums">{brl(Number(inv.value))}</span>
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted">
+                        {formatDate(inv.issued_at)}
+                        {q ? ` · ${numText(q, 3)} ${u}` : ""}
+                        {d.length ? ` · vence ${d.join(", ")}` : ""}
+                      </span>
+                    </span>
+                    <Icon name="chevron-right" size={16} className="text-faint" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </section>
   );
@@ -599,8 +655,6 @@ function OrderView({
               <th className="w-24 px-2 py-2 text-left font-medium">Unid.</th>
               <th className="w-24 px-2 py-2 text-right font-medium">Qtd.</th>
               <th className="w-28 px-2 py-2 text-right font-medium">Preço unit.</th>
-              <th className="w-20 px-2 py-2 text-right font-medium">Desc.</th>
-              {invoicedQty ? <th className="w-28 px-2 py-2 text-right font-medium">Faturado</th> : null}
               <th className="w-32 py-2 pl-2 pr-5 text-right font-medium">Total</th>
             </tr>
           </thead>
@@ -612,15 +666,11 @@ function OrderView({
                 <td className="px-2 py-3 font-medium">{i.description}</td>
                 <td className="px-2 py-3 text-ink-2">{unitLabel(i.unit)}</td>
                 <td className="px-2 py-3 text-right tabular-nums">{numText(Number(i.qty), 3)}</td>
-                <td className="px-2 py-3 text-right tabular-nums">{brl(Number(i.list_price))}</td>
-                <td className="px-2 py-3 text-right tabular-nums text-ink-2">
-                  {Number(i.discount_pct) ? `${numText(Number(i.discount_pct), 2)}%` : "—"}
+                <td className="px-2 py-3 text-right tabular-nums">
+                  {brl(Number(i.list_price))}
+                  {/* Desconto do item, quando houver, junto do preço */}
+                  {Number(i.discount_pct) ? <span className="block text-xs text-muted">−{numText(Number(i.discount_pct), 2)}%</span> : null}
                 </td>
-                {invoicedQty ? (
-                  <td className="px-2 py-3 text-right">
-                    <InvoicedCell done={invoicedQty.get(i.id) ?? 0} total={Number(i.qty)} />
-                  </td>
-                ) : null}
                 <td className="py-3 pl-2 pr-5 text-right font-medium tabular-nums">{brl(Number(i.line_total))}</td>
               </tr>
             ))}
@@ -635,11 +685,6 @@ function OrderView({
                   {numText(Number(i.qty), 3)} {unitLabel(i.unit).toLowerCase()} × {brl(Number(i.list_price))}
                   {Number(i.discount_pct) ? ` · −${numText(Number(i.discount_pct), 2)}%` : ""}
                 </p>
-                {invoicedQty ? (
-                  <div className="mt-1">
-                    <InvoicedCell done={invoicedQty.get(i.id) ?? 0} total={Number(i.qty)} left />
-                  </div>
-                ) : null}
               </div>
               <p className="shrink-0 font-semibold tabular-nums">{brl(Number(i.line_total))}</p>
             </li>
@@ -686,17 +731,3 @@ function OrderView({
   );
 }
 
-// Quanto do item já foi faturado: "60 / 120" com barrinha.
-function InvoicedCell({ done, total, left }: { done: number; total: number; left?: boolean }) {
-  const share = total ? Math.min(done / total, 1) : 0;
-  return (
-    <span className={`inline-flex flex-col gap-1 ${left ? "items-start" : "items-end"}`}>
-      <span className={`text-xs tabular-nums ${share >= 1 ? "font-medium text-ok" : share > 0 ? "text-ink-2" : "text-faint"}`}>
-        {numText(done, 3)} / {numText(total, 3)}
-      </span>
-      <span className="block h-1 w-14 overflow-hidden rounded-full bg-active">
-        <span className="block h-full rounded-full bg-ok" style={{ width: `${share * 100}%` }} />
-      </span>
-    </span>
-  );
-}

@@ -4,7 +4,24 @@
 
 import { digits } from "./br";
 
-export type NfeItem = { code: string; description: string; unit: string; qty: number; unitPrice: number; total: number };
+export type NfeItem = {
+  code: string;
+  description: string;
+  unit: string;
+  qty: number;
+  unitPrice: number;
+  total: number;
+  ncm?: string;
+  cfop?: string;
+  orderRef?: string; // xPed: nº do pedido de compra informado no item
+};
+// Quem emitiu / quem recebeu, com o endereço.
+export type NfeParty = { doc: string; name: string; fantasy: string; ie: string; address: string; city: string; uf: string; zip: string; phone: string };
+export type NfeTotals = {
+  products: number; freight: number; insurance: number; discount: number; other: number;
+  ipi: number; icmsBase: number; icms: number; icmsSt: number; total: number;
+};
+export type NfeTransport = { mode: string; carrier: string; carrierDoc: string; volumes: number; kind: string; netWeight: number; grossWeight: number };
 // Parcela (duplicata) da cobrança: número, vencimento e valor.
 export type NfeInstallment = { number: string; dueDate: string; value: number };
 export type Nfe = {
@@ -20,6 +37,13 @@ export type Nfe = {
   items: NfeItem[];
   installments: NfeInstallment[];
   additionalInfo: string; // informações complementares (infCpl / infAdFisco)
+  nature: string; // natureza da operação
+  departure: string; // data de saída/entrada (AAAA-MM-DD)
+  protocol: string; // protocolo de autorização
+  emit: NfeParty;
+  dest: NfeParty;
+  totals: NfeTotals;
+  transport: NfeTransport;
   orderRefs: string[]; // números de pedido citados na nota (xPed dos itens e "Pedido 123" nas informações)
 };
 
@@ -71,8 +95,36 @@ export function parseNfe(xml: string): Nfe {
       qty: num(text("qCom", prod)),
       unitPrice: num(text("vUnCom", prod)),
       total: num(text("vProd", prod)),
+      ncm: text("NCM", prod),
+      cfop: text("CFOP", prod),
+      orderRef: text("xPed", prod),
     };
   });
+
+  const party = (el: Element | null, addrTag: string): NfeParty => {
+    const a = el ? first(addrTag, el) : null;
+    const get = (t: string, root: Element | null) => (root ? text(t, root) : "");
+    return {
+      doc: digits(get("CNPJ", el) || get("CPF", el)),
+      name: get("xNome", el),
+      fantasy: get("xFant", el),
+      ie: get("IE", el),
+      address: [[get("xLgr", a), get("nro", a)].filter(Boolean).join(", "), get("xCpl", a), get("xBairro", a)].filter(Boolean).join(" · "),
+      city: get("xMun", a),
+      uf: get("UF", a),
+      zip: get("CEP", a),
+      phone: get("fone", a),
+    };
+  };
+  const tot = first("ICMSTot", inf);
+  const tv = (t: string) => (tot ? num(text(t, tot)) : 0);
+  const transp = first("transp", inf);
+  const carrier = transp ? first("transporta", transp) : null;
+  const vols = transp ? all("vol", transp) : [];
+  const MODES: Record<string, string> = {
+    "0": "Por conta do emitente (CIF)", "1": "Por conta do destinatário (FOB)", "2": "Por conta de terceiros",
+    "3": "Próprio, do remetente", "4": "Próprio, do destinatário", "9": "Sem frete",
+  };
 
   // Cobrança: <cobr><dup><nDup/><dVenc/><vDup/></dup>…
   const installments: NfeInstallment[] = all("dup", inf)
@@ -88,6 +140,24 @@ export function parseNfe(xml: string): Nfe {
     installments,
     additionalInfo,
     orderRefs,
+    nature: text("natOp", ide),
+    departure: (text("dhSaiEnt", ide) || text("dSaiEnt", ide)).slice(0, 10),
+    protocol: text("nProt"),
+    emit: party(emit, "enderEmit"),
+    dest: party(dest, "enderDest"),
+    totals: {
+      products: tv("vProd"), freight: tv("vFrete"), insurance: tv("vSeg"), discount: tv("vDesc"), other: tv("vOutro"),
+      ipi: tv("vIPI"), icmsBase: tv("vBC"), icms: tv("vICMS"), icmsSt: tv("vST"), total: tv("vNF"),
+    },
+    transport: {
+      mode: MODES[transp ? text("modFrete", transp) : ""] ?? "",
+      carrier: carrier ? text("xNome", carrier) : "",
+      carrierDoc: carrier ? digits(text("CNPJ", carrier) || text("CPF", carrier)) : "",
+      volumes: vols.reduce((s, v) => s + num(text("qVol", v)), 0),
+      kind: vols[0] ? text("esp", vols[0]) : "",
+      netWeight: vols.reduce((s, v) => s + num(text("pesoL", v)), 0),
+      grossWeight: vols.reduce((s, v) => s + num(text("pesoB", v)), 0),
+    },
     number: text("nNF", ide).replace(/^0+(?=\d)/, ""),
     series: text("serie", ide),
     issuedAt: issued.slice(0, 10),

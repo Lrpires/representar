@@ -13,12 +13,14 @@ export function Sheet({
   description,
   closeHref,
   children,
+  size = "md",
 }: {
   open: boolean;
   title: string;
   description?: string;
   closeHref: string;
   children: ReactNode;
+  size?: "md" | "lg"; // lg: painel largo (ex.: espelho da nota fiscal)
 }) {
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
@@ -59,7 +61,7 @@ export function Sheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby="sheet-title"
-        className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] animate-sheet-up flex-col overflow-hidden rounded-t-2xl bg-sheet shadow-sheet md:inset-y-2 md:left-auto md:right-2 md:max-h-none md:w-[28rem] md:animate-sheet-in md:rounded-xl"
+        className={`absolute inset-x-0 bottom-0 flex max-h-[92dvh] animate-sheet-up flex-col overflow-hidden rounded-t-2xl bg-sheet shadow-sheet md:inset-y-2 md:left-auto md:right-2 md:max-h-none md:animate-sheet-in md:rounded-xl ${size === "lg" ? "md:w-[min(64rem,calc(100vw-1rem))]" : "md:w-[28rem]"}`}
       >
         <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-line-strong md:hidden" />
         <header className="flex shrink-0 items-start justify-between gap-4 px-5 pb-4 pt-3 md:pt-5">

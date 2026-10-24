@@ -13,7 +13,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     .maybeSingle();
   if (!inv?.file_path) return new NextResponse("Arquivo não encontrado.", { status: 404 });
 
-  const download = new URL(request.url).searchParams.get("baixar") === "1";
+  const params_ = new URL(request.url).searchParams;
+  // ?xml=1: devolve o conteúdo do XML (para o espelho da nota ler no navegador).
+  if (params_.get("xml") === "1") {
+    if (!/\.xml$/i.test(inv.file_path)) return new NextResponse("A nota não tem XML.", { status: 404 });
+    const { data: blob, error } = await supabase.storage.from("invoices").download(inv.file_path);
+    if (error || !blob) return new NextResponse("Não foi possível abrir o XML.", { status: 500 });
+    return new NextResponse(await blob.text(), { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "private, max-age=300" } });
+  }
+  const download = params_.get("baixar") === "1";
   const name = inv.file_name || `NF-${inv.number ?? id}.${inv.file_path.split(".").pop()}`;
   const { data, error } = await supabase.storage
     .from("invoices")
